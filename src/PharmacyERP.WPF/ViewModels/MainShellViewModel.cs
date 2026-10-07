@@ -30,12 +30,14 @@ public class MainShellViewModel : ViewModelBase
 
     private object? _currentView;
 
-    public MainShellViewModel(ISessionService sessionService, INavigationService navigationService, IServiceProvider serviceProvider, IDialogService dialogService)
+    public MainShellViewModel(ISessionService sessionService, INavigationService navigationService, IServiceProvider serviceProvider, IDialogService dialogService,
+        PharmacyBrandingViewModel branding)
     {
         _sessionService = sessionService;
         _navigationService = navigationService;
         _serviceProvider = serviceProvider;
         _dialogService = dialogService;
+        Branding = branding;
 
         LogoutCommand = new RelayCommand(Logout);
         NavigateToDashboardCommand = new RelayCommand(() => CurrentView = _serviceProvider.GetService(typeof(DashboardView)));
@@ -92,6 +94,8 @@ public class MainShellViewModel : ViewModelBase
         _sessionService.CurrentSession is null
             ? string.Empty
             : $"مرحباً، {_sessionService.CurrentSession.FullName}";
+
+    public PharmacyBrandingViewModel Branding { get; }
 
     public string RoleAndBranch =>
         _sessionService.CurrentSession is null

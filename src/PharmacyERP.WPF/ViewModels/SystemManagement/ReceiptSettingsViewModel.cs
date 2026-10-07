@@ -4,6 +4,8 @@ using PharmacyERP.WPF.Services;
 
 namespace PharmacyERP.WPF.ViewModels.SystemManagement;
 
+public sealed record ReceiptSettingsSaveResult(bool Succeeded, string Message);
+
 public sealed class ReceiptSettingsViewModel : ViewModelBase
 {
     private readonly IReceiptSettingsStore _store;
@@ -37,6 +39,7 @@ public sealed class ReceiptSettingsViewModel : ViewModelBase
     public bool HasUnsavedChanges { get => _hasUnsavedChanges; private set => SetProperty(ref _hasUnsavedChanges, value); }
     public RelayCommand SaveCommand { get; }
     public RelayCommand RemoveLogoCommand { get; }
+    public event EventHandler<ReceiptSettingsSaveResult>? SaveCompleted;
 
     public void Initialize()
     {
@@ -69,7 +72,13 @@ public sealed class ReceiptSettingsViewModel : ViewModelBase
 
     public void Save()
     {
-        if (!CanManage) { StatusMessage = "لا تملك صلاحية إعداد الوصل."; return; }
+        if (!CanManage)
+        {
+            StatusMessage = "لا تملك صلاحية إعداد الوصل.";
+            SaveCompleted?.Invoke(this, new(false, StatusMessage));
+            return;
+        }
+        var succeeded = false;
         try
         {
             var settings = Snapshot();
@@ -77,9 +86,11 @@ public sealed class ReceiptSettingsViewModel : ViewModelBase
                 throw new InvalidOperationException("أدخل اسم الصيدلية أو ألغِ إظهاره في الوصل.");
             _store.Save(settings);
             HasUnsavedChanges = false;
-            StatusMessage = "تم حفظ الإعدادات. ستظهر في الوصل القادم وفي إعادة طباعة الفواتير.";
+            StatusMessage = "تم حفظ إعدادات الصيدلية والوصل بنجاح. تم تحديث الشريط العلوي وستُطبق الإعدادات على الطباعة.";
+            succeeded = true;
         }
         catch (Exception ex) { StatusMessage = $"تعذر الحفظ: {ex.Message}"; }
+        SaveCompleted?.Invoke(this, new(succeeded, StatusMessage));
     }
 
     private void Edit<T>(ref T field, T value, string name)

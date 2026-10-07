@@ -41,6 +41,7 @@
                     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                         <StackPanel IsEnabled="{Binding CanManage}">
                             <TextBlock Text="اسم الصيدلية" Style="{StaticResource FieldLabel}"/>
+                            <TextBlock Text="الاسم والشعار يظهران أيضاً في الشريط العلوي بعد الحفظ." TextWrapping="Wrap" Foreground="#64748B" FontSize="12" Margin="0,6,0,0"/>
                             <TextBox Text="{Binding PharmacyName, UpdateSourceTrigger=PropertyChanged}" MaxLength="120"/>
                             <CheckBox Content="إظهار اسم الصيدلية في أعلى الوصل" IsChecked="{Binding ShowPharmacyName}"/>
                             <TextBlock Text="عنوان الصيدلية" Style="{StaticResource FieldLabel}" Margin="0,8,0,0"/>

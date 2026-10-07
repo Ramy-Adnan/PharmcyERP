@@ -13,20 +13,33 @@ namespace PharmacyERP.WPF.Views.SystemManagement;
 public partial class ReceiptSettingsView : UserControl
 {
     private readonly ReceiptSettingsViewModel _viewModel;
+    private readonly IDialogService _dialogs;
     private readonly DispatcherTimer _previewTimer = new() { Interval = TimeSpan.FromMilliseconds(150) };
     private bool _initialized;
 
-    public ReceiptSettingsView(ReceiptSettingsViewModel viewModel)
+    public ReceiptSettingsView(ReceiptSettingsViewModel viewModel, IDialogService dialogs)
     {
         InitializeComponent(); DataContext = _viewModel = viewModel;
+        _dialogs = dialogs;
         _previewTimer.Tick += (_, _) => { _previewTimer.Stop(); UpdatePreview(); };
         Loaded += (_, _) =>
         {
             _viewModel.PropertyChanged += SettingsChanged;
+            _viewModel.SaveCompleted += SaveCompleted;
             if (!_initialized) { _viewModel.Initialize(); _initialized = true; }
             UpdatePreview();
         };
-        Unloaded += (_, _) => { _previewTimer.Stop(); _viewModel.PropertyChanged -= SettingsChanged; };
+        Unloaded += (_, _) =>
+        {
+            _previewTimer.Stop(); _viewModel.PropertyChanged -= SettingsChanged;
+            _viewModel.SaveCompleted -= SaveCompleted;
+        };
+    }
+
+    private void SaveCompleted(object? sender, ReceiptSettingsSaveResult result)
+    {
+        if (result.Succeeded) _dialogs.ShowInfo(result.Message, "تم حفظ الإعدادات");
+        else _dialogs.ShowError(result.Message, "تعذر حفظ الإعدادات");
     }
 
     private void SettingsChanged(object? sender, PropertyChangedEventArgs e)

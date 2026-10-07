@@ -16,6 +16,7 @@ public sealed class ReceiptSettings
 
 public interface IReceiptSettingsStore
 {
+    event EventHandler? SettingsChanged;
     ReceiptSettings Load();
     void Save(ReceiptSettings settings);
 }

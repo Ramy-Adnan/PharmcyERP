@@ -34,5 +34,6 @@
     <Compile Include="../../src/PharmacyERP.WPF/Services/ISessionService.cs" Link="Receipts/ISessionService.cs" />
     <Compile Include="../../src/PharmacyERP.WPF/Services/SessionService.cs" Link="Receipts/SessionService.cs" />
     <Compile Include="../../src/PharmacyERP.WPF/ViewModels/SystemManagement/ReceiptSettingsViewModel.cs" Link="Receipts/ReceiptSettingsViewModel.cs" />
+    <Compile Include="../../src/PharmacyERP.WPF/ViewModels/PharmacyBrandingViewModel.cs" Link="Receipts/PharmacyBrandingViewModel.cs" />
   </ItemGroup>
 </Project>

@@ -4,6 +4,7 @@ using PharmacyERP.Application.Features.Sales.DTOs;
 using PharmacyERP.Application.Tests.Common;
 using PharmacyERP.Domain.Enums;
 using PharmacyERP.WPF.Services;
+using PharmacyERP.WPF.ViewModels;
 using PharmacyERP.WPF.ViewModels.SystemManagement;
 using Xunit;
 
@@ -105,10 +106,14 @@ public sealed class ReceiptSettingsTests : IDisposable
     {
         Store.Save(new() { PharmacyName = "اسم محفوظ", FooterMessage = "شكراً", LogoBase64 = Logo });
         var vm = ViewModel(); vm.Initialize();
+        var confirmations = new List<ReceiptSettingsSaveResult>();
+        vm.SaveCompleted += (_, result) => confirmations.Add(result);
         vm.PharmacyName = "اسم جديد"; vm.ShowLogo = false; vm.ShowFooterMessage = false;
         vm.HasUnsavedChanges.Should().BeTrue(); Store.Load().PharmacyName.Should().Be("اسم محفوظ");
         ReceiptContentBuilder.Build(Invoice(PaymentMethod.Cash), vm.Snapshot()).LogoBase64.Should().BeNull();
         vm.Save(); vm.HasUnsavedChanges.Should().BeFalse();
+        confirmations.Should().ContainSingle(); confirmations[0].Succeeded.Should().BeTrue();
+        confirmations[0].Message.Should().Contain("بنجاح");
         var restored = Store.Load(); restored.PharmacyName.Should().Be("اسم جديد");
         restored.LogoBase64.Should().Be(Logo); restored.FooterMessage.Should().Be("شكراً");
         restored.ShowLogo.Should().BeFalse(); restored.ShowFooterMessage.Should().BeFalse();
@@ -120,7 +125,12 @@ public sealed class ReceiptSettingsTests : IDisposable
     public void SettingsViewModel_RejectsBlankDisplayedNameWithoutOverwritingSavedData()
     {
         Store.Save(new() { PharmacyName = "اسم محفوظ" });
-        var vm = ViewModel(); vm.Initialize(); vm.PharmacyName = "   "; vm.Save();
+        var vm = ViewModel(); vm.Initialize();
+        var confirmations = new List<ReceiptSettingsSaveResult>();
+        vm.SaveCompleted += (_, result) => confirmations.Add(result);
+        vm.PharmacyName = "   "; vm.Save();
+        confirmations.Should().ContainSingle(); confirmations[0].Succeeded.Should().BeFalse();
+        confirmations[0].Message.Should().Contain("أدخل اسم الصيدلية");
         vm.StatusMessage.Should().Contain("أدخل اسم الصيدلية");
         vm.HasUnsavedChanges.Should().BeTrue(); Store.Load().PharmacyName.Should().Be("اسم محفوظ");
     }
@@ -137,6 +147,53 @@ public sealed class ReceiptSettingsTests : IDisposable
         vm.PharmacyName = "اسم آخر"; vm.SetLogo(Logo); vm.Save();
         vm.HasLogo.Should().BeFalse(); vm.StatusMessage.Should().Contain("صلاحية");
         Store.Load().PharmacyName.Should().Be("اسم محفوظ");
+    }
+
+    [Fact]
+    public void Header_UsesSavedIdentityAndUpdatesOnlyAfterSuccessfulSaveIncludingLogoRemoval()
+    {
+        var store = Store;
+        store.Save(new() { PharmacyName = "صيدلية قديمة", LogoBase64 = Logo, ShowLogo = false, ShowPharmacyName = false });
+        var user = new FakeCurrentUserService(); var session = new SessionService(user);
+        session.Start(new() { UserId = 1, BranchName = "الفرع", Permissions = new() { "Sales.UsePos" } });
+        using var branding = new PharmacyBrandingViewModel(store, session); branding.Activate();
+        branding.PharmacyName.Should().Be("صيدلية قديمة"); branding.LogoBase64.Should().Be(Logo);
+        var editor = new ReceiptSettingsViewModel(store, user, session); editor.Initialize();
+        editor.PharmacyName = "صيدلية جديدة"; editor.SetLogo(null);
+        branding.PharmacyName.Should().Be("صيدلية قديمة"); branding.LogoBase64.Should().Be(Logo);
+        editor.Save();
+        branding.PharmacyName.Should().Be("صيدلية جديدة"); branding.LogoBase64.Should().BeNull();
+        editor.ShowPharmacyName = true; editor.PharmacyName = "   "; editor.Save();
+        branding.PharmacyName.Should().Be("صيدلية جديدة");
+        store.Load().PharmacyName.Should().Be("صيدلية جديدة");
+    }
+
+    [Fact]
+    public void Header_RefreshesOnOpeningAndUnsubscribesWhenClosed()
+    {
+        var store = Store;
+        var session = new SessionService(new FakeCurrentUserService());
+        session.Start(new() { BranchName = "الفرع المسجل" });
+        using var branding = new PharmacyBrandingViewModel(store, session); branding.Activate();
+        branding.PharmacyName.Should().Be("الفرع المسجل"); branding.LogoBase64.Should().BeNull();
+        store.Save(new() { PharmacyName = "صيدلية الشفاء" });
+        branding.PharmacyName.Should().Be("صيدلية الشفاء");
+        branding.Dispose(); store.Save(new() { PharmacyName = "اسم بعد الإغلاق" });
+        branding.PharmacyName.Should().Be("صيدلية الشفاء");
+        branding.Activate(); branding.PharmacyName.Should().Be("اسم بعد الإغلاق");
+    }
+
+    [Fact]
+    public void Header_CorruptSettingsDoNotBlockOpeningAndSavingRepairsTheDisplayedIdentity()
+    {
+        var store = Store; store.Save(new() { PharmacyName = "اسم" });
+        File.WriteAllText(Path.Combine(_directory, "receipt-settings.json"), "broken json");
+        var session = new SessionService(new FakeCurrentUserService());
+        session.Start(new() { BranchName = "الفرع المسجل" });
+        using var branding = new PharmacyBrandingViewModel(store, session); branding.Activate();
+        branding.PharmacyName.Should().Be("الفرع المسجل");
+        store.Save(new() { PharmacyName = "الاسم الصحيح", LogoBase64 = Logo });
+        branding.PharmacyName.Should().Be("الاسم الصحيح"); branding.LogoBase64.Should().Be(Logo);
     }
 
     private ReceiptSettingsViewModel ViewModel()

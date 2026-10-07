@@ -8,6 +8,7 @@ public sealed class ReceiptSettingsStore : IReceiptSettingsStore
     public const int MaxLogoBytes = 2 * 1024 * 1024;
     private readonly string _filePath;
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
+    public event EventHandler? SettingsChanged;
 
     public ReceiptSettingsStore() : this(Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -42,6 +43,7 @@ public sealed class ReceiptSettingsStore : IReceiptSettingsStore
         {
             if (File.Exists(temporaryFile)) File.Delete(temporaryFile);
         }
+        SettingsChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private static void Validate(ReceiptSettings settings)

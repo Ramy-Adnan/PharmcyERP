@@ -1,7 +1,8 @@
 <Window x:Class="PharmacyERP.WPF.Views.MainShellView"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Pharmacy ERP"
+        xmlns:converters="clr-namespace:PharmacyERP.WPF.Converters"
+        Title="{Binding Branding.PharmacyName, StringFormat='Pharmacy ERP — {0}'}"
         Height="720"
         Width="1280"
         MinHeight="640"
@@ -21,6 +22,7 @@
     -->
 
     <Window.Resources>
+        <converters:Base64LogoConverter x:Key="Base64LogoConverter"/>
 
         <!-- ===================================================== -->
         <!-- COLORS -->
@@ -393,19 +395,34 @@
                             Orientation="Horizontal"
                             VerticalAlignment="Center">
 
-                    <Border Width="40"
-                            Height="40"
+                    <Border Width="52"
+                            Height="52"
                             CornerRadius="10"
-                            Background="#26FFFFFF">
-                        <Path Data="{StaticResource Icon.Pharmacy}"
-                              Style="{StaticResource IconPath}"
-                              Stroke="White"
-                              HorizontalAlignment="Center"/>
+                            Background="#26FFFFFF" Padding="5">
+                        <Grid>
+                            <Image x:Name="HeaderPharmacyLogo"
+                                   Source="{Binding Branding.LogoBase64, Converter={StaticResource Base64LogoConverter}}"
+                                   Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            <Path Data="{StaticResource Icon.Pharmacy}" Stroke="White" HorizontalAlignment="Center">
+                                <Path.Style>
+                                    <Style TargetType="Path" BasedOn="{StaticResource IconPath}">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding Source, ElementName=HeaderPharmacyLogo}" Value="{x:Null}">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Path.Style>
+                            </Path>
+                        </Grid>
                     </Border>
 
                     <StackPanel VerticalAlignment="Center"
                                 Margin="12,0,0,0">
-                        <TextBlock Text="صيدلية النخيل"
+                        <TextBlock Text="{Binding Branding.PharmacyName}"
+                                   ToolTip="{Binding Branding.PharmacyName}"
+                                   MaxWidth="260" TextTrimming="CharacterEllipsis"
                                    FontSize="18"
                                    FontWeight="Bold"
                                    Foreground="White"/>

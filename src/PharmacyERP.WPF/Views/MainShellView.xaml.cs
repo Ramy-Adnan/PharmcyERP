@@ -9,6 +9,8 @@ public partial class MainShellView : Window
     {
         InitializeComponent();
         DataContext = viewModel;
+        Loaded += (_, _) => viewModel.Branding.Activate();
+        Closed += (_, _) => viewModel.Branding.Dispose();
 
         if (viewModel.NavigateToDashboardCommand.CanExecute(null))
             viewModel.NavigateToDashboardCommand.Execute(null);

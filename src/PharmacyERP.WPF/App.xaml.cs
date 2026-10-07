@@ -85,6 +85,7 @@ public partial class App : System.Windows.Application
                     services.AddTransient<LoginViewModel>();
                     services.AddTransient<LoginView>();
                     services.AddTransient<MainShellViewModel>();
+                    services.AddTransient<PharmacyBrandingViewModel>();
                     services.AddTransient<MainShellView>();
                     services.AddTransient<ReceiptSettingsViewModel>();
                     services.AddTransient<ReceiptSettingsView>();
