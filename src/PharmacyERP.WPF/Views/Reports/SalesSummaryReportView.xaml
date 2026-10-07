@@ -56,7 +56,7 @@
                         <TextBlock Text="{Binding Result.TotalDiscount, StringFormat=N2}" HorizontalAlignment="Left"/>
                     </Grid>
                     <Grid Margin="0,0,0,8"><TextBlock Text="المبيعات المدفوعة (نقدي + بطاقة)" HorizontalAlignment="Right"/><TextBlock Text="{Binding Result.PaidSales, StringFormat=N2}" HorizontalAlignment="Left"/></Grid>
-                    <Grid Margin="0,0,0,8"><TextBlock Text="مبيعات آجلة — ذمم العملاء" HorizontalAlignment="Right"/><TextBlock Text="{Binding Result.CreditSales, StringFormat=N2}" HorizontalAlignment="Left" Foreground="#B45309"/></Grid>
+                    <Grid Margin="0,0,0,8"><TextBlock Text="الجزء الآجل عند البيع" HorizontalAlignment="Right"/><TextBlock Text="{Binding Result.CreditSales, StringFormat=N2}" HorizontalAlignment="Left" Foreground="#B45309"/></Grid>
                     <Separator Margin="0,4"/>
                     <Grid>
                         <TextBlock Text="إجمالي الفواتير (يشمل الآجل)" HorizontalAlignment="Right" FontSize="16" FontWeight="Bold"/>
@@ -67,7 +67,8 @@
 
             <Border Grid.Column="2" Background="White" BorderBrush="#E5E7EB" BorderThickness="1">
                 <DockPanel>
-                    <TextBlock DockPanel.Dock="Top" Text="حسب طريقة الدفع" FontWeight="SemiBold" FontSize="14" Margin="12,10"/>
+                    <TextBlock DockPanel.Dock="Top" Text="توزيع المبالغ عند البيع" FontWeight="SemiBold" FontSize="14" Margin="12,10"/>
+                    <TextBlock DockPanel.Dock="Top" Text="الدفعة الأولى ضمن المدفوع؛ الفاتورة الجزئية تظهر في أكثر من طريقة." TextWrapping="Wrap" Foreground="#64748B" FontSize="11" Margin="12,0,12,8"/>
                     <DataGrid ItemsSource="{Binding ByPaymentMethod}" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False"
                               GridLinesVisibility="Horizontal" HeadersVisibility="Column" BorderThickness="0"
                               RowHeight="32" FontSize="13">

@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using PharmacyERP.Application.Common.Interfaces;
 using PharmacyERP.Application.Features.Reports;
 using PharmacyERP.Application.Features.Reports.DTOs;
+using PharmacyERP.Domain.Entities;
 using PharmacyERP.Domain.Enums;
 
 namespace PharmacyERP.Infrastructure.Services;
@@ -42,6 +43,12 @@ public class ReportingService : IReportingService
             - returnedToday.Where(r => r.SalesInvoice.PaymentMethod == PaymentMethod.Card).Sum(r => r.TotalAmount);
         var todayCredit = todayInvoices.Where(i => i.PaymentMethod == PaymentMethod.Credit).Sum(i => i.TotalAmount)
             - returnedToday.Where(r => r.SalesInvoice.PaymentMethod == PaymentMethod.Credit).Sum(r => r.TotalAmount);
+        // Allocate only the payment received at checkout; later debt repayments
+        // never change the classification of the original sale.
+        var initialPayments = await GetInitialCreditPaymentsAsync(todayInvoices, cancellationToken);
+        todayCash += initialPayments.Where(r => r.SourceType == CashSourceType.Cash).Sum(r => r.Amount);
+        todayCard += initialPayments.Where(r => r.SourceType == CashSourceType.Bank).Sum(r => r.Amount);
+        todayCredit -= initialPayments.Sum(r => r.Amount);
         var todaySalesTotal = todayCash + todayCard;
         var debtReceipts = _context.Receipts.Where(r => r.ReferenceType == "CustomerCredit" && r.ReceiptDate >= today && r.ReceiptDate < tomorrow);
         if (branchId.HasValue) debtReceipts = debtReceipts.Where(r => r.BranchId == branchId.Value);
@@ -50,8 +57,7 @@ public class ReportingService : IReportingService
         var invoiceNumbers = await _context.SalesInvoices.Where(i => receiptInvoiceIds.Contains(i.Id))
             .Select(i => new { i.Id, i.Number }).ToDictionaryAsync(i => i.Id, i => i.Number, cancellationToken);
         bool IsInitialPayment(PharmacyERP.Domain.Entities.Receipt r) => r.ReferenceId.HasValue
-            && invoiceNumbers.TryGetValue(r.ReferenceId.Value, out var number) && number.StartsWith("SI-", StringComparison.Ordinal)
-            && r.Number == "RCT-" + number[3..];
+            && invoiceNumbers.TryGetValue(r.ReferenceId.Value, out var number) && IsInitialCreditPayment(r, number);
         var creditDeposits = received.Where(IsInitialPayment).Sum(r => r.Amount);
         var debtCollections = received.Where(r => !IsInitialPayment(r)).Sum(r => r.Amount);
         var cashLines = _context.JournalEntryLines.Where(l => l.Account.Code == "1110" && l.JournalEntry.IsPosted
@@ -218,14 +224,26 @@ public class ReportingService : IReportingService
         if (branchId.HasValue) query = query.Where(s => s.BranchId == branchId.Value);
 
         var invoices = await query.ToListAsync(cancellationToken);
-
-        var byPaymentMethod = invoices
-            .GroupBy(i => i.PaymentMethod)
+        var initialPayments = await GetInitialCreditPaymentsAsync(invoices, cancellationToken);
+        var paymentsByInvoice = initialPayments.ToLookup(r => r.ReferenceId!.Value);
+        var allocations = invoices.SelectMany(i =>
+        {
+            var deposits = paymentsByInvoice[i.Id].ToList();
+            var portions = new List<(int InvoiceId, PaymentMethod Method, decimal Amount)>
+            {
+                (i.Id, i.PaymentMethod, i.TotalAmount - deposits.Sum(r => r.Amount))
+            };
+            portions.AddRange(deposits.Select(r => (i.Id,
+                r.SourceType == CashSourceType.Bank ? PaymentMethod.Card : PaymentMethod.Cash, r.Amount)));
+            return portions;
+        });
+        var byPaymentMethod = allocations
+            .GroupBy(i => i.Method)
             .Select(g => new PaymentMethodAmountDto
             {
                 PaymentMethod = g.Key,
-                InvoiceCount = g.Count(),
-                Amount = g.Sum(i => i.TotalAmount)
+                InvoiceCount = g.Select(i => i.InvoiceId).Distinct().Count(),
+                Amount = g.Sum(i => i.Amount)
             })
             .OrderByDescending(p => p.Amount)
             .ToList();
@@ -241,5 +259,24 @@ public class ReportingService : IReportingService
             NetSales = invoices.Sum(i => i.TotalAmount),
             ByPaymentMethod = byPaymentMethod
         };
+    }
+
+    private static bool IsInitialCreditPayment(Receipt receipt, string invoiceNumber) =>
+        invoiceNumber.StartsWith("SI-", StringComparison.Ordinal)
+        && receipt.Number == "RCT-" + invoiceNumber[3..];
+
+    private async Task<List<Receipt>> GetInitialCreditPaymentsAsync(
+        IReadOnlyCollection<SalesInvoice> invoices, CancellationToken cancellationToken)
+    {
+        var creditInvoices = invoices.Where(i => i.PaymentMethod == PaymentMethod.Credit)
+            .ToDictionary(i => i.Id, i => i.Number);
+        if (creditInvoices.Count == 0) return new();
+        var invoiceIds = creditInvoices.Keys.ToList();
+        var receipts = await _context.Receipts.AsNoTracking()
+            .Where(r => r.ReferenceType == "CustomerCredit" && r.ReferenceId.HasValue
+                && invoiceIds.Contains(r.ReferenceId.Value))
+            .ToListAsync(cancellationToken);
+        // AmountTendered on older invoices is not proof of an actual receipt.
+        return receipts.Where(r => IsInitialCreditPayment(r, creditInvoices[r.ReferenceId!.Value])).ToList();
     }
 }

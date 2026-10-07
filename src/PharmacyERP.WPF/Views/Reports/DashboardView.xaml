@@ -87,10 +87,10 @@
                     <TextBlock Text="{Binding Summary.TodayNetCashPosition, StringFormat=N2}" Style="{StaticResource KpiValue}"/>
                 </StackPanel>
             </Border>
-        <Border Style="{StaticResource KpiCard}" Margin="0,8,8,0"><StackPanel><TextBlock Text="مبيعات آجلة اليوم — ذمم العملاء" Style="{StaticResource KpiLabel}"/><TextBlock Text="{Binding Summary.TodayCreditSalesTotal, StringFormat=N2}" Style="{StaticResource KpiValue}" Foreground="#B45309"/></StackPanel></Border>
+        <Border Style="{StaticResource KpiCard}" Margin="0,8,8,0"><StackPanel><TextBlock Text="الجزء الآجل من مبيعات اليوم" Style="{StaticResource KpiLabel}"/><TextBlock Text="{Binding Summary.TodayCreditSalesTotal, StringFormat=N2}" Style="{StaticResource KpiValue}" Foreground="#B45309"/></StackPanel></Border>
             <Border Style="{StaticResource KpiCard}" Margin="0,8,8,0"><StackPanel><TextBlock Text="مبيعات نقدية اليوم" Style="{StaticResource KpiLabel}"/><TextBlock Text="{Binding Summary.TodayCashSalesTotal, StringFormat=N2}" Style="{StaticResource KpiValue}"/></StackPanel></Border>
             <Border Style="{StaticResource KpiCard}" Margin="0,8,8,0"><StackPanel><TextBlock Text="مبيعات بطاقات اليوم" Style="{StaticResource KpiLabel}"/><TextBlock Text="{Binding Summary.TodayCardSalesTotal, StringFormat=N2}" Style="{StaticResource KpiValue}"/></StackPanel></Border>
-            <Border Style="{StaticResource KpiCard}" Margin="0,8,0,0"><StackPanel><TextBlock Text="تحصيل ديون اليوم — ليست مبيعات جديدة" Style="{StaticResource KpiLabel}"/><TextBlock Text="{Binding Summary.TodayDebtCollections, StringFormat=N2}" Style="{StaticResource KpiValue}"/><TextBlock Text="{Binding Summary.TodayCreditDeposits, StringFormat='دفعات أولى عند البيع: {0:N2}'}" Foreground="#64748B" FontSize="11" Margin="0,5,0,0"/></StackPanel></Border>
+            <Border Style="{StaticResource KpiCard}" Margin="0,8,0,0"><StackPanel><TextBlock Text="تحصيل ديون اليوم — ليست مبيعات جديدة" Style="{StaticResource KpiLabel}"/><TextBlock Text="{Binding Summary.TodayDebtCollections, StringFormat=N2}" Style="{StaticResource KpiValue}"/><TextBlock Text="{Binding Summary.TodayCreditDeposits, StringFormat='دفعات أولى ضمن المدفوع: {0:N2}'}" Foreground="#64748B" FontSize="11" Margin="0,5,0,0"/></StackPanel></Border>
         </UniformGrid>
 
         <Border Grid.Row="4" Background="White" BorderBrush="#E5E7EB" BorderThickness="1">

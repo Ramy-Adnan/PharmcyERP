@@ -318,7 +318,82 @@ public class SalesPosWorkflowTests
         (await sales.GetCustomerAccountAsync(seed.CustomerId))!.OutstandingAmount.Should().Be(8);
         var summary = await new ReportingService(db, _clock).GetDashboardSummaryAsync(seed.Fixture.BranchId);
         summary.TodayCreditDeposits.Should().Be(7); summary.TodayDebtCollections.Should().Be(5);
-        summary.TodayNetCashPosition.Should().Be(12); summary.TodaySalesTotal.Should().Be(0);
+        summary.TodayNetCashPosition.Should().Be(12); summary.TodaySalesTotal.Should().Be(7);
+        summary.TodayCashSalesTotal.Should().Be(7); summary.TodayCreditSalesTotal.Should().Be(13);
+        summary.TodayRevenueTotal.Should().Be(20);
+    }
+
+    [Theory]
+    [InlineData(0, 2000)]
+    [InlineData(1000, 1000)]
+    [InlineData(2000, 0)]
+    public async Task Reports_SplitInitialCreditPaymentWithoutChangingTotalRevenue(int deposit, int deferred)
+    {
+        await using var db = TestDb.CreateContext(_clock); var seed = await SeedAsync(db);
+        var request = Checkout(seed.Fixture, PaymentMethod.Credit, seed.CustomerId);
+        request.Lines.Single().UnitPrice = 1000; request.AmountTendered = deposit;
+        (await Sales(db).CheckoutAsync(request, seed.UserId)).Succeeded.Should().BeTrue();
+        var reports = new ReportingService(db, _clock);
+        var dashboard = await reports.GetDashboardSummaryAsync(seed.Fixture.BranchId);
+        dashboard.TodayCashSalesTotal.Should().Be(deposit); dashboard.TodaySalesTotal.Should().Be(deposit);
+        dashboard.TodayCardSalesTotal.Should().Be(0); dashboard.TodayCreditSalesTotal.Should().Be(deferred);
+        dashboard.TodayRevenueTotal.Should().Be(2000); dashboard.TodayInvoiceCount.Should().Be(1);
+        dashboard.TodayDebtCollections.Should().Be(0);
+        var summary = await reports.GetSalesSummaryAsync(_clock.UtcNow, _clock.UtcNow, seed.Fixture.BranchId);
+        summary.PaidSales.Should().Be(deposit); summary.CreditSales.Should().Be(deferred);
+        summary.NetSales.Should().Be(2000); summary.TotalInvoices.Should().Be(1);
+        summary.ByPaymentMethod.Sum(p => p.Amount).Should().Be(2000);
+        var otherBranch = await reports.GetDashboardSummaryAsync(seed.Fixture.BranchId + 100);
+        otherBranch.TodaySalesTotal.Should().Be(0); otherBranch.TodayCreditSalesTotal.Should().Be(0);
+        otherBranch.TodayCreditDeposits.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task Reports_KeepOldSaleAllocationWhenDebtIsCollectedOnAnotherDay()
+    {
+        await using var db = TestDb.CreateContext(_clock); var seed = await SeedAsync(db); var sales = Sales(db);
+        var saleDay = _clock.UtcNow;
+        var request = Checkout(seed.Fixture, PaymentMethod.Credit, seed.CustomerId); request.AmountTendered = 7;
+        var sale = await sales.CheckoutAsync(request, seed.UserId);
+        _clock.Advance(TimeSpan.FromDays(1));
+        await sales.RecordCustomerPaymentAsync(new() { CustomerId = seed.CustomerId, InvoiceId = sale.Value!.Id, Amount = 5 });
+        var reports = new ReportingService(db, _clock);
+        var dashboard = await reports.GetDashboardSummaryAsync(seed.Fixture.BranchId);
+        dashboard.TodayRevenueTotal.Should().Be(0); dashboard.TodayCreditDeposits.Should().Be(0);
+        dashboard.TodayDebtCollections.Should().Be(5); dashboard.TodayCashMovement.Should().Be(5);
+        var oldSales = await reports.GetSalesSummaryAsync(saleDay, saleDay, seed.Fixture.BranchId);
+        oldSales.PaidSales.Should().Be(7); oldSales.CreditSales.Should().Be(13); oldSales.NetSales.Should().Be(20);
+        var todaysSales = await reports.GetSalesSummaryAsync(_clock.UtcNow, _clock.UtcNow, seed.Fixture.BranchId);
+        todaysSales.PaidSales.Should().Be(0); todaysSales.CreditSales.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task Reports_DoNotTreatLegacyTenderedMetadataAsAnActualPayment()
+    {
+        await using var db = TestDb.CreateContext(_clock); var seed = await SeedAsync(db);
+        await Sales(db).CheckoutAsync(Checkout(seed.Fixture, PaymentMethod.Credit, seed.CustomerId), seed.UserId);
+        (await db.SalesInvoices.SingleAsync()).AmountTendered = 7;
+        await db.SaveChangesAsync();
+        var reports = new ReportingService(db, _clock);
+        var dashboard = await reports.GetDashboardSummaryAsync(seed.Fixture.BranchId);
+        dashboard.TodaySalesTotal.Should().Be(0); dashboard.TodayCreditSalesTotal.Should().Be(20);
+        var summary = await reports.GetSalesSummaryAsync(_clock.UtcNow, _clock.UtcNow, seed.Fixture.BranchId);
+        summary.PaidSales.Should().Be(0); summary.CreditSales.Should().Be(20);
+    }
+
+    [Fact]
+    public async Task Dashboard_CreditReturnReducesDeferredAmountAndKeepsTheInitialCashReceipt()
+    {
+        await using var db = TestDb.CreateContext(_clock); var seed = await SeedAsync(db); var sales = Sales(db);
+        var request = Checkout(seed.Fixture, PaymentMethod.Credit, seed.CustomerId); request.AmountTendered = 7;
+        var sale = await sales.CheckoutAsync(request, seed.UserId);
+        var line = await db.SalesInvoiceItems.SingleAsync();
+        (await sales.ProcessReturnAsync(new() { SalesInvoiceId = sale.Value!.Id, Reason = "Return unpaid portion",
+            Lines = new() { new() { SalesInvoiceItemId = line.Id, Quantity = 1 } } }, seed.UserId)).Succeeded.Should().BeTrue();
+        var summary = await new ReportingService(db, _clock).GetDashboardSummaryAsync(seed.Fixture.BranchId);
+        summary.TodayCashSalesTotal.Should().Be(7); summary.TodayCreditSalesTotal.Should().Be(3);
+        summary.TodayRevenueTotal.Should().Be(10); summary.TodayDebtCollections.Should().Be(0);
+        (await sales.GetCustomerAccountAsync(seed.CustomerId))!.OutstandingAmount.Should().Be(3);
     }
 
     [Theory]
