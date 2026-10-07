@@ -1,0 +1,100 @@
+<Window x:Class="PharmacyERP.WPF.Views.Hr.PayrollRunDetailDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="تفاصيل دورة الرواتب" Height="640" Width="880"
+        WindowStartupLocation="CenterOwner" FlowDirection="RightToLeft"
+        Background="#F4F6F8">
+
+    <Grid Margin="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="12"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0" Background="White" BorderBrush="#E5E7EB" BorderThickness="1" Padding="12">
+            <UniformGrid Columns="5">
+                <StackPanel Margin="0,0,8,0">
+                    <TextBlock Text="الرقم" FontSize="11" Foreground="#9CA3AF"/>
+                    <TextBlock Text="{Binding Header.Number}" FontWeight="SemiBold"/>
+                </StackPanel>
+                <StackPanel Margin="0,0,8,0">
+                    <TextBlock Text="الفرع" FontSize="11" Foreground="#9CA3AF"/>
+                    <TextBlock Text="{Binding Header.BranchName}" FontWeight="SemiBold"/>
+                </StackPanel>
+                <StackPanel Margin="0,0,8,0">
+                    <TextBlock Text="الفترة" FontSize="11" Foreground="#9CA3AF"/>
+                    <TextBlock FontWeight="SemiBold">
+                        <TextBlock.Text>
+                            <MultiBinding StringFormat="{}{0:yyyy-MM-dd} إلى {1:yyyy-MM-dd}">
+                                <Binding Path="Header.PeriodStart"/>
+                                <Binding Path="Header.PeriodEnd"/>
+                            </MultiBinding>
+                        </TextBlock.Text>
+                    </TextBlock>
+                </StackPanel>
+                <StackPanel Margin="0,0,8,0">
+                    <TextBlock Text="إجمالي الصافي" FontSize="11" Foreground="#9CA3AF"/>
+                    <TextBlock Text="{Binding Header.TotalNetPay, StringFormat=N2}" FontWeight="Bold" Foreground="#1F6F50"/>
+                </StackPanel>
+                <StackPanel>
+                    <TextBlock Text="الحالة" FontSize="11" Foreground="#9CA3AF"/>
+                    <TextBlock Text="{Binding Header.Status}" FontWeight="Bold"/>
+                </StackPanel>
+            </UniformGrid>
+        </Border>
+
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="2*"/>
+                <ColumnDefinition Width="16"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <Border Grid.Column="0" Background="White" BorderBrush="#E5E7EB" BorderThickness="1">
+                <DataGrid ItemsSource="{Binding Lines}" SelectedItem="{Binding SelectedLine}"
+                          AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False"
+                          GridLinesVisibility="Horizontal" HeadersVisibility="Column" BorderThickness="0"
+                          RowHeight="32" FontSize="13">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="الموظف" Binding="{Binding EmployeeName}" Width="*"/>
+                        <DataGridTextColumn Header="الوظيفة" Binding="{Binding JobTitle}" Width="110"/>
+                        <DataGridTextColumn Header="الأساسي" Binding="{Binding BaseSalary, StringFormat=N2}" Width="85"/>
+                        <DataGridTextColumn Header="العمولات" Binding="{Binding TotalCommissions, StringFormat=N2}" Width="85"/>
+                        <DataGridTextColumn Header="الاستقطاعات" Binding="{Binding Deductions, StringFormat=N2}" Width="90"/>
+                        <DataGridTextColumn Header="الصافي" Binding="{Binding NetPay, StringFormat=N2}" Width="90"/>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </Border>
+
+            <Border Grid.Column="2" Background="White" BorderBrush="#E5E7EB" BorderThickness="1" Padding="12">
+                <StackPanel>
+                    <TextBlock Text="تعديل استقطاعات الموظف المحدد" FontWeight="SemiBold" Margin="0,0,0,10"/>
+
+                    <TextBlock Text="مبلغ الاستقطاع" Margin="0,0,0,4"/>
+                    <TextBox Text="{Binding EditableDeductions, UpdateSourceTrigger=PropertyChanged}" Padding="6" Margin="0,0,0,12"/>
+
+                    <TextBlock Text="سبب الاستقطاع" Margin="0,0,0,4"/>
+                    <TextBox Text="{Binding EditableDeductionNotes, UpdateSourceTrigger=PropertyChanged}" Padding="6" Margin="0,0,0,12"/>
+
+                    <Button Content="حفظ الاستقطاع" Padding="14,8" Background="#1F6F50" Foreground="White" BorderThickness="0"
+                            Command="{Binding SaveDeductionCommand}"
+                            Visibility="{Binding CanEdit, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <StackPanel Grid.Row="3" Margin="0,12,0,0">
+            <TextBlock Text="{Binding ErrorMessage}" Foreground="#DC2626" TextWrapping="Wrap" Margin="0,0,0,8"
+                       Visibility="{Binding ErrorMessage, Converter={StaticResource StringToVisibilityConverter}}"/>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
+                <Button Content="اعتماد الدورة" Padding="16,8" Background="#1F6F50" Foreground="White" BorderThickness="0"
+                        Command="{Binding ApproveCommand}" Margin="0,0,8,0"/>
+                <Button Content="تسجيل الصرف (دفع الرواتب)" Padding="16,8" Background="#B45309" Foreground="White" BorderThickness="0"
+                        Command="{Binding MarkPaidCommand}" Margin="0,0,8,0"/>
+                <Button Content="إغلاق" Padding="16,8" Click="CloseButton_Click"/>
+            </StackPanel>
+        </StackPanel>
+    </Grid>
+</Window>

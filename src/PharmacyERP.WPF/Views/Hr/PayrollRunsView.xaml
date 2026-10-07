@@ -1,0 +1,44 @@
+<UserControl x:Class="PharmacyERP.WPF.Views.Hr.PayrollRunsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             FlowDirection="RightToLeft">
+
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="12"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0" Orientation="Horizontal">
+            <TextBlock Text="دورات الرواتب" FontSize="20" FontWeight="Bold" Foreground="#1F2937" VerticalAlignment="Center"/>
+            <Button Content="دورة رواتب جديدة" Margin="16,0,0,0" Padding="14,6" Background="#1F6F50" Foreground="White" BorderThickness="0"
+                    Command="{Binding GenerateRunCommand}" Visibility="{Binding CanManage, Converter={StaticResource BoolToVisibilityConverter}}"/>
+            <Button Content="تحديث" Margin="8,0,0,0" Padding="14,6" Command="{Binding RefreshCommand}"/>
+        </StackPanel>
+
+        <Border Grid.Row="2" Background="White" BorderBrush="#E5E7EB" BorderThickness="1">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="10" HorizontalAlignment="Left">
+                    <Button Content="فتح التفاصيل" Padding="12,6" Background="#1F6F50" Foreground="White" BorderThickness="0"
+                            Command="{Binding OpenDetailCommand}"/>
+                </StackPanel>
+
+                <DataGrid ItemsSource="{Binding PayrollRuns}" SelectedItem="{Binding SelectedRun}"
+                          AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False"
+                          GridLinesVisibility="Horizontal" HeadersVisibility="Column" BorderThickness="0"
+                          RowHeight="34" FontSize="13">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="الرقم" Binding="{Binding Number}" Width="110"/>
+                        <DataGridTextColumn Header="الفرع" Binding="{Binding BranchName}" Width="110"/>
+                        <DataGridTextColumn Header="بداية الفترة" Binding="{Binding PeriodStart, StringFormat=yyyy-MM-dd}" Width="100"/>
+                        <DataGridTextColumn Header="نهاية الفترة" Binding="{Binding PeriodEnd, StringFormat=yyyy-MM-dd}" Width="100"/>
+                        <DataGridTextColumn Header="عدد الموظفين" Binding="{Binding EmployeeCount}" Width="95"/>
+                        <DataGridTextColumn Header="إجمالي الصافي" Binding="{Binding TotalNetPay, StringFormat=N2}" Width="105"/>
+                        <DataGridTextColumn Header="الحالة" Binding="{Binding Status}" Width="100"/>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </DockPanel>
+        </Border>
+    </Grid>
+</UserControl>

@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>PharmacyERP.Application</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FluentValidation" Version="11.9.0" />
+    <PackageReference Include="Mapster" Version="7.4.0" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="8.0.1" />
+    <!-- The full EF Core package, not Abstractions: IApplicationDbContext exposes DbSet<T>,
+         which lives in Microsoft.EntityFrameworkCore.dll. The Abstractions package only
+         carries attributes and small interfaces, so referencing it alone left DbSet<T>
+         unresolvable — a gap that was hidden while an unrelated EF6 package was installed. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.8" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PharmacyERP.Domain\PharmacyERP.Domain.csproj" />
+  </ItemGroup>
+
+</Project>

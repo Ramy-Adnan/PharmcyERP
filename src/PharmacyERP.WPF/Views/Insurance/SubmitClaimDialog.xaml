@@ -1,0 +1,60 @@
+<Window x:Class="PharmacyERP.WPF.Views.Insurance.SubmitClaimDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="تقديم مطالبة تأمين جديدة" Height="520" Width="500"
+        WindowStartupLocation="CenterOwner" ResizeMode="NoResize" FlowDirection="RightToLeft"
+        Background="#F4F6F8">
+
+    <Grid Margin="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0">
+            <TextBlock Text="فاتورة المبيعات" Margin="0,0,0,4"/>
+            <ComboBox ItemsSource="{Binding Invoices}" SelectedItem="{Binding SelectedInvoice}" Padding="6" Margin="0,0,0,12">
+                <ComboBox.ItemTemplate>
+                    <DataTemplate>
+                        <TextBlock Text="{Binding Number}"/>
+                    </DataTemplate>
+                </ComboBox.ItemTemplate>
+            </ComboBox>
+
+            <TextBlock Text="{Binding SelectedInvoice.CustomerName, StringFormat='العميل: {0}'}" Foreground="#6B7280" Margin="0,0,0,4"/>
+            <TextBlock Text="{Binding SelectedInvoice.TotalAmount, StringFormat='إجمالي الفاتورة: {0:N2}'}" Foreground="#6B7280" Margin="0,0,0,12"/>
+
+            <TextBlock Text="بوليصة التأمين" Margin="0,0,0,4"/>
+            <ComboBox ItemsSource="{Binding CustomerPolicies}" SelectedItem="{Binding SelectedPolicy}" Padding="6" Margin="0,0,0,12">
+                <ComboBox.ItemTemplate>
+                    <DataTemplate>
+                        <TextBlock>
+                            <TextBlock.Text>
+                                <MultiBinding StringFormat="{}{0} - {1} ({2}%)">
+                                    <Binding Path="InsuranceCompanyName"/>
+                                    <Binding Path="PolicyNumber"/>
+                                    <Binding Path="CoveragePercent"/>
+                                </MultiBinding>
+                            </TextBlock.Text>
+                        </TextBlock>
+                    </DataTemplate>
+                </ComboBox.ItemTemplate>
+            </ComboBox>
+
+            <TextBlock Text="مبلغ المطالبة" Margin="0,0,0,4"/>
+            <TextBox Text="{Binding ClaimedAmount, UpdateSourceTrigger=PropertyChanged}" Padding="6" Margin="0,0,0,12"/>
+
+            <TextBlock Text="ملاحظات" Margin="0,0,0,4"/>
+            <TextBox Text="{Binding Notes, UpdateSourceTrigger=PropertyChanged}" Padding="6" Margin="0,0,0,12"/>
+
+            <TextBlock Text="{Binding ErrorMessage}" Foreground="#DC2626" TextWrapping="Wrap"
+                       Visibility="{Binding ErrorMessage, Converter={StaticResource StringToVisibilityConverter}}"/>
+        </StackPanel>
+
+        <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,16,0,0">
+            <Button Content="تقديم المطالبة" Padding="18,8" Background="#1F6F50" Foreground="White" BorderThickness="0"
+                    Command="{Binding SaveCommand}" Margin="0,0,8,0"/>
+            <Button Content="إلغاء" Padding="18,8" Click="CancelButton_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>

@@ -1,0 +1,70 @@
+<UserControl x:Class="PharmacyERP.WPF.Views.Accounting.ReceiptsAndPaymentsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             FlowDirection="RightToLeft">
+
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="12"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0" Orientation="Horizontal">
+            <TextBlock Text="سندات القبض والصرف" FontSize="20" FontWeight="Bold" Foreground="#1F2937" VerticalAlignment="Center"/>
+            <Button Content="تحديث" Margin="16,0,0,0" Padding="14,6" Command="{Binding RefreshCommand}"/>
+        </StackPanel>
+
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="16"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <Border Grid.Column="0" Background="White" BorderBrush="#E5E7EB" BorderThickness="1">
+                <DockPanel>
+                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="10">
+                        <TextBlock Text="سندات القبض" FontWeight="SemiBold" FontSize="14" VerticalAlignment="Center"/>
+                        <Button Content="سند قبض جديد" Margin="12,0,0,0" Padding="10,4" Background="#1F6F50" Foreground="White" BorderThickness="0"
+                                Command="{Binding AddReceiptCommand}" Visibility="{Binding CanManage, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                    </StackPanel>
+
+                    <DataGrid ItemsSource="{Binding Receipts}" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False"
+                              GridLinesVisibility="Horizontal" HeadersVisibility="Column" BorderThickness="0"
+                              RowHeight="32" FontSize="12">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="الرقم" Binding="{Binding Number}" Width="90"/>
+                            <DataGridTextColumn Header="الدافع" Binding="{Binding PayerName}" Width="*"/>
+                            <DataGridTextColumn Header="التاريخ" Binding="{Binding ReceiptDate, StringFormat=yyyy-MM-dd}" Width="90"/>
+                            <DataGridTextColumn Header="المبلغ" Binding="{Binding Amount, StringFormat=N2}" Width="85"/>
+                            <DataGridTextColumn Header="المصدر" Binding="{Binding SourceType}" Width="65"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </DockPanel>
+            </Border>
+
+            <Border Grid.Column="2" Background="White" BorderBrush="#E5E7EB" BorderThickness="1">
+                <DockPanel>
+                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="10">
+                        <TextBlock Text="سندات الصرف" FontWeight="SemiBold" FontSize="14" VerticalAlignment="Center"/>
+                        <Button Content="سند صرف جديد" Margin="12,0,0,0" Padding="10,4" Background="#1F6F50" Foreground="White" BorderThickness="0"
+                                Command="{Binding AddPaymentCommand}" Visibility="{Binding CanManage, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                    </StackPanel>
+
+                    <DataGrid ItemsSource="{Binding Payments}" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False"
+                              GridLinesVisibility="Horizontal" HeadersVisibility="Column" BorderThickness="0"
+                              RowHeight="32" FontSize="12">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="الرقم" Binding="{Binding Number}" Width="90"/>
+                            <DataGridTextColumn Header="المستفيد" Binding="{Binding PayeeName}" Width="*"/>
+                            <DataGridTextColumn Header="التاريخ" Binding="{Binding PaymentDate, StringFormat=yyyy-MM-dd}" Width="90"/>
+                            <DataGridTextColumn Header="المبلغ" Binding="{Binding Amount, StringFormat=N2}" Width="85"/>
+                            <DataGridTextColumn Header="المصدر" Binding="{Binding SourceType}" Width="65"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </DockPanel>
+            </Border>
+        </Grid>
+    </Grid>
+</UserControl>

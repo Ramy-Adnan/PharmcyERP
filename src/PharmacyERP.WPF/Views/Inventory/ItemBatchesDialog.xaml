@@ -1,0 +1,68 @@
+<Window x:Class="PharmacyERP.WPF.Views.Inventory.ItemBatchesDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="إدارة الدفعات والمخزون" Height="640" Width="900"
+        WindowStartupLocation="CenterOwner" FlowDirection="RightToLeft"
+        Background="#F4F6F8">
+
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="12"/>
+            <RowDefinition Height="2*"/>
+            <RowDefinition Height="12"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="16"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0" Orientation="Horizontal">
+            <TextBlock Text="{Binding ItemName, StringFormat='دفعات الصنف: {0}'}" FontSize="18" FontWeight="Bold" Foreground="#1F2937" VerticalAlignment="Center"/>
+            <Button Content="تحديث" Margin="16,0,0,0" Padding="12,6" Command="{Binding RefreshCommand}"/>
+            <Button Content="استلام دفعة جديدة" Margin="8,0,0,0" Padding="12,6" Background="#1F6F50" Foreground="White" BorderThickness="0"
+                    Command="{Binding ReceiveStockCommand}" Visibility="{Binding CanReceiveStock, Converter={StaticResource BoolToVisibilityConverter}}"/>
+            <Button Content="تعديل رصيد الدفعة المحددة" Margin="8,0,0,0" Padding="12,6" Command="{Binding AdjustStockCommand}"
+                    Visibility="{Binding CanAdjustStock, Converter={StaticResource BoolToVisibilityConverter}}"/>
+        </StackPanel>
+
+        <Border Grid.Row="2" Background="White" BorderBrush="#E5E7EB" BorderThickness="1">
+            <DataGrid ItemsSource="{Binding Batches}" SelectedItem="{Binding SelectedBatch}"
+                      AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False"
+                      GridLinesVisibility="Horizontal" HeadersVisibility="Column" BorderThickness="0"
+                      RowHeight="32" FontSize="12">
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="المخزن" Binding="{Binding WarehouseName}" Width="120"/>
+                    <DataGridTextColumn Header="رقم الدفعة" Binding="{Binding BatchNumber}" Width="120"/>
+                    <DataGridTextColumn Header="تاريخ الانتهاء" Binding="{Binding ExpiryDate, StringFormat=yyyy-MM-dd}" Width="110"/>
+                    <DataGridTextColumn Header="أيام متبقية" Binding="{Binding DaysUntilExpiry}" Width="90"/>
+                    <DataGridTextColumn Header="الكمية" Binding="{Binding QuantityOnHand}" Width="80"/>
+                    <DataGridTextColumn Header="سعر الشراء" Binding="{Binding PurchasePrice, StringFormat=N2}" Width="90"/>
+                    <DataGridTextColumn Header="مرجع المورد" Binding="{Binding SupplierReference}" Width="120"/>
+                    <DataGridCheckBoxColumn Header="منتهي" Binding="{Binding IsExpired}" Width="60"/>
+                </DataGrid.Columns>
+            </DataGrid>
+        </Border>
+
+        <TextBlock Grid.Row="3" Text="سجل حركة الدفعة المحددة" FontWeight="SemiBold" FontSize="13"/>
+
+        <Border Grid.Row="4" Background="White" BorderBrush="#E5E7EB" BorderThickness="1">
+            <DataGrid ItemsSource="{Binding TransactionHistory}"
+                      AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False"
+                      GridLinesVisibility="Horizontal" HeadersVisibility="Column" BorderThickness="0"
+                      RowHeight="30" FontSize="12">
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="التاريخ" Binding="{Binding TransactionAtUtc, StringFormat='yyyy-MM-dd HH:mm'}" Width="140"/>
+                    <DataGridTextColumn Header="نوع الحركة" Binding="{Binding TypeDisplay}" Width="130"/>
+                    <DataGridTextColumn Header="التغيير" Binding="{Binding QuantityChange}" Width="70"/>
+                    <DataGridTextColumn Header="الرصيد بعد الحركة" Binding="{Binding ResultingQuantityOnHand}" Width="110"/>
+                    <DataGridTextColumn Header="بواسطة" Binding="{Binding PerformedByUserName}" Width="120"/>
+                    <DataGridTextColumn Header="ملاحظات" Binding="{Binding Notes}" Width="*"/>
+                </DataGrid.Columns>
+            </DataGrid>
+        </Border>
+
+        <StackPanel Grid.Row="6" Orientation="Horizontal" HorizontalAlignment="Left">
+            <Button Content="إغلاق" Padding="18,8" Click="CloseButton_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>

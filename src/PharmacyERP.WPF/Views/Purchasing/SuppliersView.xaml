@@ -1,0 +1,45 @@
+<UserControl x:Class="PharmacyERP.WPF.Views.Purchasing.SuppliersView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             FlowDirection="RightToLeft">
+
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="12"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0" Orientation="Horizontal">
+            <TextBlock Text="الموردون" FontSize="20" FontWeight="Bold" Foreground="#1F2937" VerticalAlignment="Center"/>
+            <Button Content="مورد جديد" Margin="16,0,0,0" Padding="14,6" Background="#1F6F50" Foreground="White" BorderThickness="0"
+                    Command="{Binding AddSupplierCommand}" Visibility="{Binding CanManage, Converter={StaticResource BoolToVisibilityConverter}}"/>
+            <Button Content="تحديث" Margin="8,0,0,0" Padding="14,6" Command="{Binding RefreshCommand}"/>
+        </StackPanel>
+
+        <Border Grid.Row="2" Background="White" BorderBrush="#E5E7EB" BorderThickness="1">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="10" HorizontalAlignment="Left">
+                    <Button Content="تعديل" Padding="12,6" Margin="0,0,8,0" Command="{Binding EditSupplierCommand}"/>
+                    <Button Content="تفعيل / تعطيل" Padding="12,6" Command="{Binding ToggleStatusCommand}"/>
+                </StackPanel>
+
+                <DataGrid ItemsSource="{Binding Suppliers}" SelectedItem="{Binding SelectedSupplier}"
+                          AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False"
+                          GridLinesVisibility="Horizontal" HeadersVisibility="Column" BorderThickness="0"
+                          RowHeight="34" FontSize="13">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="الرمز" Binding="{Binding Code}" Width="80"/>
+                        <DataGridTextColumn Header="اسم المورد" Binding="{Binding Name}" Width="*"/>
+                        <DataGridTextColumn Header="جهة الاتصال" Binding="{Binding ContactPerson}" Width="140"/>
+                        <DataGridTextColumn Header="الهاتف" Binding="{Binding Phone}" Width="120"/>
+                        <DataGridTextColumn Header="مدة السداد (يوم)" Binding="{Binding PaymentTermsDays}" Width="110"/>
+                        <DataGridTextColumn Header="أوامر شراء مفتوحة" Binding="{Binding OpenPurchaseOrderCount}" Width="120"/>
+                        <DataGridTextColumn Header="رصيد مستحق" Binding="{Binding TotalOutstandingBalance, StringFormat=N2}" Width="110"/>
+                        <DataGridCheckBoxColumn Header="نشط" Binding="{Binding IsActive}" Width="60"/>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </DockPanel>
+        </Border>
+    </Grid>
+</UserControl>

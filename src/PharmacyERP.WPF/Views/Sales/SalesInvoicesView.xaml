@@ -1,0 +1,45 @@
+<UserControl x:Class="PharmacyERP.WPF.Views.Sales.SalesInvoicesView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             FlowDirection="RightToLeft">
+
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="12"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0" Orientation="Horizontal">
+            <TextBlock Text="فواتير المبيعات" FontSize="20" FontWeight="Bold" Foreground="#1F2937" VerticalAlignment="Center"/>
+            <Button Content="تحديث" Margin="16,0,0,0" Padding="14,6" Command="{Binding RefreshCommand}"/>
+        </StackPanel>
+
+        <Border Grid.Row="2" Background="White" BorderBrush="#E5E7EB" BorderThickness="1">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="10" HorizontalAlignment="Left">
+                    <Button Content="فتح التفاصيل / المرتجعات" Padding="12,6" Background="#1F6F50" Foreground="White" BorderThickness="0"
+                            Command="{Binding OpenDetailCommand}"/>
+                </StackPanel>
+
+                <DataGrid ItemsSource="{Binding Invoices}" SelectedItem="{Binding SelectedInvoice}"
+                          AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False"
+                          GridLinesVisibility="Horizontal" HeadersVisibility="Column" BorderThickness="0"
+                          RowHeight="34" FontSize="13">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="الرقم" Binding="{Binding Number}" Width="100"/>
+                        <DataGridTextColumn Header="العميل" Binding="{Binding CustomerName}" Width="*"/>
+                        <DataGridTextColumn Header="الوصفة الطبية" Binding="{Binding PrescriptionNumber}" Width="110"/>
+                        <DataGridTextColumn Header="الفرع" Binding="{Binding BranchName}" Width="110"/>
+                        <DataGridTextColumn Header="الكاشير" Binding="{Binding CashierName}" Width="120"/>
+                        <DataGridTextColumn Header="التاريخ والوقت" Binding="{Binding SaleAtUtc, StringFormat='yyyy-MM-dd HH:mm'}" Width="140"/>
+                        <DataGridTextColumn Header="طريقة الدفع" Binding="{Binding PaymentMethod}" Width="100"/>
+                        <DataGridTextColumn Header="الإجمالي" Binding="{Binding TotalAmount, StringFormat=N2}" Width="95"/>
+                        <DataGridTextColumn Header="عدد الأصناف" Binding="{Binding LineCount}" Width="90"/>
+                        <DataGridTextColumn Header="الحالة" Binding="{Binding Status}" Width="100"/>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </DockPanel>
+        </Border>
+    </Grid>
+</UserControl>

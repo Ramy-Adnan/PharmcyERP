@@ -1,0 +1,60 @@
+<UserControl x:Class="PharmacyERP.WPF.Views.Inventory.ItemsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             FlowDirection="RightToLeft">
+
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="12"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <Grid Grid.Row="0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <TextBlock Grid.Column="0" Text="بطاقات الأصناف" FontSize="20" FontWeight="Bold" Foreground="#1F2937" VerticalAlignment="Center"/>
+
+            <TextBox Grid.Column="1" Margin="16,0" Padding="8,6" VerticalAlignment="Center" MaxWidth="380" HorizontalAlignment="Left"
+                     Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                     ToolTip="ابحث بالاسم أو الرمز أو الباركود أو الاسم العلمي"/>
+
+            <StackPanel Grid.Column="2" Orientation="Horizontal">
+                <Button Content="بحث" Padding="14,6" Margin="0,0,8,0" Command="{Binding SearchCommand}"/>
+                <Button Content="صنف جديد" Padding="14,6" Background="#1F6F50" Foreground="White" BorderThickness="0"
+                        Command="{Binding AddItemCommand}" Visibility="{Binding CanManageItems, Converter={StaticResource BoolToVisibilityConverter}}"/>
+            </StackPanel>
+        </Grid>
+
+        <Border Grid.Row="2" Background="White" BorderBrush="#E5E7EB" BorderThickness="1">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="10" HorizontalAlignment="Left">
+                    <Button Content="تعديل" Padding="12,6" Margin="0,0,8,0" Command="{Binding EditItemCommand}"/>
+                    <Button Content="تفعيل / تعطيل" Padding="12,6" Margin="0,0,8,0" Command="{Binding ToggleActiveCommand}"/>
+                    <Button Content="إدارة الدفعات والمخزون" Padding="12,6" Command="{Binding ManageBatchesCommand}"/>
+                </StackPanel>
+
+                <DataGrid ItemsSource="{Binding Items}" SelectedItem="{Binding SelectedItem}"
+                          AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False"
+                          GridLinesVisibility="Horizontal" HeadersVisibility="Column" BorderThickness="0"
+                          RowHeight="34" FontSize="13">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="الرمز" Binding="{Binding Code}" Width="90"/>
+                        <DataGridTextColumn Header="اسم الصنف" Binding="{Binding Name}" Width="*"/>
+                        <DataGridTextColumn Header="الاسم العلمي" Binding="{Binding GenericName}" Width="150"/>
+                        <DataGridTextColumn Header="التصنيف" Binding="{Binding CategoryName}" Width="120"/>
+                        <DataGridTextColumn Header="الوحدة" Binding="{Binding UnitOfMeasureName}" Width="90"/>
+                        <DataGridTextColumn Header="سعر البيع" Binding="{Binding DefaultSalePrice, StringFormat=N2}" Width="90"/>
+                        <DataGridTextColumn Header="الرصيد الكلي" Binding="{Binding TotalQuantityOnHand}" Width="90"/>
+                        <DataGridCheckBoxColumn Header="وصفة" Binding="{Binding RequiresPrescription}" Width="60"/>
+                        <DataGridCheckBoxColumn Header="نشط" Binding="{Binding IsActive}" Width="60"/>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </DockPanel>
+        </Border>
+    </Grid>
+</UserControl>

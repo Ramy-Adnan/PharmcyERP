@@ -1,0 +1,46 @@
+<UserControl x:Class="PharmacyERP.WPF.Views.Purchasing.GoodsReceiptsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             FlowDirection="RightToLeft">
+
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="12"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0" Orientation="Horizontal">
+            <TextBlock Text="سندات استلام البضاعة" FontSize="20" FontWeight="Bold" Foreground="#1F2937" VerticalAlignment="Center"/>
+            <Button Content="سند استلام جديد" Margin="16,0,0,0" Padding="14,6" Background="#1F6F50" Foreground="White" BorderThickness="0"
+                    Command="{Binding AddNoteCommand}" Visibility="{Binding CanReceive, Converter={StaticResource BoolToVisibilityConverter}}"/>
+            <Button Content="تحديث" Margin="8,0,0,0" Padding="14,6" Command="{Binding RefreshCommand}"/>
+        </StackPanel>
+
+        <Border Grid.Row="2" Background="White" BorderBrush="#E5E7EB" BorderThickness="1">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="10" HorizontalAlignment="Left">
+                    <Button Content="تعديل" Padding="12,6" Margin="0,0,8,0" Command="{Binding EditNoteCommand}"/>
+                    <Button Content="ترحيل إلى المخزون" Padding="12,6" Margin="0,0,8,0" Background="#1F6F50" Foreground="White" BorderThickness="0" Command="{Binding PostNoteCommand}"/>
+                    <Button Content="حذف" Padding="12,6" Foreground="#DC2626" Command="{Binding DeleteNoteCommand}"/>
+                </StackPanel>
+
+                <DataGrid ItemsSource="{Binding Notes}" SelectedItem="{Binding SelectedNote}"
+                          AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False"
+                          GridLinesVisibility="Horizontal" HeadersVisibility="Column" BorderThickness="0"
+                          RowHeight="34" FontSize="13">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="الرقم" Binding="{Binding Number}" Width="100"/>
+                        <DataGridTextColumn Header="أمر الشراء" Binding="{Binding PurchaseOrderNumber}" Width="100"/>
+                        <DataGridTextColumn Header="المورد" Binding="{Binding SupplierName}" Width="*"/>
+                        <DataGridTextColumn Header="الفرع" Binding="{Binding BranchName}" Width="110"/>
+                        <DataGridTextColumn Header="المخزن" Binding="{Binding WarehouseName}" Width="110"/>
+                        <DataGridTextColumn Header="تاريخ الاستلام" Binding="{Binding ReceiptDate, StringFormat=yyyy-MM-dd}" Width="100"/>
+                        <DataGridTextColumn Header="الحالة" Binding="{Binding Status}" Width="90"/>
+                        <DataGridTextColumn Header="التكلفة الإجمالية" Binding="{Binding TotalCost, StringFormat=N2}" Width="110"/>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </DockPanel>
+        </Border>
+    </Grid>
+</UserControl>

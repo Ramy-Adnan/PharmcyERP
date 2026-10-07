@@ -1,0 +1,23 @@
+bin/
+obj/
+.vs/
+*.user
+logs/
+*.suo
+
+# Local credentials, certificates, databases and backups
+.env
+.env.*
+!.env.example
+appsettings.Local.json
+appsettings.Development.json
+*.pfx
+*.p12
+*.pem
+*.key
+*.lic
+*.bak
+*.mdf
+*.ldf
+*.db
+*.sqlite*

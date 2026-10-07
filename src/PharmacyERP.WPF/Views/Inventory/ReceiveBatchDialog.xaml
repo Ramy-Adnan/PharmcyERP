@@ -1,0 +1,52 @@
+<Window x:Class="PharmacyERP.WPF.Views.Inventory.ReceiveBatchDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="استلام دفعة جديدة" Height="560" Width="440"
+        WindowStartupLocation="CenterOwner" ResizeMode="NoResize" FlowDirection="RightToLeft"
+        Background="#F4F6F8">
+
+    <Grid Margin="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+                <TextBlock Text="المخزن" Margin="0,0,0,4"/>
+                <ComboBox ItemsSource="{Binding Warehouses}" DisplayMemberPath="Name" SelectedValuePath="Id"
+                          SelectedValue="{Binding WarehouseId}" Padding="6" Margin="0,0,0,12"/>
+
+                <TextBlock Text="رقم الدفعة (Batch Number)" Margin="0,0,0,4"/>
+                <TextBox Text="{Binding BatchNumber, UpdateSourceTrigger=PropertyChanged}" Padding="6" Margin="0,0,0,12"/>
+
+                <TextBlock Text="تاريخ الصنع (اختياري)" Margin="0,0,0,4"/>
+                <DatePicker SelectedDate="{Binding ManufactureDate}" Padding="6" Margin="0,0,0,12"/>
+
+                <TextBlock Text="تاريخ الانتهاء" Margin="0,0,0,4"/>
+                <DatePicker SelectedDate="{Binding ExpiryDate}" Padding="6" Margin="0,0,0,12"/>
+
+                <TextBlock Text="الكمية المستلمة" Margin="0,0,0,4"/>
+                <TextBox Text="{Binding Quantity, UpdateSourceTrigger=PropertyChanged}" Padding="6" Margin="0,0,0,12"/>
+
+                <TextBlock Text="سعر الشراء (للوحدة)" Margin="0,0,0,4"/>
+                <TextBox Text="{Binding PurchasePrice, UpdateSourceTrigger=PropertyChanged}" Padding="6" Margin="0,0,0,12"/>
+
+                <TextBlock Text="سعر بيع خاص بهذه الدفعة (اختياري)" Margin="0,0,0,4"/>
+                <TextBox Text="{Binding SalePriceOverride, UpdateSourceTrigger=PropertyChanged}" Padding="6" Margin="0,0,0,12"/>
+
+                <TextBlock Text="مرجع المورد / رقم الفاتورة (اختياري)" Margin="0,0,0,4"/>
+                <TextBox Text="{Binding SupplierReference, UpdateSourceTrigger=PropertyChanged}" Padding="6" Margin="0,0,0,12"/>
+
+                <TextBlock Text="{Binding ErrorMessage}" Foreground="#DC2626" TextWrapping="Wrap"
+                           Visibility="{Binding ErrorMessage, Converter={StaticResource StringToVisibilityConverter}}"/>
+            </StackPanel>
+        </ScrollViewer>
+
+        <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,16,0,0">
+            <Button Content="حفظ" Padding="18,8" Background="#1F6F50" Foreground="White" BorderThickness="0"
+                    Command="{Binding SaveCommand}" Margin="0,0,8,0"/>
+            <Button Content="إلغاء" Padding="18,8" Click="CancelButton_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>

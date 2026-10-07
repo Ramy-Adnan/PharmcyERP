@@ -1,0 +1,311 @@
+using System.Collections.ObjectModel;
+using PharmacyERP.Application.Features.Branches;
+using PharmacyERP.Application.Features.Branches.DTOs;
+using PharmacyERP.Application.Features.Inventory;
+using PharmacyERP.Application.Features.Inventory.DTOs;
+using PharmacyERP.Application.Features.Purchasing;
+using PharmacyERP.Application.Features.Purchasing.DTOs;
+using PharmacyERP.Domain.Enums;
+using PharmacyERP.WPF.MVVM;
+
+namespace PharmacyERP.WPF.ViewModels.Purchasing;
+
+/// <summary>
+/// ViewModel for the Goods Receipt editor. Supports two flows: picking an
+/// open Purchase Order to pre-fill outstanding lines (quantities/costs come
+/// from what was ordered), or a fully manual receipt for stock arriving
+/// without a formal PO. Either way the note is saved as Draft first and only
+/// PostGoodsReceiptAsync (triggered from the list screen) commits it to
+/// Inventory — this screen never touches stock directly.
+/// </summary>
+public class GoodsReceiptEditViewModel : ViewModelBase
+{
+    private readonly IPurchasingService _purchasingService;
+    private readonly IInventoryService _inventoryService;
+    private readonly IBranchService _branchService;
+
+    private int? _id;
+    private int _supplierId;
+    private int? _purchaseOrderId;
+    private int _branchId;
+    private int _warehouseId;
+    private DateTime _receiptDate = DateTime.Today;
+    private string? _notes;
+    private string _errorMessage = string.Empty;
+    private bool _isBusy;
+    private GRLineRow? _selectedLine;
+
+    public GoodsReceiptEditViewModel(IPurchasingService purchasingService, IInventoryService inventoryService, IBranchService branchService)
+    {
+        _purchasingService = purchasingService;
+        _inventoryService = inventoryService;
+        _branchService = branchService;
+
+        Suppliers = new ObservableCollection<SupplierDto>();
+        OpenPurchaseOrders = new ObservableCollection<PurchaseOrderDto>();
+        Branches = new ObservableCollection<BranchDto>();
+        Warehouses = new ObservableCollection<WarehouseDto>();
+        AvailableItems = new ObservableCollection<ItemDto>();
+        Lines = new ObservableCollection<GRLineRow>();
+
+        LoadFromPurchaseOrderCommand = new AsyncRelayCommand(LoadFromPurchaseOrderAsync, () => PurchaseOrderId.HasValue);
+        AddLineCommand = new RelayCommand(() => Lines.Add(new GRLineRow()));
+        RemoveLineCommand = new RelayCommand(() => { if (SelectedLine is not null) Lines.Remove(SelectedLine); }, () => SelectedLine is not null);
+        SaveCommand = new AsyncRelayCommand(SaveAsync, () => !IsBusy);
+    }
+
+    public bool IsEditMode => _id.HasValue;
+    public string DialogTitle => IsEditMode ? "تعديل سند استلام" : "سند استلام بضاعة جديد";
+
+    public ObservableCollection<SupplierDto> Suppliers { get; }
+    public ObservableCollection<PurchaseOrderDto> OpenPurchaseOrders { get; }
+    public ObservableCollection<BranchDto> Branches { get; }
+    public ObservableCollection<WarehouseDto> Warehouses { get; }
+    public ObservableCollection<ItemDto> AvailableItems { get; }
+    public ObservableCollection<GRLineRow> Lines { get; }
+
+    public int SupplierId
+    {
+        get => _supplierId;
+        set
+        {
+            if (SetProperty(ref _supplierId, value))
+                _ = LoadOpenPurchaseOrdersForSupplierAsync();
+        }
+    }
+
+    public int? PurchaseOrderId
+    {
+        get => _purchaseOrderId;
+        set
+        {
+            if (SetProperty(ref _purchaseOrderId, value))
+                System.Windows.Input.CommandManager.InvalidateRequerySuggested();
+        }
+    }
+
+    public int BranchId
+    {
+        get => _branchId;
+        set
+        {
+            if (SetProperty(ref _branchId, value))
+                _ = LoadWarehousesForBranchAsync();
+        }
+    }
+
+    public int WarehouseId { get => _warehouseId; set => SetProperty(ref _warehouseId, value); }
+    public DateTime ReceiptDate { get => _receiptDate; set => SetProperty(ref _receiptDate, value); }
+    public string? Notes { get => _notes; set => SetProperty(ref _notes, value); }
+
+    public GRLineRow? SelectedLine
+    {
+        get => _selectedLine;
+        set
+        {
+            if (SetProperty(ref _selectedLine, value))
+                System.Windows.Input.CommandManager.InvalidateRequerySuggested();
+        }
+    }
+
+    public string ErrorMessage { get => _errorMessage; set => SetProperty(ref _errorMessage, value); }
+    public bool IsBusy { get => _isBusy; set => SetProperty(ref _isBusy, value); }
+
+    public AsyncRelayCommand LoadFromPurchaseOrderCommand { get; }
+    public RelayCommand AddLineCommand { get; }
+    public RelayCommand RemoveLineCommand { get; }
+    public AsyncRelayCommand SaveCommand { get; }
+    public bool SavedSuccessfully { get; private set; }
+    public event Action? RequestClose;
+
+    public async Task LoadForCreateAsync()
+    {
+        _id = null;
+        await LoadLookupsAsync();
+    }
+
+    public async Task LoadForEditAsync(int goodsReceiptNoteId)
+    {
+        await LoadLookupsAsync();
+
+        var dto = await _purchasingService.GetGoodsReceiptForEditAsync(goodsReceiptNoteId);
+        if (dto is null) return;
+
+        _id = dto.Id;
+        SupplierId = dto.SupplierId;
+        await LoadOpenPurchaseOrdersForSupplierAsync();
+        PurchaseOrderId = dto.PurchaseOrderId;
+        BranchId = dto.BranchId;
+        await LoadWarehousesForBranchAsync();
+        WarehouseId = dto.WarehouseId;
+        ReceiptDate = dto.ReceiptDate;
+        Notes = dto.Notes;
+
+        Lines.Clear();
+        foreach (var line in dto.Lines)
+        {
+            var item = AvailableItems.FirstOrDefault(i => i.Id == line.ItemId);
+            Lines.Add(new GRLineRow
+            {
+                Id = line.Id,
+                PurchaseOrderItemId = line.PurchaseOrderItemId,
+                ItemId = line.ItemId,
+                ItemCode = item?.Code ?? string.Empty,
+                ItemName = item?.Name ?? string.Empty,
+                BatchNumber = line.BatchNumber,
+                ManufactureDate = line.ManufactureDate,
+                ExpiryDate = line.ExpiryDate,
+                QuantityReceived = line.QuantityReceived,
+                UnitCost = line.UnitCost,
+                SalePrice = line.SalePrice
+            });
+        }
+
+        OnPropertyChanged(nameof(IsEditMode));
+        OnPropertyChanged(nameof(DialogTitle));
+    }
+
+    private async Task LoadLookupsAsync()
+    {
+        var suppliers = await _purchasingService.GetSuppliersAsync();
+        Suppliers.Clear();
+        foreach (var s in suppliers.Where(s => s.IsActive)) Suppliers.Add(s);
+
+        var branches = await _branchService.GetAllAsync(includeInactive: false);
+        Branches.Clear();
+        foreach (var b in branches) Branches.Add(b);
+
+        var items = await _inventoryService.GetItemsAsync();
+        AvailableItems.Clear();
+        foreach (var i in items.Where(i => i.IsActive)) AvailableItems.Add(i);
+
+        if (BranchId == 0 && Branches.Count > 0) BranchId = Branches.First().Id;
+        else await LoadWarehousesForBranchAsync();
+    }
+
+    private async Task LoadOpenPurchaseOrdersForSupplierAsync()
+    {
+        OpenPurchaseOrders.Clear();
+        if (SupplierId <= 0) return;
+
+        var allOrders = await _purchasingService.GetPurchaseOrdersAsync();
+        foreach (var o in allOrders.Where(o => o.SupplierId == SupplierId &&
+                     o.Status is PurchaseOrderStatus.Submitted or PurchaseOrderStatus.PartiallyReceived))
+        {
+            OpenPurchaseOrders.Add(o);
+        }
+    }
+
+    private async Task LoadWarehousesForBranchAsync()
+    {
+        Warehouses.Clear();
+        if (BranchId == 0) return;
+
+        var warehouses = await _branchService.GetWarehousesAsync(BranchId);
+        foreach (var w in warehouses.Where(w => w.IsActive)) Warehouses.Add(w);
+
+        if (WarehouseId == 0 || Warehouses.All(w => w.Id != WarehouseId))
+            WarehouseId = Warehouses.FirstOrDefault()?.Id ?? 0;
+    }
+
+    /// <summary>Pulls the selected PO's branch/warehouse and pre-fills one grid row per outstanding line.</summary>
+    private async Task LoadFromPurchaseOrderAsync()
+    {
+        if (!PurchaseOrderId.HasValue) return;
+
+        var poDetails = await _purchasingService.GetPurchaseOrderForEditAsync(PurchaseOrderId.Value);
+        if (poDetails is not null)
+        {
+            BranchId = poDetails.BranchId;
+            await LoadWarehousesForBranchAsync();
+            WarehouseId = poDetails.WarehouseId;
+        }
+
+        var outstandingLines = await _purchasingService.GetOutstandingLinesForReceiptAsync(PurchaseOrderId.Value);
+
+        Lines.Clear();
+        foreach (var line in outstandingLines)
+        {
+            Lines.Add(new GRLineRow
+            {
+                PurchaseOrderItemId = line.Id,
+                ItemId = line.ItemId,
+                ItemCode = line.ItemCode,
+                ItemName = line.ItemName,
+                QuantityReceived = line.QuantityOutstanding,
+                UnitCost = line.UnitCost,
+                ExpiryDate = DateTime.Today.AddYears(1)
+            });
+        }
+    }
+
+    /// <summary>Called from the View's code-behind when a line's item ComboBox selection changes (manual lines only).</summary>
+    public void ApplyItemSelection(GRLineRow line, int itemId)
+    {
+        var item = AvailableItems.FirstOrDefault(i => i.Id == itemId);
+        if (item is null) return;
+
+        line.ItemId = item.Id;
+        line.ItemCode = item.Code;
+        line.ItemName = item.Name;
+        if (line.UnitCost == 0) line.UnitCost = item.DefaultPurchasePrice;
+        if (line.SalePrice == 0) line.SalePrice = item.DefaultSalePrice;
+    }
+
+    private async Task SaveAsync()
+    {
+        ErrorMessage = string.Empty;
+
+        if (SupplierId <= 0) { ErrorMessage = "الرجاء اختيار المورد."; return; }
+        if (BranchId <= 0 || WarehouseId <= 0) { ErrorMessage = "الرجاء اختيار الفرع والمخزن."; return; }
+        if (!Lines.Any()) { ErrorMessage = "يجب إضافة صنف واحد على الأقل."; return; }
+        if (Lines.Any(l => l.ItemId <= 0)) { ErrorMessage = "الرجاء اختيار الصنف لكل سطر."; return; }
+        if (Lines.Any(l => string.IsNullOrWhiteSpace(l.BatchNumber))) { ErrorMessage = "رقم الدفعة مطلوب لكل سطر."; return; }
+        if (Lines.Any(l => l.QuantityReceived <= 0)) { ErrorMessage = "الكمية يجب أن تكون أكبر من صفر لكل سطر."; return; }
+        if (Lines.Any(l => l.ExpiryDate.Date <= ReceiptDate.Date)) { ErrorMessage = "تاريخ انتهاء الصلاحية يجب أن يكون بعد تاريخ الاستلام."; return; }
+
+        IsBusy = true;
+        try
+        {
+            var dto = new GoodsReceiptUpsertDto
+            {
+                Id = _id,
+                PurchaseOrderId = PurchaseOrderId,
+                SupplierId = SupplierId,
+                BranchId = BranchId,
+                WarehouseId = WarehouseId,
+                ReceiptDate = ReceiptDate,
+                Notes = Notes,
+                Lines = Lines.Select(l => new GoodsReceiptLineUpsertDto
+                {
+                    Id = l.Id,
+                    PurchaseOrderItemId = l.PurchaseOrderItemId,
+                    ItemId = l.ItemId,
+                    BatchNumber = l.BatchNumber,
+                    ManufactureDate = l.ManufactureDate,
+                    ExpiryDate = l.ExpiryDate,
+                    QuantityReceived = l.QuantityReceived,
+                    UnitCost = l.UnitCost,
+                    SalePrice = l.SalePrice
+                }).ToList()
+            };
+
+            var result = _id.HasValue
+                ? await _purchasingService.UpdateGoodsReceiptAsync(dto)
+                : await _purchasingService.CreateGoodsReceiptAsync(dto);
+
+            if (!result.Succeeded)
+            {
+                ErrorMessage = result.Errors.FirstOrDefault() ?? "تعذر حفظ سند الاستلام.";
+                return;
+            }
+
+            SavedSuccessfully = true;
+            RequestClose?.Invoke();
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+}

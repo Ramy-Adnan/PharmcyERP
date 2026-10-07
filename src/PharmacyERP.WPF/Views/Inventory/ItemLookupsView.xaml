@@ -1,0 +1,88 @@
+<UserControl x:Class="PharmacyERP.WPF.Views.Inventory.ItemLookupsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             FlowDirection="RightToLeft">
+
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="12"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0" Orientation="Horizontal">
+            <TextBlock Text="تصنيفات ووحدات وشركات الأصناف" FontSize="20" FontWeight="Bold" Foreground="#1F2937" VerticalAlignment="Center"/>
+            <Button Content="تحديث" Margin="16,0,0,0" Padding="14,6" Command="{Binding RefreshCommand}"/>
+        </StackPanel>
+
+        <TabControl Grid.Row="2" Background="White">
+
+            <TabItem Header="التصنيفات">
+                <DockPanel Margin="12">
+                    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,10,0,0" HorizontalAlignment="Left">
+                        <Button Content="إضافة صف" Padding="12,6" Margin="0,0,8,0" Command="{Binding AddCategoryCommand}"/>
+                        <Button Content="حفظ التغييرات" Padding="12,6" Margin="0,0,8,0" Background="#1F6F50" Foreground="White" BorderThickness="0" Command="{Binding SaveCategoriesCommand}"/>
+                        <Button Content="حذف المحدد" Padding="12,6" Foreground="#DC2626" Command="{Binding DeleteCategoryCommand}"/>
+                    </StackPanel>
+
+                    <DataGrid ItemsSource="{Binding Categories}" SelectedItem="{Binding SelectedCategory}"
+                              AutoGenerateColumns="False" CanUserAddRows="False"
+                              GridLinesVisibility="Horizontal" HeadersVisibility="Column" BorderThickness="1" BorderBrush="#E5E7EB"
+                              RowHeight="34" FontSize="13">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="الرمز" Binding="{Binding Code, UpdateSourceTrigger=PropertyChanged}" Width="120"/>
+                            <DataGridTextColumn Header="اسم التصنيف" Binding="{Binding Name, UpdateSourceTrigger=PropertyChanged}" Width="*"/>
+                            <DataGridCheckBoxColumn Header="نشط" Binding="{Binding IsActive, UpdateSourceTrigger=PropertyChanged}" Width="60"/>
+                            <DataGridTextColumn Header="عدد الأصناف" Binding="{Binding ItemCount}" Width="90" IsReadOnly="True"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </DockPanel>
+            </TabItem>
+
+            <TabItem Header="وحدات القياس">
+                <DockPanel Margin="12">
+                    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,10,0,0" HorizontalAlignment="Left">
+                        <Button Content="إضافة صف" Padding="12,6" Margin="0,0,8,0" Command="{Binding AddUnitCommand}"/>
+                        <Button Content="حفظ التغييرات" Padding="12,6" Margin="0,0,8,0" Background="#1F6F50" Foreground="White" BorderThickness="0" Command="{Binding SaveUnitsCommand}"/>
+                        <Button Content="حذف المحدد" Padding="12,6" Foreground="#DC2626" Command="{Binding DeleteUnitCommand}"/>
+                    </StackPanel>
+
+                    <DataGrid ItemsSource="{Binding Units}" SelectedItem="{Binding SelectedUnit}"
+                              AutoGenerateColumns="False" CanUserAddRows="False"
+                              GridLinesVisibility="Horizontal" HeadersVisibility="Column" BorderThickness="1" BorderBrush="#E5E7EB"
+                              RowHeight="34" FontSize="13">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="الرمز" Binding="{Binding Code, UpdateSourceTrigger=PropertyChanged}" Width="120"/>
+                            <DataGridTextColumn Header="اسم الوحدة" Binding="{Binding Name, UpdateSourceTrigger=PropertyChanged}" Width="*"/>
+                            <DataGridCheckBoxColumn Header="نشط" Binding="{Binding IsActive, UpdateSourceTrigger=PropertyChanged}" Width="60"/>
+                            <DataGridTextColumn Header="عدد الأصناف" Binding="{Binding ItemCount}" Width="90" IsReadOnly="True"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </DockPanel>
+            </TabItem>
+
+            <TabItem Header="الشركات المصنّعة">
+                <DockPanel Margin="12">
+                    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,10,0,0" HorizontalAlignment="Left">
+                        <Button Content="إضافة صف" Padding="12,6" Margin="0,0,8,0" Command="{Binding AddManufacturerCommand}"/>
+                        <Button Content="حفظ التغييرات" Padding="12,6" Margin="0,0,8,0" Background="#1F6F50" Foreground="White" BorderThickness="0" Command="{Binding SaveManufacturersCommand}"/>
+                        <Button Content="حذف المحدد" Padding="12,6" Foreground="#DC2626" Command="{Binding DeleteManufacturerCommand}"/>
+                    </StackPanel>
+
+                    <DataGrid ItemsSource="{Binding Manufacturers}" SelectedItem="{Binding SelectedManufacturer}"
+                              AutoGenerateColumns="False" CanUserAddRows="False"
+                              GridLinesVisibility="Horizontal" HeadersVisibility="Column" BorderThickness="1" BorderBrush="#E5E7EB"
+                              RowHeight="34" FontSize="13">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="اسم الشركة" Binding="{Binding Name, UpdateSourceTrigger=PropertyChanged}" Width="*"/>
+                            <DataGridTextColumn Header="البلد" Binding="{Binding Extra, UpdateSourceTrigger=PropertyChanged}" Width="160"/>
+                            <DataGridCheckBoxColumn Header="نشط" Binding="{Binding IsActive, UpdateSourceTrigger=PropertyChanged}" Width="60"/>
+                            <DataGridTextColumn Header="عدد الأصناف" Binding="{Binding ItemCount}" Width="90" IsReadOnly="True"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </DockPanel>
+            </TabItem>
+
+        </TabControl>
+    </Grid>
+</UserControl>

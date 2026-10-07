@@ -1,0 +1,99 @@
+<Window x:Class="PharmacyERP.WPF.Views.Accounting.ManualJournalEntryDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="قيد يدوي جديد" Height="640" Width="800"
+        WindowStartupLocation="CenterOwner" FlowDirection="RightToLeft"
+        Background="#F4F6F8">
+
+    <Grid Margin="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="12"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <Grid Grid.Row="0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="8"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="8"/>
+                <ColumnDefinition Width="2*"/>
+            </Grid.ColumnDefinitions>
+
+            <StackPanel Grid.Column="0">
+                <TextBlock Text="الفرع" Margin="0,0,0,4"/>
+                <ComboBox ItemsSource="{Binding Branches}" DisplayMemberPath="Name" SelectedValuePath="Id"
+                          SelectedValue="{Binding BranchId}" Padding="6"/>
+            </StackPanel>
+
+            <StackPanel Grid.Column="2">
+                <TextBlock Text="تاريخ القيد" Margin="0,0,0,4"/>
+                <DatePicker SelectedDate="{Binding EntryDate}" Padding="6"/>
+            </StackPanel>
+
+            <StackPanel Grid.Column="4">
+                <TextBlock Text="وصف القيد" Margin="0,0,0,4"/>
+                <TextBox Text="{Binding Description, UpdateSourceTrigger=PropertyChanged}" Padding="6"/>
+            </StackPanel>
+        </Grid>
+
+        <Border Grid.Row="2" Background="White" BorderBrush="#E5E7EB" BorderThickness="1">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="10" HorizontalAlignment="Left">
+                    <Button Content="إضافة سطر" Padding="12,6" Margin="0,0,8,0" Command="{Binding AddLineCommand}"/>
+                    <Button Content="حذف السطر" Padding="12,6" Foreground="#DC2626" Command="{Binding RemoveLineCommand}"/>
+                </StackPanel>
+
+                <Border DockPanel.Dock="Bottom" Margin="10" Padding="10" Background="#F4F6F8" BorderBrush="#E5E7EB" BorderThickness="1">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="إجمالي المدين: " FontWeight="SemiBold"/>
+                        <TextBlock Text="{Binding TotalDebit, StringFormat=N2}" Margin="0,0,24,0"/>
+                        <TextBlock Text="إجمالي الدائن: " FontWeight="SemiBold"/>
+                        <TextBlock Text="{Binding TotalCredit, StringFormat=N2}" Margin="0,0,24,0"/>
+                        <TextBlock Text="{Binding IsBalanced, StringFormat='متوازن: {0}'}" FontWeight="Bold"
+                                   Foreground="#1F6F50"/>
+                    </StackPanel>
+                </Border>
+
+                <DataGrid x:Name="LinesGrid" ItemsSource="{Binding Lines}" SelectedItem="{Binding SelectedLine}"
+                          AutoGenerateColumns="False" CanUserAddRows="False"
+                          GridLinesVisibility="Horizontal" HeadersVisibility="Column" BorderThickness="0"
+                          RowHeight="32" FontSize="13"
+                          CellEditEnding="LinesGrid_CellEditEnding">
+                    <DataGrid.Columns>
+                        <DataGridTemplateColumn Header="الحساب" Width="2*">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding AccountName}" VerticalAlignment="Center" Margin="6,0"/>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                            <DataGridTemplateColumn.CellEditingTemplate>
+                                <DataTemplate>
+                                    <ComboBox x:Name="AccountCombo"
+                                              ItemsSource="{Binding DataContext.AvailableAccounts, RelativeSource={RelativeSource AncestorType=Window}}"
+                                              DisplayMemberPath="Name" SelectedValuePath="Id" SelectedValue="{Binding AccountId}"
+                                              SelectionChanged="AccountCombo_SelectionChanged"/>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellEditingTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTextColumn Header="مدين" Binding="{Binding DebitAmount, UpdateSourceTrigger=PropertyChanged}" Width="110"/>
+                        <DataGridTextColumn Header="دائن" Binding="{Binding CreditAmount, UpdateSourceTrigger=PropertyChanged}" Width="110"/>
+                        <DataGridTextColumn Header="الوصف" Binding="{Binding Description, UpdateSourceTrigger=PropertyChanged}" Width="2*"/>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </DockPanel>
+        </Border>
+
+        <StackPanel Grid.Row="3" Margin="0,12,0,0">
+            <TextBlock Text="{Binding ErrorMessage}" Foreground="#DC2626" TextWrapping="Wrap" Margin="0,0,0,8"
+                       Visibility="{Binding ErrorMessage, Converter={StaticResource StringToVisibilityConverter}}"/>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
+                <Button Content="حفظ" Padding="18,8" Background="#1F6F50" Foreground="White" BorderThickness="0"
+                        Command="{Binding SaveCommand}" Margin="0,0,8,0"/>
+                <Button Content="إلغاء" Padding="18,8" Click="CancelButton_Click"/>
+            </StackPanel>
+        </StackPanel>
+    </Grid>
+</Window>

@@ -1,0 +1,86 @@
+<UserControl x:Class="PharmacyERP.WPF.Views.Reports.IncomeStatementView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             FlowDirection="RightToLeft">
+
+    <Grid Margin="20" FlowDirection="RightToLeft">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="805*"/>
+            <ColumnDefinition Width="24*"/>
+        </Grid.ColumnDefinitions>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="12"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="12"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" Text="قائمة الدخل" FontSize="20" FontWeight="Bold" Foreground="#1F2937" Grid.ColumnSpan="2" Margin="0,0,0,12" Grid.RowSpan="2"/>
+
+        <StackPanel Grid.Row="2" Orientation="Horizontal" Grid.ColumnSpan="2" Margin="0,0,0,12" Grid.RowSpan="2">
+            <TextBlock Text="من:" VerticalAlignment="Center" Margin="0,0,8,0"/>
+            <DatePicker SelectedDate="{Binding FromDate}" Width="140" Margin="0,0,16,0"/>
+            <TextBlock Text="إلى:" VerticalAlignment="Center" Margin="0,0,8,0"/>
+            <DatePicker SelectedDate="{Binding ToDate}" Width="140" Margin="0,0,16,0"/>
+
+            <TextBlock Text="الفرع:" VerticalAlignment="Center" Margin="0,0,8,0"/>
+            <ComboBox ItemsSource="{Binding Branches}" DisplayMemberPath="Name" SelectedItem="{Binding SelectedBranch}"
+                      Width="160" Margin="0,0,16,0"/>
+
+            <Button Content="عرض التقرير" Padding="14,6" Background="#1F6F50" Foreground="White" BorderThickness="0"
+                    Command="{Binding RunReportCommand}" Margin="0,0,8,0"/>
+            <Button Content="تصدير CSV" Padding="14,6" Command="{Binding ExportCsvCommand}" Margin="0,0,8,0"/>
+            <Button Content="طباعة" Padding="14,6" Command="{Binding PrintCommand}"/>
+        </StackPanel>
+
+        <Border Grid.Row="4" Background="White" BorderBrush="#E5E7EB" BorderThickness="1" Padding="24" Grid.ColumnSpan="2">
+            <StackPanel MaxWidth="500" HorizontalAlignment="Center" Width="390" FlowDirection="LeftToRight" RenderTransformOrigin="0.5,0.5">
+                <StackPanel.RenderTransform>
+                    <TransformGroup>
+                        <ScaleTransform ScaleX="1"/>
+                        <SkewTransform/>
+                        <RotateTransform/>
+                        <TranslateTransform/>
+                    </TransformGroup>
+                </StackPanel.RenderTransform>
+                <Grid Margin="0,0,0,8">
+                    <TextBlock Text="إجمالي الإيرادات" HorizontalAlignment="Right" FontSize="14"/>
+                    <TextBlock Text="{Binding Result.TotalRevenue, StringFormat=N2}" HorizontalAlignment="Left" FontSize="14"/>
+                </Grid>
+                <Grid Margin="0,0,0,8">
+                    <TextBlock Text="تكلفة البضاعة المباعة" HorizontalAlignment="Right" FontSize="14"/>
+                    <TextBlock Text="{Binding Result.TotalCogs, StringFormat=N2}" HorizontalAlignment="Left" FontSize="14"/>
+                </Grid>
+                <Separator Margin="0,4"/>
+                <Grid Margin="0,0,0,16">
+                    <TextBlock Text="إجمالي الربح" HorizontalAlignment="Right" FontSize="16" FontWeight="Bold"/>
+                    <TextBlock Text="{Binding Result.GrossProfit, StringFormat=N2}" HorizontalAlignment="Left" FontSize="16" FontWeight="Bold" Foreground="#1F6F50"/>
+                </Grid>
+
+                <TextBlock Text="المصاريف حسب الفئة" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                <ItemsControl ItemsSource="{Binding Result.ExpensesByCategory}" Margin="0,0,0,8">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Grid Margin="0,0,0,4">
+                                <TextBlock Text="{Binding CategoryName}" HorizontalAlignment="Right" Foreground="#6B7280"/>
+                                <TextBlock Text="{Binding Amount, StringFormat=N2}" HorizontalAlignment="Left" Foreground="#6B7280"/>
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <Grid Margin="0,0,0,16">
+                    <TextBlock Text="إجمالي المصاريف" HorizontalAlignment="Right" FontSize="14"/>
+                    <TextBlock Text="{Binding Result.TotalExpenses, StringFormat=N2}" HorizontalAlignment="Left" FontSize="14"/>
+                </Grid>
+
+                <Separator Margin="0,4"/>
+                <Grid>
+                    <TextBlock Text="صافي الربح" HorizontalAlignment="Right" FontSize="18" FontWeight="Bold"/>
+                    <TextBlock Text="{Binding Result.NetProfit, StringFormat=N2}" HorizontalAlignment="Left" FontSize="18" FontWeight="Bold" Foreground="#1F6F50"/>
+                </Grid>
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>
