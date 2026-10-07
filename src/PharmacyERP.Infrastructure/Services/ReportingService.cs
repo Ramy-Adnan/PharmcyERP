@@ -45,7 +45,15 @@ public class ReportingService : IReportingService
         var todaySalesTotal = todayCash + todayCard;
         var debtReceipts = _context.Receipts.Where(r => r.ReferenceType == "CustomerCredit" && r.ReceiptDate >= today && r.ReceiptDate < tomorrow);
         if (branchId.HasValue) debtReceipts = debtReceipts.Where(r => r.BranchId == branchId.Value);
-        var debtCollections = await debtReceipts.SumAsync(r => r.Amount, cancellationToken);
+        var received = await debtReceipts.AsNoTracking().ToListAsync(cancellationToken);
+        var receiptInvoiceIds = received.Where(r => r.ReferenceId.HasValue).Select(r => r.ReferenceId!.Value).Distinct().ToList();
+        var invoiceNumbers = await _context.SalesInvoices.Where(i => receiptInvoiceIds.Contains(i.Id))
+            .Select(i => new { i.Id, i.Number }).ToDictionaryAsync(i => i.Id, i => i.Number, cancellationToken);
+        bool IsInitialPayment(PharmacyERP.Domain.Entities.Receipt r) => r.ReferenceId.HasValue
+            && invoiceNumbers.TryGetValue(r.ReferenceId.Value, out var number) && number.StartsWith("SI-", StringComparison.Ordinal)
+            && r.Number == "RCT-" + number[3..];
+        var creditDeposits = received.Where(IsInitialPayment).Sum(r => r.Amount);
+        var debtCollections = received.Where(r => !IsInitialPayment(r)).Sum(r => r.Amount);
         var cashLines = _context.JournalEntryLines.Where(l => l.Account.Code == "1110" && l.JournalEntry.IsPosted
             && l.JournalEntry.EntryDate >= today && l.JournalEntry.EntryDate < tomorrow);
         if (branchId.HasValue) cashLines = cashLines.Where(l => l.JournalEntry.BranchId == branchId.Value);
@@ -95,7 +103,7 @@ public class ReportingService : IReportingService
             TodayCogs = todayCogs,
             TodayGrossProfit = todaySalesTotal + todayCredit - todayCogs,
             TodayCreditSalesTotal = todayCredit, TodayCashSalesTotal = todayCash, TodayCardSalesTotal = todayCard,
-            TodayDebtCollections = debtCollections, TodayCashMovement = cashMovement,
+            TodayCreditDeposits = creditDeposits, TodayDebtCollections = debtCollections, TodayCashMovement = cashMovement,
             TodayExpensesTotal = todayExpensesTotal,
             LowStockItemCount = lowStockCount,
             ExpiringSoonCount = expiringSoonCount,

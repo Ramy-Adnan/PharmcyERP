@@ -179,6 +179,7 @@ public class SalesService : ISalesService
         var previous = await _context.SalesInvoices.FirstOrDefaultAsync(i => i.Number == invoiceNumber, cancellationToken);
         if (previous is not null)
             return Result<SalesInvoiceDto>.Success((await LoadInvoiceDtoAsync(previous.Id, cancellationToken))!);
+        if (!_currentUser.HasPermission("Sales.UsePos")) return Result<SalesInvoiceDto>.Failure("لا تملك صلاحية البيع.");
         if (dto.PaymentMethod is not (PaymentMethod.Cash or PaymentMethod.Card or PaymentMethod.Credit))
             return Result<SalesInvoiceDto>.Failure("اختر نقدي أو بطاقة أو آجل.");
         if (dto.PaymentMethod == PaymentMethod.Credit && dto.CustomerId is null)
@@ -257,11 +258,12 @@ public class SalesService : ISalesService
             return Result<SalesInvoiceDto>.Failure("الخصم يتجاوز قيمة الأصناف.");
         var totalAmount = Math.Round(subTotal + taxAmount - discountAmount, 2);
 
-        if (dto.PaymentMethod == PaymentMethod.Cash && dto.AmountTendered < totalAmount)
-            return Result<SalesInvoiceDto>.Failure("المبلغ المستلم من العميل أقل من إجمالي الفاتورة.");
+        if (dto.PaymentMethod == PaymentMethod.Credit && (dto.AmountTendered > totalAmount || Math.Round(dto.AmountTendered, 2) != dto.AmountTendered))
+            return Result<SalesInvoiceDto>.Failure("الدفعة المستلمة الآن يجب أن تكون بين صفر وإجمالي الفاتورة وبمنزلتين عشريتين كحد أقصى.");
 
-        var amountTendered = dto.PaymentMethod == PaymentMethod.Credit ? 0 : dto.PaymentMethod == PaymentMethod.Cash ? dto.AmountTendered : totalAmount;
-        var changeGiven = Math.Max(0, amountTendered - totalAmount);
+        // Cash and card are paid in full; only credit exposes an editable initial payment.
+        var amountTendered = dto.PaymentMethod == PaymentMethod.Credit ? dto.AmountTendered : totalAmount;
+        var changeGiven = 0m;
 
         var invoice = new SalesInvoice
         {
@@ -360,6 +362,17 @@ public class SalesService : ISalesService
             TotalAmount = invoice.TotalAmount
         }, cancellationToken);
 
+        if (invoice.PaymentMethod == PaymentMethod.Credit && amountTendered > 0)
+        {
+            // The POS permission authorizes the initial cash receipt; later repayments require customer-management permission.
+            var payment = await RecordCustomerPaymentCoreAsync(new CustomerDebtPaymentDto
+            {
+                RequestId = dto.RequestId, CustomerId = dto.CustomerId!.Value, InvoiceId = invoice.Id,
+                Amount = amountTendered, PaymentMethod = PaymentMethod.Cash, Notes = "دفعة أولى عند البيع الآجل"
+            }, cancellationToken, isInitialPosPayment: true);
+            if (!payment.Succeeded) return Result<SalesInvoiceDto>.Failure(payment.Errors.FirstOrDefault() ?? "تعذر حفظ الدفعة الأولى.");
+        }
+
         return Result<SalesInvoiceDto>.Success((await LoadInvoiceDtoAsync(invoice.Id, cancellationToken))!);
     }
 
@@ -379,7 +392,16 @@ public class SalesService : ISalesService
         if (toUtc.HasValue) query = query.Where(s => s.SaleAtUtc <= toUtc.Value);
 
         var invoices = await query.OrderByDescending(s => s.SaleAtUtc).Take(500).ToListAsync(cancellationToken);
-        return invoices.Select(MapInvoiceToDto).ToList();
+        var result = invoices.Select(MapInvoiceToDto).ToList();
+        var ids = result.Where(i => i.PaymentMethod == PaymentMethod.Credit).Select(i => i.Id).ToList();
+        if (ids.Count > 0)
+        {
+            var receipts = await _context.Receipts.AsNoTracking().Where(r => r.ReferenceType == "CustomerCredit" && r.ReferenceId.HasValue && ids.Contains(r.ReferenceId.Value))
+                .Select(r => new { r.Number, r.Amount }).ToDictionaryAsync(r => r.Number, r => r.Amount, cancellationToken);
+            foreach (var invoice in result.Where(i => i.PaymentMethod == PaymentMethod.Credit && i.Number.StartsWith("SI-", StringComparison.Ordinal)))
+                invoice.InitialPaymentAmount = receipts.GetValueOrDefault("RCT-" + invoice.Number[3..]);
+        }
+        return result;
     }
 
     public async Task<SalesInvoiceDetailDto?> GetSalesInvoiceDetailAsync(int id, CancellationToken cancellationToken = default)
@@ -686,9 +708,9 @@ public class SalesService : ISalesService
     public Task<Result> RecordCustomerPaymentAsync(CustomerDebtPaymentDto dto, CancellationToken cancellationToken = default) =>
         InTransactionAsync(() => RecordCustomerPaymentCoreAsync(dto, cancellationToken), r => r.Succeeded, cancellationToken);
 
-    private async Task<Result> RecordCustomerPaymentCoreAsync(CustomerDebtPaymentDto dto, CancellationToken cancellationToken)
+    private async Task<Result> RecordCustomerPaymentCoreAsync(CustomerDebtPaymentDto dto, CancellationToken cancellationToken, bool isInitialPosPayment = false)
     {
-        if (!_currentUser.HasPermission("Sales.ManageCustomers")) return Result.Failure("لا تملك صلاحية تسديد ديون العملاء.");
+        if (!isInitialPosPayment && !_currentUser.HasPermission("Sales.ManageCustomers")) return Result.Failure("لا تملك صلاحية تسديد ديون العملاء.");
         var number = "RCT-" + dto.RequestId.ToString("N")[..24];
         var previousReceipt = await _context.Receipts.FirstOrDefaultAsync(r => r.Number == number, cancellationToken);
         if (previousReceipt is not null)
@@ -839,7 +861,18 @@ public class SalesService : ISalesService
             .Include(s => s.Items)
             .FirstOrDefaultAsync(s => s.Id == id, cancellationToken);
 
-        return invoice is null ? null : MapInvoiceToDto(invoice);
+        if (invoice is null) return null;
+        var dto = MapInvoiceToDto(invoice);
+        await LoadInitialPaymentAsync(dto, cancellationToken);
+        return dto;
+    }
+
+    private async Task LoadInitialPaymentAsync(SalesInvoiceDto dto, CancellationToken cancellationToken)
+    {
+        if (dto.PaymentMethod != PaymentMethod.Credit || !dto.Number.StartsWith("SI-", StringComparison.Ordinal)) return;
+        var receiptNumber = "RCT-" + dto.Number[3..];
+        dto.InitialPaymentAmount = await _context.Receipts.Where(r => r.ReferenceType == "CustomerCredit" && r.ReferenceId == dto.Id && r.Number == receiptNumber)
+            .Select(r => (decimal?)r.Amount).FirstOrDefaultAsync(cancellationToken) ?? 0;
     }
 
     private async Task<SalesInvoiceDetailDto?> LoadInvoiceDetailDtoAsync(int id, CancellationToken cancellationToken)
@@ -854,9 +887,11 @@ public class SalesService : ISalesService
 
         if (invoice is null) return null;
 
+        var header = MapInvoiceToDto(invoice);
+        await LoadInitialPaymentAsync(header, cancellationToken);
         return new SalesInvoiceDetailDto
         {
-            Header = MapInvoiceToDto(invoice),
+            Header = header,
             Lines = invoice.Items.Select(i => new SalesInvoiceLineDto
             {
                 Id = i.Id,

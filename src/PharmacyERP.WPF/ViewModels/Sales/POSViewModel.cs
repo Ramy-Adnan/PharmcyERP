@@ -49,7 +49,10 @@ public class POSViewModel : ViewModelBase
         RemoveLineCommand = new RelayCommand(() => { if (SelectedCartLine is not null) CartLines.Remove(SelectedCartLine); }, () => !IsBusy && SelectedCartLine is not null);
         ClearCartCommand = new RelayCommand(() => CartLines.Clear(), () => !IsBusy && CartLines.Count > 0);
         CheckoutCommand = new AsyncRelayCommand(CheckoutAsync, () => !IsBusy && !CheckoutUncertain && _pendingScans == 0 && CartLines.Count > 0);
-        ExactCashCommand = new RelayCommand(() => AmountTendered = TotalAmount, () => IsCash && !IsBusy);
+        PayAllCreditCommand = new RelayCommand(() => AmountTendered = TotalAmount, () => IsCredit && !IsBusy);
+        IncrementLineCommand = new RelayCommand(p => AdjustQuantity((POSLineRow)p!, 1), p => !IsBusy && p is POSLineRow line && line.Quantity < line.AvailableQuantity);
+        DecrementLineCommand = new RelayCommand(p => AdjustQuantity((POSLineRow)p!, -1), p => !IsBusy && p is POSLineRow line && line.Quantity > 1);
+        RemoveItemCommand = new RelayCommand(p => CartLines.Remove((POSLineRow)p!), p => !IsBusy && p is POSLineRow);
         ReprintCommand = new AsyncRelayCommand(ReprintAsync, () => !IsBusy && _lastInvoiceId.HasValue);
         CartLines.CollectionChanged += (_, _) =>
         {
@@ -75,7 +78,7 @@ public class POSViewModel : ViewModelBase
     public CustomerOption? SelectedCustomer
     {
         get => _selectedCustomer;
-        set { if (SetProperty(ref _selectedCustomer, value)) _ = LoadCustomerAsync(); }
+        set { if (SetProperty(ref _selectedCustomer, value)) { OnPropertyChanged(nameof(HasCreditCustomer)); _ = LoadCustomerAsync(); } }
     }
     public ActivePrescriptionSummaryDto? SelectedPrescription
     {
@@ -90,22 +93,27 @@ public class POSViewModel : ViewModelBase
         {
             if (!SetProperty(ref _paymentMethod, value)) return;
             AmountTendered = 0;
-            OnPropertyChanged(nameof(IsCash)); OnPropertyChanged(nameof(IsCredit));
-            OnPropertyChanged(nameof(PaymentHint)); OnPropertyChanged(nameof(ChangeDue)); Requery();
+            OnPropertyChanged(nameof(IsCash)); OnPropertyChanged(nameof(IsCard)); OnPropertyChanged(nameof(IsCredit));
+            OnPropertyChanged(nameof(PaymentHint)); OnPropertyChanged(nameof(CreditRemaining)); OnPropertyChanged(nameof(CustomerBalanceAfterSale)); Requery();
         }
     }
-    public bool IsCash => PaymentMethod == PaymentMethod.Cash;
-    public bool IsCredit => PaymentMethod == PaymentMethod.Credit;
-    public string PaymentHint => IsCredit ? "يلزم اختيار عميل مسجل. لا يدخل المبلغ في النقدية؛ يسجل في ذمة العميل."
-        : IsCash ? "أدخل النقد المستلم؛ زر المبلغ كامل يملأ إجمالي الفاتورة." : "أكد نجاح الدفع على جهاز البطاقة قبل إتمام البيع.";
-    public decimal CustomerDebt { get => _customerDebt; private set => SetProperty(ref _customerDebt, value); }
-    public decimal AmountTendered { get => _amountTendered; set { SetProperty(ref _amountTendered, value); OnPropertyChanged(nameof(ChangeDue)); } }
+    public bool IsCash { get => PaymentMethod == PaymentMethod.Cash; set { if (value) PaymentMethod = PaymentMethod.Cash; } }
+    public bool IsCard { get => PaymentMethod == PaymentMethod.Card; set { if (value) PaymentMethod = PaymentMethod.Card; } }
+    public bool IsCredit { get => PaymentMethod == PaymentMethod.Credit; set { if (value) PaymentMethod = PaymentMethod.Credit; } }
+    public bool HasCreditCustomer => SelectedCustomer?.Id is not null;
+    public string CashierName => _currentUserService.UserName ?? "الكاشير";
+    public string PaymentHint => IsCredit ? "استلم جزءاً من المبلغ الآن، وسجّل المتبقي على العميل. اتركه صفراً لآجل كامل."
+        : IsCash ? "سيُسجَّل كامل المبلغ نقداً عند إتمام البيع." : "أكد نجاح الدفع على جهاز البطاقة قبل إتمام البيع.";
+    public decimal CustomerDebt { get => _customerDebt; private set { SetProperty(ref _customerDebt, value); OnPropertyChanged(nameof(CustomerBalanceAfterSale)); } }
+    public decimal AmountTendered { get => _amountTendered; set { SetProperty(ref _amountTendered, value); OnPropertyChanged(nameof(CreditRemaining)); OnPropertyChanged(nameof(CustomerBalanceAfterSale)); } }
+    public decimal CreditRemaining => IsCredit ? Math.Max(0, TotalAmount - AmountTendered) : 0;
+    public decimal CustomerBalanceAfterSale => CustomerDebt + CreditRemaining;
     public decimal DiscountAmount { get => _discountAmount; set { SetProperty(ref _discountAmount, value); NotifyTotals(); } }
     public decimal SubTotal => CartLines.Sum(l => l.UnitPrice * l.Quantity);
     public decimal TaxAmount => CartLines.Sum(l => l.UnitPrice * l.Quantity * l.TaxRatePercent / 100m);
     public decimal TotalAmount => Math.Round(SubTotal + TaxAmount - CartLines.Sum(l => l.DiscountAmount) - DiscountAmount, 2);
     public int ItemCount => CartLines.Sum(l => l.Quantity);
-    public decimal ChangeDue => IsCash ? Math.Max(0, AmountTendered - TotalAmount) : 0;
+    public decimal CartDiscount => DiscountAmount + CartLines.Sum(l => l.DiscountAmount);
     public string ErrorMessage { get => _errorMessage; set => SetProperty(ref _errorMessage, value); }
     public string SuccessMessage { get => _successMessage; set => SetProperty(ref _successMessage, value); }
     public bool IsBusy { get => _isBusy; private set { SetProperty(ref _isBusy, value); Requery(); } }
@@ -116,13 +124,16 @@ public class POSViewModel : ViewModelBase
     public RelayCommand AddToCartCommand { get; }
     public RelayCommand RemoveLineCommand { get; }
     public RelayCommand ClearCartCommand { get; }
-    public RelayCommand ExactCashCommand { get; }
+    public RelayCommand PayAllCreditCommand { get; }
+    public RelayCommand IncrementLineCommand { get; }
+    public RelayCommand DecrementLineCommand { get; }
+    public RelayCommand RemoveItemCommand { get; }
     public AsyncRelayCommand CheckoutCommand { get; }
     public AsyncRelayCommand ReprintCommand { get; }
     private static void Requery() => System.Windows.Input.CommandManager.InvalidateRequerySuggested();
     private void NotifyTotals()
     {
-        foreach (var name in new[] { nameof(SubTotal), nameof(TaxAmount), nameof(TotalAmount), nameof(ChangeDue), nameof(ItemCount), nameof(HasUnresolvedPrescriptionRequirement) }) OnPropertyChanged(name);
+        foreach (var name in new[] { nameof(SubTotal), nameof(TaxAmount), nameof(TotalAmount), nameof(CreditRemaining), nameof(CustomerBalanceAfterSale), nameof(CartDiscount), nameof(ItemCount), nameof(HasUnresolvedPrescriptionRequirement) }) OnPropertyChanged(name);
         Requery();
     }
     private void LineChanged(object? sender, PropertyChangedEventArgs e) => NotifyTotals();
@@ -214,6 +225,13 @@ public class POSViewModel : ViewModelBase
         ScanFocusRequested?.Invoke();
     }
 
+    private void AdjustQuantity(POSLineRow line, int delta)
+    {
+        if (!CartLines.Contains(line) || line.Quantity + delta < 1 || line.Quantity + delta > line.AvailableQuantity) return;
+        line.Quantity += delta;
+        ScanFocusRequested?.Invoke();
+    }
+
     public async Task CheckoutAsync()
     {
         if (IsBusy || CheckoutUncertain || _pendingScans > 0) return;
@@ -223,14 +241,15 @@ public class POSViewModel : ViewModelBase
             || DiscountAmount < 0 || DiscountAmount + CartLines.Sum(l => l.DiscountAmount) > SubTotal)
         { ErrorMessage = "راجع الكميات والأسعار والخصومات."; return; }
         if (IsCredit && SelectedCustomer?.Id is null) { ErrorMessage = "اختر عميلاً مسجلاً للبيع الآجل."; return; }
-        if (IsCash && AmountTendered < TotalAmount) { ErrorMessage = "المبلغ النقدي أقل من الإجمالي."; return; }
+        if (IsCredit && (AmountTendered < 0 || AmountTendered > TotalAmount || Math.Round(AmountTendered, 2) != AmountTendered))
+        { ErrorMessage = "المبلغ المستلم الآن يجب أن يكون بين صفر وإجمالي الفاتورة وبمنزلتين عشريتين كحد أقصى."; return; }
         if (HasUnresolvedPrescriptionRequirement) { ErrorMessage = "اختر العميل واربط الوصفة الطبية قبل البيع."; return; }
         if (_currentUserService.UserId is not int userId) { ErrorMessage = "تعذر تحديد المستخدم الحالي."; return; }
         var dto = new SalesCheckoutDto
         {
             RequestId = _checkoutRequestId, BranchId = _currentUserService.CurrentBranchId ?? 0, WarehouseId = WarehouseId,
             CustomerId = SelectedCustomer?.Id, PrescriptionId = SelectedPrescription?.Id, DiscountAmount = DiscountAmount,
-            PaymentMethod = PaymentMethod, AmountTendered = IsCredit ? 0 : IsCash ? AmountTendered : TotalAmount,
+            PaymentMethod = PaymentMethod, AmountTendered = IsCredit ? AmountTendered : TotalAmount,
             Lines = CartLines.Select(l => new SaleLineInputDto { ItemId = l.ItemId, Quantity = l.Quantity, UnitPrice = l.UnitPrice,
                 TaxRatePercent = l.TaxRatePercent, DiscountAmount = l.DiscountAmount }).ToList()
         };
@@ -257,7 +276,9 @@ public class POSViewModel : ViewModelBase
         // Clear the committed sale before printing. Printer failure must never allow a duplicate checkout.
         CartLines.Clear(); AmountTendered = 0; DiscountAmount = 0; SearchResults.Clear(); SearchText = string.Empty;
         _checkoutRequestId = Guid.NewGuid(); CheckoutUncertain = false;
-        SuccessMessage = $"تم حفظ الفاتورة {invoice.Number}" + (invoice.PaymentMethod == PaymentMethod.Credit ? " — سجلت ديناً على العميل." : $" — الباقي {invoice.ChangeGiven:N2}.");
+        SuccessMessage = $"تم حفظ الفاتورة {invoice.Number}" + (invoice.PaymentMethod == PaymentMethod.Credit
+            ? $" — المستلم {invoice.InitialPaymentAmount:N2}، المتبقي على العميل {invoice.DebtAtSale:N2}."
+            : " — مدفوعة بالكامل.");
         try
         {
             _lastReceipt = await _salesService.GetSalesInvoiceDetailAsync(invoice.Id)

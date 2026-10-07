@@ -9,6 +9,7 @@ public class DashboardSummaryDto
     public decimal TodayCreditSalesTotal { get; set; }
     public decimal TodayCashSalesTotal { get; set; }
     public decimal TodayCardSalesTotal { get; set; }
+    public decimal TodayCreditDeposits { get; set; }
     public decimal TodayDebtCollections { get; set; }
     public decimal TodayRevenueTotal => TodaySalesTotal + TodayCreditSalesTotal;
     public decimal TodayCashMovement { get; set; }

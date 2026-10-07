@@ -17,6 +17,8 @@ public class SalesInvoiceDto
     public decimal DiscountAmount { get; set; }
     public decimal TotalAmount { get; set; }
     public PaymentMethod PaymentMethod { get; set; }
+    public decimal InitialPaymentAmount { get; set; }
+    public decimal DebtAtSale => PaymentMethod == PaymentMethod.Credit ? Math.Max(0, TotalAmount - InitialPaymentAmount) : 0;
     public decimal AmountTendered { get; set; }
     public decimal ChangeGiven { get; set; }
     public SalesInvoiceStatus Status { get; set; }

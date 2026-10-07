@@ -65,7 +65,11 @@ public sealed class ThermalReceiptPrinter : IReceiptPrinter
         Text($"الإجمالي: {h.TotalAmount:N2}", true);
         var method = h.PaymentMethod switch { PaymentMethod.Cash => "نقدي", PaymentMethod.Card => "بطاقة", PaymentMethod.Credit => "آجل", _ => "مختلط" };
         Text($"طريقة الدفع: {method}");
-        if (h.PaymentMethod == PaymentMethod.Credit) Text($"دين على العميل عند البيع: {h.TotalAmount:N2}", true);
+        if (h.PaymentMethod == PaymentMethod.Credit)
+        {
+            Text($"المستلم عند البيع: {h.InitialPaymentAmount:N2}");
+            Text($"المتبقي على العميل عند البيع: {h.DebtAtSale:N2}", true);
+        }
         else
         {
             Text($"المستلم: {h.AmountTendered:N2}");

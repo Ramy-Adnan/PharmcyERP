@@ -36,7 +36,7 @@ public class SalesPosWorkflowTests
     };
 
     [Theory]
-    [InlineData(PaymentMethod.Cash, "1110", 100)]
+    [InlineData(PaymentMethod.Cash, "1110", 20)]
     [InlineData(PaymentMethod.Card, "1120", 20)]
     [InlineData(PaymentMethod.Credit, "1160", 0)]
     public async Task Checkout_PostsTheActualPaymentMethod(PaymentMethod method, string account, int tendered)
@@ -232,7 +232,7 @@ public class SalesPosWorkflowTests
     {
         await using var db = TestDb.CreateContext(_clock); var seed = await SeedAsync(db);
         var (pos, printer) = await PosAsync(db, seed.Fixture);
-        await pos.SubmitSearchAsync("ITM-001"); pos.ExactCashCommand.Execute(null); printer.Fail = true;
+        await pos.SubmitSearchAsync("ITM-001"); printer.Fail = true;
         await pos.CheckoutAsync();
         pos.CartLines.Should().BeEmpty(); pos.ErrorMessage.Should().Contain("تم البيع وحفظ الفاتورة");
         (await db.SalesInvoices.CountAsync()).Should().Be(1);
@@ -290,12 +290,100 @@ public class SalesPosWorkflowTests
         var proxy = System.Reflection.DispatchProxy.Create<PharmacyERP.Application.Features.Sales.ISalesService, LostCheckoutResponse>();
         ((LostCheckoutResponse)proxy).Target = Sales(db);
         var (pos, printer) = await PosAsync(db, seed.Fixture, proxy);
-        await pos.SubmitSearchAsync("ITM-001"); pos.ExactCashCommand.Execute(null);
+        await pos.SubmitSearchAsync("ITM-001");
         await pos.CheckoutAsync(); pos.CheckoutUncertain.Should().BeTrue(); pos.CanScan.Should().BeFalse();
         await pos.CheckoutAsync(); (await db.SalesInvoices.CountAsync()).Should().Be(1);
         await pos.ResolveCheckoutAsync(); pos.CheckoutUncertain.Should().BeFalse(); pos.CartLines.Should().BeEmpty();
         printer.PrintedIds.Should().HaveCount(1); (await db.SalesInvoices.CountAsync()).Should().Be(1);
         (await db.Batches.SumAsync(b => b.QuantityOnHand)).Should().Be(19);
+    }
+
+    [Fact]
+    public async Task CreditInitialDeposit_IsReceivedOnceAndOnlyTheRemainderBecomesDebt()
+    {
+        await using var db = TestDb.CreateContext(_clock); var seed = await SeedAsync(db); var sales = Sales(db);
+        var request = Checkout(seed.Fixture, PaymentMethod.Credit, seed.CustomerId); request.AmountTendered = 7;
+        var result = await sales.CheckoutAsync(request, seed.UserId);
+        result.Succeeded.Should().BeTrue(); result.Value!.InitialPaymentAmount.Should().Be(7); result.Value.DebtAtSale.Should().Be(13);
+        (await sales.CheckoutAsync(request, seed.UserId)).Value!.Id.Should().Be(result.Value.Id);
+        var account = await sales.GetCustomerAccountAsync(seed.CustomerId);
+        account!.OutstandingAmount.Should().Be(13); account.Payments.Should().HaveCount(1);
+        (await sales.GetSalesInvoiceDetailAsync(result.Value.Id))!.Header.InitialPaymentAmount.Should().Be(7);
+        (await sales.GetSalesInvoicesAsync()).Single().DebtAtSale.Should().Be(13);
+        var lines = await db.JournalEntryLines.Include(l => l.Account).ToListAsync();
+        lines.Where(l => l.Account.Code == "1110").Sum(l => l.DebitAmount - l.CreditAmount).Should().Be(7);
+        lines.Where(l => l.Account.Code == "1160").Sum(l => l.DebitAmount - l.CreditAmount).Should().Be(13);
+        lines.Where(l => l.Account.Code == "4100").Sum(l => l.CreditAmount).Should().Be(20);
+        await sales.RecordCustomerPaymentAsync(new() { CustomerId = seed.CustomerId, InvoiceId = result.Value.Id, Amount = 5 });
+        (await sales.GetCustomerAccountAsync(seed.CustomerId))!.OutstandingAmount.Should().Be(8);
+        var summary = await new ReportingService(db, _clock).GetDashboardSummaryAsync(seed.Fixture.BranchId);
+        summary.TodayCreditDeposits.Should().Be(7); summary.TodayDebtCollections.Should().Be(5);
+        summary.TodayNetCashPosition.Should().Be(12); summary.TodaySalesTotal.Should().Be(0);
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(21)]
+    [InlineData(0.001)]
+    public async Task CreditInitialDeposit_RejectsInvalidAmountsBeforeSaving(decimal amount)
+    {
+        await using var db = TestDb.CreateContext(_clock); var seed = await SeedAsync(db);
+        var request = Checkout(seed.Fixture, PaymentMethod.Credit, seed.CustomerId); request.AmountTendered = amount;
+        (await Sales(db).CheckoutAsync(request, seed.UserId)).Succeeded.Should().BeFalse();
+        (await db.SalesInvoices.CountAsync()).Should().Be(0); (await db.Receipts.CountAsync()).Should().Be(0);
+        (await db.Batches.SumAsync(b => b.QuantityOnHand)).Should().Be(20);
+    }
+
+    [Fact]
+    public async Task Pos_CashAndCardCheckoutNeedNoAmountEntryAndModeChangesResetCreditDeposit()
+    {
+        await using var db = TestDb.CreateContext(_clock); var seed = await SeedAsync(db); var (pos, printer) = await PosAsync(db, seed.Fixture);
+        await pos.SubmitSearchAsync("ITM-001"); pos.AmountTendered.Should().Be(0);
+        await pos.CheckoutAsync(); printer.PrintedIds.Should().HaveCount(1);
+        pos.IsCredit = true; pos.AmountTendered = 3; pos.IsCard = true; pos.AmountTendered.Should().Be(0);
+        await pos.SubmitSearchAsync("ITM-001"); await pos.CheckoutAsync(); printer.PrintedIds.Should().HaveCount(2);
+        var invoices = await db.SalesInvoices.ToListAsync(); invoices.Should().AllSatisfy(i => { i.AmountTendered.Should().Be(10); i.ChangeGiven.Should().Be(0); });
+    }
+
+    [Fact]
+    public async Task Pos_CreditDepositAndQuantityButtonsRefreshDebtAndPrintTheActualRemainder()
+    {
+        await using var db = TestDb.CreateContext(_clock); var seed = await SeedAsync(db); var (pos, printer) = await PosAsync(db, seed.Fixture);
+        pos.SelectedCustomer = pos.Customers.Single(c => c.Id == seed.CustomerId); pos.IsCredit = true;
+        await pos.SubmitSearchAsync("ITM-001"); var line = pos.CartLines.Single();
+        pos.IncrementLineCommand.Execute(line); line.Quantity.Should().Be(2);
+        pos.AmountTendered = 7; pos.CreditRemaining.Should().Be(13); pos.CustomerBalanceAfterSale.Should().Be(13);
+        pos.DecrementLineCommand.Execute(line); pos.CreditRemaining.Should().Be(3);
+        pos.IncrementLineCommand.Execute(line);
+        await pos.CheckoutAsync(); printer.PrintedIds.Should().HaveCount(1); pos.CartLines.Should().BeEmpty();
+        (await Sales(db).GetCustomerAccountAsync(seed.CustomerId))!.OutstandingAmount.Should().Be(13);
+        var detail = await Sales(db).GetSalesInvoiceDetailAsync(printer.PrintedIds.Single());
+        detail!.Header.InitialPaymentAmount.Should().Be(7); detail.Header.DebtAtSale.Should().Be(13);
+    }
+
+    private sealed class PosOnlySession : PharmacyERP.Application.Common.Interfaces.ICurrentUserService
+    {
+        private readonly FakeCurrentUserService _session = new();
+        public int? UserId => _session.UserId;
+        public string? UserName => _session.UserName;
+        public int? CurrentBranchId => _session.CurrentBranchId;
+        public IReadOnlyCollection<string> Permissions => new[] { "Sales.UsePos" };
+        public bool HasPermission(string code) => UserId.HasValue && code == "Sales.UsePos";
+        public void SetSession(int userId, string userName, int branchId, IEnumerable<string> permissions) => _session.SetSession(userId, userName, branchId, permissions);
+        public void ClearSession() => _session.ClearSession();
+    }
+
+    [Fact]
+    public async Task PosCashier_CanReceiveAFullInitialDepositWithoutCustomerManagementPermission()
+    {
+        await using var db = TestDb.CreateContext(_clock); var seed = await SeedAsync(db);
+        var sales = new SalesService(db, new InventoryService(db, _clock), new AccountingService(db, _clock), _clock, new PosOnlySession());
+        var request = Checkout(seed.Fixture, PaymentMethod.Credit, seed.CustomerId); request.AmountTendered = 20;
+        var result = await sales.CheckoutAsync(request, seed.UserId);
+        result.Succeeded.Should().BeTrue(); result.Value!.DebtAtSale.Should().Be(0);
+        (await sales.GetCustomerAccountAsync(seed.CustomerId))!.OutstandingAmount.Should().Be(0);
+        var repayment = await sales.RecordCustomerPaymentAsync(new() { CustomerId = seed.CustomerId, InvoiceId = result.Value.Id, Amount = 1 });
+        repayment.Succeeded.Should().BeFalse(); repayment.Errors.Single().Should().Contain("صلاحية");
     }
 
 }
