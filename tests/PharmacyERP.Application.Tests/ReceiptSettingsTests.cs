@@ -73,9 +73,10 @@ public sealed class ReceiptSettingsTests : IDisposable
         content.Footer.Any(t => t.Value == settings.FooterMessage).Should().Be(visible);
         content.Header.Should().Contain(t => t.Value == invoice.Header.Number);
         content.Products.Should().HaveCount(2);
-        content.Products[0][0].Value.Should().Be("منتج أول");
-        content.Products[1][0].Value.Should().Be("منتج ثانٍ");
-        content.Products[0].Should().Contain(t => t.Value.StartsWith("خصم الصنف:"));
+        content.Products[0].Should().ContainSingle(); content.Products[1].Should().ContainSingle();
+        content.Products[0][0].Value.Should().Be("منتج أول  —  الكمية: 1");
+        content.Products[1][0].Value.Should().Be("منتج ثانٍ  —  الكمية: 2");
+        content.Totals.Should().HaveCount(3);
         content.Totals.Should().Contain(t => t.Value == $"الإجمالي: {2000:N2}" && t.Bold);
     }
 
@@ -85,20 +86,34 @@ public sealed class ReceiptSettingsTests : IDisposable
         var invoice = Invoice(PaymentMethod.Credit);
         invoice.Header.InitialPaymentAmount = 1000; invoice.Header.AmountTendered = 1900;
         var content = ReceiptContentBuilder.Build(invoice, new());
-        content.Totals.Should().Contain(t => t.Value == $"المستلم عند البيع: {1000:N2}");
-        content.Totals.Should().Contain(t => t.Value == $"المتبقي على العميل عند البيع: {1000:N2}");
-        content.Totals.Should().Contain(t => t.Value == "طريقة الدفع: آجل");
+        content.Totals.Should().Contain(t => t.Value == $"المستلم: {1000:N2}");
+        content.Totals.Should().Contain(t => t.Value == $"الباقي: {1000:N2}");
+        content.Totals.Should().HaveCount(3);
     }
 
     [Theory]
-    [InlineData(PaymentMethod.Cash, "نقدي")]
-    [InlineData(PaymentMethod.Card, "بطاقة")]
-    public void PaidReceipt_DoesNotShowCustomerDebt(PaymentMethod method, string label)
+    [InlineData(PaymentMethod.Cash)]
+    [InlineData(PaymentMethod.Card)]
+    public void PaidReceipt_ShowsReceivedAmountAndZeroRemaining(PaymentMethod method)
     {
         var content = ReceiptContentBuilder.Build(Invoice(method), new());
-        content.Totals.Should().Contain(t => t.Value == "طريقة الدفع: " + label);
         content.Totals.Should().Contain(t => t.Value == $"المستلم: {2000:N2}");
-        content.Totals.Should().NotContain(t => t.Value.Contains("المتبقي على العميل"));
+        content.Totals.Should().Contain(t => t.Value == $"الباقي: {0:N2}");
+        content.Totals.Should().HaveCount(3);
+    }
+
+    [Fact]
+    public void CompactReceipt_HidesDetailWithoutChangingTotalIncludingTaxAndDiscount()
+    {
+        var invoice = Invoice(PaymentMethod.Cash);
+        invoice.Header.TaxAmount = 200; invoice.Header.DiscountAmount = 100;
+        invoice.Header.TotalAmount = 2100; invoice.Header.AmountTendered = 2500; invoice.Header.ChangeGiven = 400;
+        var content = ReceiptContentBuilder.Build(invoice, new());
+        content.Totals.Select(t => t.Value).Should().Equal($"الإجمالي: {2100:N2}", $"المستلم: {2500:N2}", $"الباقي: {400:N2}");
+        var printed = content.Header.Concat(content.Products.SelectMany(p => p)).Concat(content.Totals).Concat(content.Footer);
+        printed.Should().NotContain(t => t.Value.Contains("الضريبة") || t.Value.Contains("الخصم")
+            || t.Value.Contains("السعر") || t.Value.Contains("طريقة الدفع") || t.Value.Contains("الموظف") || t.Value.Contains("العميل"));
+        invoice.Header.TotalAmount.Should().Be(2100); invoice.Header.TaxAmount.Should().Be(200);
     }
 
     [Fact]
