@@ -1,0 +1,82 @@
+<UserControl x:Class="PharmacyERP.WPF.Views.SystemManagement.ReceiptSettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             FlowDirection="RightToLeft" Background="#F1F5F9">
+    <UserControl.Resources>
+        <Style TargetType="TextBox">
+            <Setter Property="Padding" Value="10,8"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="BorderBrush" Value="#CBD5E1"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Margin" Value="0,6,0,14"/>
+        </Style>
+        <Style TargetType="CheckBox">
+            <Setter Property="Margin" Value="0,6,0,10"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Foreground" Value="#334155"/>
+        </Style>
+        <Style x:Key="FieldLabel" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#0F172A"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="FontSize" Value="14"/>
+        </Style>
+    </UserControl.Resources>
+    <Grid Margin="20">
+        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="16"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+        <Border Background="#0F172A" CornerRadius="12" Padding="20,16">
+            <StackPanel>
+                <TextBlock Text="إعدادات الصيدلية والفاتورة" Foreground="White" FontSize="23" FontWeight="Bold"/>
+                <TextBlock Text="هوية صيدليتك على كل وصل • طباعة حرارية 80mm" Foreground="#CBD5E1" FontSize="13" Margin="0,6,0,0"/>
+            </StackPanel>
+        </Border>
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="18"/><ColumnDefinition Width="370"/></Grid.ColumnDefinitions>
+            <Border Background="White" CornerRadius="12" Padding="20">
+                <DockPanel>
+                    <StackPanel DockPanel.Dock="Bottom" Margin="0,14,0,0">
+                        <TextBlock Text="{Binding StatusMessage}" TextWrapping="Wrap" Foreground="#0F766E" Margin="0,0,0,10" FontSize="12"/>
+                        <Button Content="حفظ إعدادات الصيدلية والوصل" Command="{Binding SaveCommand}" Background="#0F766E"
+                                Foreground="White" BorderThickness="0" Padding="18,12" FontSize="15" FontWeight="SemiBold"/>
+                    </StackPanel>
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel IsEnabled="{Binding CanManage}">
+                            <TextBlock Text="اسم الصيدلية" Style="{StaticResource FieldLabel}"/>
+                            <TextBox Text="{Binding PharmacyName, UpdateSourceTrigger=PropertyChanged}" MaxLength="120"/>
+                            <CheckBox Content="إظهار اسم الصيدلية في أعلى الوصل" IsChecked="{Binding ShowPharmacyName}"/>
+                            <TextBlock Text="عنوان الصيدلية" Style="{StaticResource FieldLabel}" Margin="0,8,0,0"/>
+                            <TextBox Text="{Binding Address, UpdateSourceTrigger=PropertyChanged}" MaxLength="250" TextWrapping="Wrap" AcceptsReturn="True" MinHeight="68"/>
+                            <CheckBox Content="إظهار العنوان تحت الاسم" IsChecked="{Binding ShowAddress}"/>
+                            <Separator Margin="0,10"/>
+                            <TextBlock Text="شعار الصيدلية" Style="{StaticResource FieldLabel}"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                                <Button Content="اختيار شعار…" Click="ChooseLogo_Click" Padding="14,8" Background="#E2E8F0" BorderThickness="0"/>
+                                <Button Content="حذف الشعار" Command="{Binding RemoveLogoCommand}" Padding="14,8" Margin="8,0,0,0" Foreground="#B91C1C"/>
+                            </StackPanel>
+                            <TextBlock Text="PNG أو JPG • حتى 2 MB • تُحفظ نسخة من الصورة مع الإعدادات" TextWrapping="Wrap" Foreground="#64748B" FontSize="11" Margin="0,8,0,4"/>
+                            <CheckBox Content="إظهار الشعار في أعلى الوصل" IsChecked="{Binding ShowLogo}"/>
+                            <Separator Margin="0,10"/>
+                            <TextBlock Text="العبارة في نهاية الوصل" Style="{StaticResource FieldLabel}"/>
+                            <TextBox Text="{Binding FooterMessage, UpdateSourceTrigger=PropertyChanged}" MaxLength="400" TextWrapping="Wrap" AcceptsReturn="True" MinHeight="80"/>
+                            <CheckBox Content="إظهار العبارة الختامية" IsChecked="{Binding ShowFooterMessage}"/>
+                            <TextBlock Text="تُحفظ الإعدادات لحساب Windows الحالي على هذا الجهاز، وتبقى بعد Git Pull أو تحديث البرنامج." TextWrapping="Wrap" Foreground="#64748B" FontSize="12" Margin="0,12,0,0"/>
+                        </StackPanel>
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
+            <Border Grid.Column="2" Background="#E2E8F0" CornerRadius="12" Padding="12">
+                <DockPanel>
+                    <StackPanel DockPanel.Dock="Top" Margin="0,2,0,12">
+                        <TextBlock Text="معاينة الوصل" FontSize="17" FontWeight="Bold" Foreground="#0F172A" HorizontalAlignment="Center"/>
+                        <TextBlock Text="بيانات توضيحية • يتحدث أثناء التعديل" FontSize="11" Foreground="#64748B" HorizontalAlignment="Center" Margin="0,5,0,0"/>
+                    </StackPanel>
+                    <TextBlock DockPanel.Dock="Bottom" Text="جميع النصوص في الوسط، وخط يفصل المنتجات. الطباعة تستخدم طابعة Windows الافتراضية." TextWrapping="Wrap" TextAlignment="Center" Foreground="#64748B" FontSize="11" Margin="4,10,4,0"/>
+                    <Border Background="White" BorderBrush="#CBD5E1" BorderThickness="1">
+                        <FlowDocumentScrollViewer x:Name="ReceiptPreview" IsToolBarVisible="False" IsSelectionEnabled="False"
+                                                  VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                                                  Zoom="100" MinZoom="100" MaxZoom="100" Background="White"/>
+                    </Border>
+                </DockPanel>
+            </Border>
+        </Grid>
+    </Grid>
+</UserControl>

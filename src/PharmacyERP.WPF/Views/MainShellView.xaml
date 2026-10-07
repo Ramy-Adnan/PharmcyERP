@@ -951,6 +951,14 @@
 
                             <RadioButton Style="{StaticResource NavItemStyle}"
                                          GroupName="MainNav"
+                                         Content="إعدادات الصيدلية والفاتورة"
+                                         ToolTip="إعدادات الصيدلية والفاتورة"
+                                         Tag="{StaticResource Icon.Reports}"
+                                         Command="{Binding NavigateToReceiptSettingsCommand}"
+                                         Visibility="{Binding CanConfigureReceipts, Converter={StaticResource BoolToVisibilityConverter}}"/>
+
+                            <RadioButton Style="{StaticResource NavItemStyle}"
+                                         GroupName="MainNav"
                                          Content="النسخ الاحتياطي والاستعادة"
                                          ToolTip="النسخ الاحتياطي والاستعادة"
                                          Tag="{StaticResource Icon.Backup}"

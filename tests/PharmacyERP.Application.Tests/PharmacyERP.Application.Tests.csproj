@@ -28,5 +28,11 @@
     <Compile Include="../../src/PharmacyERP.WPF/ViewModels/Sales/POSLineRow.cs" Link="POS/POSLineRow.cs" />
     <Compile Include="../../src/PharmacyERP.WPF/ViewModels/Sales/POSViewModel.cs" Link="POS/POSViewModel.cs" />
     <Compile Include="../../src/PharmacyERP.WPF/Services/IReceiptPrinter.cs" Link="POS/IReceiptPrinter.cs" />
+    <Compile Include="../../src/PharmacyERP.WPF/Services/ReceiptSettings.cs" Link="Receipts/ReceiptSettings.cs" />
+    <Compile Include="../../src/PharmacyERP.WPF/Services/ReceiptSettingsStore.cs" Link="Receipts/ReceiptSettingsStore.cs" />
+    <Compile Include="../../src/PharmacyERP.WPF/Services/ReceiptContentBuilder.cs" Link="Receipts/ReceiptContentBuilder.cs" />
+    <Compile Include="../../src/PharmacyERP.WPF/Services/ISessionService.cs" Link="Receipts/ISessionService.cs" />
+    <Compile Include="../../src/PharmacyERP.WPF/Services/SessionService.cs" Link="Receipts/SessionService.cs" />
+    <Compile Include="../../src/PharmacyERP.WPF/ViewModels/SystemManagement/ReceiptSettingsViewModel.cs" Link="Receipts/ReceiptSettingsViewModel.cs" />
   </ItemGroup>
 </Project>

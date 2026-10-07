@@ -79,12 +79,15 @@ public partial class App : System.Windows.Application
                     services.AddSingleton<INavigationService, NavigationService>();
                     services.AddSingleton<IDialogService, DialogService>();
                     services.AddSingleton<IReportExportService, ReportExportService>();
+                    services.AddSingleton<IReceiptSettingsStore, ReceiptSettingsStore>();
                     services.AddSingleton<IReceiptPrinter, ThermalReceiptPrinter>();
 
                     services.AddTransient<LoginViewModel>();
                     services.AddTransient<LoginView>();
                     services.AddTransient<MainShellViewModel>();
                     services.AddTransient<MainShellView>();
+                    services.AddTransient<ReceiptSettingsViewModel>();
+                    services.AddTransient<ReceiptSettingsView>();
 
                     // Branches & Warehouses module
                     services.AddTransient<BranchesViewModel>();
