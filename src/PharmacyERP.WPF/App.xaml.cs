@@ -79,6 +79,7 @@ public partial class App : System.Windows.Application
                     services.AddSingleton<INavigationService, NavigationService>();
                     services.AddSingleton<IDialogService, DialogService>();
                     services.AddSingleton<IReportExportService, ReportExportService>();
+                    services.AddSingleton<IReceiptPrinter, ThermalReceiptPrinter>();
 
                     services.AddTransient<LoginViewModel>();
                     services.AddTransient<LoginView>();
@@ -148,6 +149,8 @@ public partial class App : System.Windows.Application
                     services.AddTransient<POSView>();
                     services.AddTransient<CustomersViewModel>();
                     services.AddTransient<CustomersView>();
+                    services.AddTransient<CustomerAccountViewModel>();
+                    services.AddTransient<CustomerAccountDialog>();
                     services.AddTransient<CustomerEditViewModel>();
                     services.AddTransient<CustomerEditDialog>();
                     services.AddTransient<SalesInvoicesViewModel>();

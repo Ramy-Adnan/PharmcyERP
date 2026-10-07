@@ -8,6 +8,7 @@ public class SalesReturnLineInputDto
 
 public class SalesReturnRequestDto
 {
+    public Guid RequestId { get; set; } = Guid.NewGuid();
     public int SalesInvoiceId { get; set; }
     public string Reason { get; set; } = string.Empty;
     public List<SalesReturnLineInputDto> Lines { get; set; } = new();

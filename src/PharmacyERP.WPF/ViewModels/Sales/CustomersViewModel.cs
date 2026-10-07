@@ -25,6 +25,7 @@ public class CustomersViewModel : ViewModelBase
 
         Customers = new ObservableCollection<CustomerDto>();
 
+        AccountCommand = new AsyncRelayCommand(OpenAccountAsync, () => SelectedCustomer is not null);
         RefreshCommand = new AsyncRelayCommand(LoadCustomersAsync);
         AddCustomerCommand = new AsyncRelayCommand(AddCustomerAsync, () => CanManage);
         EditCustomerCommand = new AsyncRelayCommand(EditCustomerAsync, () => CanManage && SelectedCustomer is not null);
@@ -42,6 +43,17 @@ public class CustomersViewModel : ViewModelBase
     }
 
     public bool IsBusy { get => _isBusy; set => SetProperty(ref _isBusy, value); }
+
+    public AsyncRelayCommand AccountCommand { get; }
+
+    private async Task OpenAccountAsync()
+    {
+        if (SelectedCustomer is null) return;
+        var window = _dialogService.CreateDialog<CustomerAccountDialog>();
+        await ((CustomerAccountViewModel)window.DataContext).LoadAsync(SelectedCustomer.Id);
+        _dialogService.ShowDialog(window);
+        await LoadCustomersAsync();
+    }
 
     public AsyncRelayCommand RefreshCommand { get; }
     public AsyncRelayCommand AddCustomerCommand { get; }

@@ -30,9 +30,26 @@ public class ReportingService : IReportingService
 
         var todayInvoices = await invoicesQuery
             .Include(s => s.Items).ThenInclude(i => i.BatchAllocations)
+            .Include(s => s.Items).ThenInclude(i => i.Item)
             .ToListAsync(cancellationToken);
 
-        var todaySalesTotal = todayInvoices.Sum(s => s.TotalAmount);
+        var returnedQuery = _context.SalesReturns.Where(r => r.ReturnAtUtc >= today && r.ReturnAtUtc < tomorrow);
+        if (branchId.HasValue) returnedQuery = returnedQuery.Where(r => r.BranchId == branchId.Value);
+        var returnedToday = await returnedQuery.Include(r => r.SalesInvoice).ToListAsync(cancellationToken);
+        var todayCash = todayInvoices.Where(i => i.PaymentMethod == PaymentMethod.Cash).Sum(i => i.TotalAmount)
+            - returnedToday.Where(r => r.SalesInvoice.PaymentMethod == PaymentMethod.Cash).Sum(r => r.TotalAmount);
+        var todayCard = todayInvoices.Where(i => i.PaymentMethod == PaymentMethod.Card).Sum(i => i.TotalAmount)
+            - returnedToday.Where(r => r.SalesInvoice.PaymentMethod == PaymentMethod.Card).Sum(r => r.TotalAmount);
+        var todayCredit = todayInvoices.Where(i => i.PaymentMethod == PaymentMethod.Credit).Sum(i => i.TotalAmount)
+            - returnedToday.Where(r => r.SalesInvoice.PaymentMethod == PaymentMethod.Credit).Sum(r => r.TotalAmount);
+        var todaySalesTotal = todayCash + todayCard;
+        var debtReceipts = _context.Receipts.Where(r => r.ReferenceType == "CustomerCredit" && r.ReceiptDate >= today && r.ReceiptDate < tomorrow);
+        if (branchId.HasValue) debtReceipts = debtReceipts.Where(r => r.BranchId == branchId.Value);
+        var debtCollections = await debtReceipts.SumAsync(r => r.Amount, cancellationToken);
+        var cashLines = _context.JournalEntryLines.Where(l => l.Account.Code == "1110" && l.JournalEntry.IsPosted
+            && l.JournalEntry.EntryDate >= today && l.JournalEntry.EntryDate < tomorrow);
+        if (branchId.HasValue) cashLines = cashLines.Where(l => l.JournalEntry.BranchId == branchId.Value);
+        var cashMovement = await cashLines.SumAsync(l => l.DebitAmount - l.CreditAmount, cancellationToken);
         var todayCogs = todayInvoices.Sum(s => s.Items.Sum(i => i.BatchAllocations.Sum(a => a.QuantityTaken * a.UnitCost)));
 
         var expensesQuery = _context.Expenses.Where(e => e.ExpenseDate >= today && e.ExpenseDate < tomorrow);
@@ -76,7 +93,9 @@ public class ReportingService : IReportingService
             TodaySalesTotal = todaySalesTotal,
             TodayInvoiceCount = todayInvoices.Count,
             TodayCogs = todayCogs,
-            TodayGrossProfit = todaySalesTotal - todayCogs,
+            TodayGrossProfit = todaySalesTotal + todayCredit - todayCogs,
+            TodayCreditSalesTotal = todayCredit, TodayCashSalesTotal = todayCash, TodayCardSalesTotal = todayCard,
+            TodayDebtCollections = debtCollections, TodayCashMovement = cashMovement,
             TodayExpensesTotal = todayExpensesTotal,
             LowStockItemCount = lowStockCount,
             ExpiringSoonCount = expiringSoonCount,

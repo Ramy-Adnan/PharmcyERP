@@ -6,12 +6,18 @@ public class DashboardSummaryDto
     public DateTime AsOfDate { get; set; }
 
     public decimal TodaySalesTotal { get; set; }
+    public decimal TodayCreditSalesTotal { get; set; }
+    public decimal TodayCashSalesTotal { get; set; }
+    public decimal TodayCardSalesTotal { get; set; }
+    public decimal TodayDebtCollections { get; set; }
+    public decimal TodayRevenueTotal => TodaySalesTotal + TodayCreditSalesTotal;
+    public decimal TodayCashMovement { get; set; }
     public int TodayInvoiceCount { get; set; }
     public decimal TodayCogs { get; set; }
     public decimal TodayGrossProfit { get; set; }
 
     public decimal TodayExpensesTotal { get; set; }
-    public decimal TodayNetCashPosition => TodaySalesTotal - TodayExpensesTotal;
+    public decimal TodayNetCashPosition => TodayCashMovement;
 
     public int LowStockItemCount { get; set; }
     public int ExpiringSoonCount { get; set; }

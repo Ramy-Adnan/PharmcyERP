@@ -32,6 +32,7 @@ public class ReturnableLineRow : ViewModelBase
 public class SalesInvoiceDetailViewModel : ViewModelBase
 {
     private readonly ISalesService _salesService;
+    private readonly IReceiptPrinter _printer;
     private readonly IDialogService _dialogService;
     private readonly ICurrentUserService _currentUserService;
 
@@ -40,14 +41,16 @@ public class SalesInvoiceDetailViewModel : ViewModelBase
     private string _errorMessage = string.Empty;
     private bool _isBusy;
 
-    public SalesInvoiceDetailViewModel(ISalesService salesService, IDialogService dialogService, ICurrentUserService currentUserService)
+    public SalesInvoiceDetailViewModel(ISalesService salesService, IDialogService dialogService, ICurrentUserService currentUserService, IReceiptPrinter printer)
     {
         _salesService = salesService;
+        _printer = printer;
         _dialogService = dialogService;
         _currentUserService = currentUserService;
 
         Lines = new ObservableCollection<ReturnableLineRow>();
 
+        PrintCommand = new AsyncRelayCommand(PrintAsync, () => !IsBusy && Header is not null);
         ProcessReturnCommand = new AsyncRelayCommand(ProcessReturnAsync, () => !IsBusy && CanProcessReturns);
         VoidInvoiceCommand = new AsyncRelayCommand(VoidInvoiceAsync, () => !IsBusy && CanVoid);
     }
@@ -61,6 +64,20 @@ public class SalesInvoiceDetailViewModel : ViewModelBase
     public string ReturnReason { get => _returnReason; set => SetProperty(ref _returnReason, value); }
     public string ErrorMessage { get => _errorMessage; set => SetProperty(ref _errorMessage, value); }
     public bool IsBusy { get => _isBusy; set => SetProperty(ref _isBusy, value); }
+
+    public AsyncRelayCommand PrintCommand { get; }
+    private async Task PrintAsync()
+    {
+        if (Header is null) return;
+        IsBusy = true;
+        try
+        {
+            var invoice = await _salesService.GetSalesInvoiceDetailAsync(Header.Id);
+            if (invoice is not null) _printer.Print(invoice);
+        }
+        catch (Exception ex) { ErrorMessage = $"تعذرت الطباعة: {ex.Message}"; }
+        finally { IsBusy = false; }
+    }
 
     public AsyncRelayCommand ProcessReturnCommand { get; }
     public AsyncRelayCommand VoidInvoiceCommand { get; }

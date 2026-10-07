@@ -55,9 +55,11 @@
                         <TextBlock Text="إجمالي الخصم" HorizontalAlignment="Right"/>
                         <TextBlock Text="{Binding Result.TotalDiscount, StringFormat=N2}" HorizontalAlignment="Left"/>
                     </Grid>
+                    <Grid Margin="0,0,0,8"><TextBlock Text="المبيعات المدفوعة (نقدي + بطاقة)" HorizontalAlignment="Right"/><TextBlock Text="{Binding Result.PaidSales, StringFormat=N2}" HorizontalAlignment="Left"/></Grid>
+                    <Grid Margin="0,0,0,8"><TextBlock Text="مبيعات آجلة — ذمم العملاء" HorizontalAlignment="Right"/><TextBlock Text="{Binding Result.CreditSales, StringFormat=N2}" HorizontalAlignment="Left" Foreground="#B45309"/></Grid>
                     <Separator Margin="0,4"/>
                     <Grid>
-                        <TextBlock Text="صافي المبيعات" HorizontalAlignment="Right" FontSize="16" FontWeight="Bold"/>
+                        <TextBlock Text="إجمالي الفواتير (يشمل الآجل)" HorizontalAlignment="Right" FontSize="16" FontWeight="Bold"/>
                         <TextBlock Text="{Binding Result.NetSales, StringFormat=N2}" HorizontalAlignment="Left" FontSize="16" FontWeight="Bold" Foreground="#1F6F50"/>
                     </Grid>
                 </StackPanel>
@@ -70,7 +72,7 @@
                               GridLinesVisibility="Horizontal" HeadersVisibility="Column" BorderThickness="0"
                               RowHeight="32" FontSize="13">
                         <DataGrid.Columns>
-                            <DataGridTextColumn Header="طريقة الدفع" Binding="{Binding PaymentMethod}" Width="*"/>
+                            <DataGridTextColumn Header="طريقة الدفع" Binding="{Binding PaymentMethodName}" Width="*"/>
                             <DataGridTextColumn Header="عدد الفواتير" Binding="{Binding InvoiceCount}" Width="100"/>
                             <DataGridTextColumn Header="المبلغ" Binding="{Binding Amount, StringFormat=N2}" Width="110"/>
                         </DataGrid.Columns>

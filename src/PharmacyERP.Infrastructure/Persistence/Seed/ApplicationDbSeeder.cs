@@ -229,6 +229,7 @@ public class ApplicationDbSeeder
             ("1130", "المخزون", AccountType.Asset, "1100", true),
             ("1140", "ضريبة مدخلات قابلة للاسترداد", AccountType.Asset, "1100", true),
             ("1150", "ذمم مدينة - شركات التأمين", AccountType.Asset, "1100", true),
+            ("1160", "ذمم مدينة - العملاء", AccountType.Asset, "1100", true),
 
             ("2000", "الالتزامات", AccountType.Liability, null, false),
             ("2100", "ذمم دائنة - الموردون", AccountType.Liability, "2000", true),

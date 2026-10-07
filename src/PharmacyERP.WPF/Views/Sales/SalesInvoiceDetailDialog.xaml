@@ -72,6 +72,7 @@
                        Visibility="{Binding ErrorMessage, Converter={StaticResource StringToVisibilityConverter}}"/>
 
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
+                <Button Content="طباعة وصل 80mm" Command="{Binding PrintCommand}" Padding="12,8" Margin="0,0,8,0"/>
                 <Button Content="تسجيل الإرجاع" Padding="16,8" Background="#1F6F50" Foreground="White" BorderThickness="0"
                         Command="{Binding ProcessReturnCommand}" Margin="0,0,8,0"
                         Visibility="{Binding CanProcessReturns, Converter={StaticResource BoolToVisibilityConverter}}"/>

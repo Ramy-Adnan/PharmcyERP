@@ -1,3 +1,5 @@
+using PharmacyERP.Domain.Enums;
+
 namespace PharmacyERP.Application.Features.Accounting.DTOs;
 
 /// <summary>
@@ -7,6 +9,7 @@ namespace PharmacyERP.Application.Features.Accounting.DTOs;
 /// </summary>
 public class SalesInvoicePostingRequest
 {
+    public PaymentMethod PaymentMethod { get; set; } = PaymentMethod.Cash;
     public int BranchId { get; set; }
     public int SalesInvoiceId { get; set; }
     public string SalesInvoiceNumber { get; set; } = string.Empty;

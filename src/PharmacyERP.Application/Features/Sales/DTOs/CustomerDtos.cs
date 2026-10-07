@@ -2,6 +2,7 @@ namespace PharmacyERP.Application.Features.Sales.DTOs;
 
 public class CustomerDto
 {
+    public decimal OutstandingAmount { get; set; }
     public int Id { get; set; }
     public string Code { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;

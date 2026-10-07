@@ -14,7 +14,7 @@ public class POSLineRow : ViewModelBase
     public string Name { get; init; } = string.Empty;
     public string UnitOfMeasureName { get; init; } = string.Empty;
     public decimal TaxRatePercent { get; init; }
-    public int AvailableQuantity { get; init; }
+    public int AvailableQuantity { get; set; }
     public bool RequiresPrescription { get; init; }
 
     public int Quantity

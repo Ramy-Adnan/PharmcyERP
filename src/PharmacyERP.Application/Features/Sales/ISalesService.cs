@@ -22,8 +22,14 @@ public interface ISalesService
     Task<Result<CustomerDto>> UpdateCustomerAsync(CustomerUpsertDto dto, CancellationToken cancellationToken = default);
     Task<Result> SetCustomerActiveStatusAsync(int customerId, bool isActive, CancellationToken cancellationToken = default);
 
+    Task<Result> ReconcileCustomerCreditAsync(int customerId, CancellationToken cancellationToken = default);
+    Task<CustomerAccountDto?> GetCustomerAccountAsync(int customerId, CancellationToken cancellationToken = default);
+    Task<Result> RecordCustomerPaymentAsync(CustomerDebtPaymentDto dto, CancellationToken cancellationToken = default);
+
     // POS item lookup
     Task<List<SaleItemLookupDto>> SearchSaleItemsAsync(string searchText, int warehouseId, CancellationToken cancellationToken = default);
+
+    Task<SalesInvoiceDto?> FindCheckoutAsync(Guid requestId, CancellationToken cancellationToken = default);
 
     // Checkout
     Task<Result<SalesInvoiceDto>> CheckoutAsync(SalesCheckoutDto dto, int cashierUserId, CancellationToken cancellationToken = default);

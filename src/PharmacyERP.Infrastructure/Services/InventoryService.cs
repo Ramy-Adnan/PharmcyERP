@@ -503,7 +503,7 @@ public class InventoryService : IInventoryService
     public async Task<int> GetAvailableQuantityAsync(int itemId, int warehouseId, CancellationToken cancellationToken = default)
     {
         return await _context.Batches
-            .Where(b => b.ItemId == itemId && b.WarehouseId == warehouseId)
+            .Where(b => b.ItemId == itemId && b.WarehouseId == warehouseId && b.ExpiryDate >= _dateTime.UtcNow.Date)
             .SumAsync(b => b.QuantityOnHand, cancellationToken);
     }
 
@@ -514,7 +514,7 @@ public class InventoryService : IInventoryService
         if (quantity <= 0) return Result<List<BatchAllocationResultDto>>.Failure("الكمية المطلوبة يجب أن تكون أكبر من صفر.");
 
         var candidateBatches = await _context.Batches
-            .Where(b => b.ItemId == itemId && b.WarehouseId == warehouseId && b.QuantityOnHand > 0)
+            .Where(b => b.ItemId == itemId && b.WarehouseId == warehouseId && b.QuantityOnHand > 0 && b.ExpiryDate >= _dateTime.UtcNow.Date)
             .OrderBy(b => b.ExpiryDate)
             .ToListAsync(cancellationToken);
 

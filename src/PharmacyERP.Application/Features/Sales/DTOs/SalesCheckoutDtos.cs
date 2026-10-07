@@ -13,6 +13,7 @@ public class SaleLineInputDto
 
 public class SalesCheckoutDto
 {
+    public Guid RequestId { get; set; } = Guid.NewGuid();
     public int BranchId { get; set; }
     public int WarehouseId { get; set; }
     public int? CustomerId { get; set; }

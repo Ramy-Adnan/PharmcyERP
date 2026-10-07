@@ -549,7 +549,14 @@ public class AccountingService : IAccountingService
 
     public async Task PostSalesInvoiceAsync(SalesInvoicePostingRequest request, CancellationToken cancellationToken = default)
     {
-        var cashAccount = await GetSystemAccountAsync(CashAccountCode, cancellationToken);
+        var settlementCode = request.PaymentMethod switch
+        {
+            PaymentMethod.Cash => CashAccountCode,
+            PaymentMethod.Card => BankAccountCode,
+            PaymentMethod.Credit => "1160",
+            _ => throw new InvalidOperationException("طريقة دفع غير مدعومة.")
+        };
+        var cashAccount = await GetSystemAccountAsync(settlementCode, cancellationToken);
         var revenueAccount = await GetSystemAccountAsync(SalesRevenueAccountCode, cancellationToken);
         var taxPayableAccount = await GetSystemAccountAsync(TaxPayableAccountCode, cancellationToken);
 

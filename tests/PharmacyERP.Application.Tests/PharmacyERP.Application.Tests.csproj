@@ -13,10 +13,20 @@
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
     <PackageReference Include="FluentAssertions" Version="6.12.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="8.0.8" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.8" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\PharmacyERP.Infrastructure\PharmacyERP.Infrastructure.csproj" />
   </ItemGroup>
 
+  <!-- Exercise the actual POS view-model on Linux; only WPF command notification plumbing is shimmed. -->
+  <ItemGroup>
+    <Compile Include="../../src/PharmacyERP.WPF/MVVM/ViewModelBase.cs" Link="POS/ViewModelBase.cs" />
+    <Compile Include="../../src/PharmacyERP.WPF/MVVM/RelayCommand.cs" Link="POS/RelayCommand.cs" />
+    <Compile Include="../../src/PharmacyERP.WPF/MVVM/AsyncRelayCommand.cs" Link="POS/AsyncRelayCommand.cs" />
+    <Compile Include="../../src/PharmacyERP.WPF/ViewModels/Sales/POSLineRow.cs" Link="POS/POSLineRow.cs" />
+    <Compile Include="../../src/PharmacyERP.WPF/ViewModels/Sales/POSViewModel.cs" Link="POS/POSViewModel.cs" />
+    <Compile Include="../../src/PharmacyERP.WPF/Services/IReceiptPrinter.cs" Link="POS/IReceiptPrinter.cs" />
+  </ItemGroup>
 </Project>

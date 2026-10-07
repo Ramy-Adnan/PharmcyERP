@@ -20,6 +20,7 @@
         <Border Grid.Row="2" Background="White" BorderBrush="#E5E7EB" BorderThickness="1">
             <DockPanel>
                 <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="10" HorizontalAlignment="Left">
+                    <Button Content="كشف الدين / تسديد" Command="{Binding AccountCommand}" Padding="12,6" Margin="0,0,8,0" Background="#0F766E" Foreground="White"/>
                     <Button Content="تعديل" Padding="12,6" Margin="0,0,8,0" Command="{Binding EditCustomerCommand}"/>
                     <Button Content="تفعيل / تعطيل" Padding="12,6" Command="{Binding ToggleStatusCommand}"/>
                 </StackPanel>
@@ -33,6 +34,7 @@
                         <DataGridTextColumn Header="الاسم" Binding="{Binding Name}" Width="*"/>
                         <DataGridTextColumn Header="الهاتف" Binding="{Binding Phone}" Width="130"/>
                         <DataGridTextColumn Header="العنوان" Binding="{Binding Address}" Width="2*"/>
+                        <DataGridTextColumn Header="الدين المتبقي" Binding="{Binding OutstandingAmount, StringFormat=N2}" Width="120"/>
                         <DataGridCheckBoxColumn Header="نشط" Binding="{Binding IsActive}" Width="60"/>
                     </DataGrid.Columns>
                 </DataGrid>
