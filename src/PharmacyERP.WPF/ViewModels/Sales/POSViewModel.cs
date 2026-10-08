@@ -211,7 +211,10 @@ public class POSViewModel : ViewModelBase
     private void AddItem(SaleItemLookupDto item, string? scannedBarcode = null)
     {
         var scanBase = !string.IsNullOrWhiteSpace(scannedBarcode) && string.Equals(item.BaseUnitBarcode, scannedBarcode, StringComparison.OrdinalIgnoreCase);
-        var line = CartLines.LastOrDefault(l => l.ItemId == item.ItemId && (!scanBase || !l.SellAsPackage));
+        var line = scanBase
+            ? CartLines.FirstOrDefault(l => l.ItemId == item.ItemId && !l.SellAsPackage)
+            : SelectedCartLine is { } selected && CartLines.Contains(selected) && selected.ItemId == item.ItemId
+                ? selected : CartLines.LastOrDefault(l => l.ItemId == item.ItemId);
         var factor = scanBase ? 1 : line?.UnitsPerSale ?? (item.AvailableQuantity >= item.UnitsPerPackage ? item.UnitsPerPackage : 1);
         if (ReservedStock(item.ItemId) + factor > item.AvailableQuantity)
         { ErrorMessage = $"المتوفر من {item.DisplayName}: {item.StockDisplay}. اختر الوحدة الصغيرة عند عدم توفر عبوة كاملة."; return; }

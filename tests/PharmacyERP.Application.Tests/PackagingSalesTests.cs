@@ -332,4 +332,17 @@ public class PackagingSalesTests
         (await db.SalesInvoiceItems.SingleAsync()).QuantityReturned.Should().Be(1);
     }
 
+    [Fact]
+    public async Task Scanner_WithBoxAndStripRows_FollowsTheCashierSelectedRow()
+    {
+        await using var db = TestDb.CreateContext(_clock); var f = await SeedAsync(db); await ReceiveAsync(db, f, 3);
+        var pos = await PosAsync(db, f); await pos.SubmitSearchAsync("1234567890", true); pos.AddOtherUnitCommand.Execute(null);
+        var box = pos.CartLines.Single(l => l.SellAsPackage); var strip = pos.CartLines.Single(l => !l.SellAsPackage);
+        pos.SelectedCartLine = box; await pos.SubmitSearchAsync("1234567890", true);
+        box.Quantity.Should().Be(2); strip.Quantity.Should().Be(1);
+        pos.SelectedCartLine = strip; await pos.SubmitSearchAsync("1234567890", true);
+        box.Quantity.Should().Be(2); strip.Quantity.Should().Be(2); pos.TotalAmount.Should().Be(24000);
+        await pos.CheckoutAsync(); pos.ErrorMessage.Should().BeEmpty(); (await db.Batches.SingleAsync()).QuantityOnHand.Should().Be(3);
+    }
+
 }
