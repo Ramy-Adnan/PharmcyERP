@@ -4,6 +4,7 @@ namespace PharmacyERP.Application.Features.Purchasing.DTOs;
 
 public class GoodsReceiptNoteDto
 {
+    public PurchasePricingType PurchaseType { get; set; }
     public int Id { get; set; }
     public string Number { get; set; } = string.Empty;
     public string? PurchaseOrderNumber { get; set; }
@@ -38,6 +39,7 @@ public class GoodsReceiptLineDto
 /// </summary>
 public class GoodsReceiptUpsertDto
 {
+    public PurchasePricingType PurchaseType { get; set; }
     public int? Id { get; set; }
     public int? PurchaseOrderId { get; set; }
     public int SupplierId { get; set; }

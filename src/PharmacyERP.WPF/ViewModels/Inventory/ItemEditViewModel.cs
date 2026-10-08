@@ -14,7 +14,7 @@ public class LookupOption
 }
 
 /// <summary>ViewModel for the Add/Edit Item (medicine master record) dialog.</summary>
-public class ItemEditViewModel : ViewModelBase
+public class ItemEditViewModel : PurchasePricingViewModel
 {
     private readonly IInventoryService _inventoryService;
 
@@ -50,8 +50,10 @@ public class ItemEditViewModel : ViewModelBase
         Forms = new ObservableCollection<ItemForm>(Enum.GetValues<ItemForm>());
 
         SaveCommand = new AsyncRelayCommand(SaveAsync, () => !IsBusy);
-        CalculateSalePriceCommand = new RelayCommand(() => DefaultSalePrice = SalePricePolicy.FromPurchasePrice(DefaultPurchasePrice));
+        CalculateSalePriceCommand = new RelayCommand(() => DefaultSalePrice = SalePricePolicy.FromPurchasePrice(DefaultPurchasePrice, PurchaseType));
     }
+
+    protected override void OnPurchaseTypeChanged() => DefaultSalePrice = SalePricePolicy.FromPurchasePrice(DefaultPurchasePrice, PurchaseType);
 
     public bool IsEditMode => _id.HasValue;
     public string DialogTitle => IsEditMode ? "تعديل بطاقة الصنف" : "إضافة صنف جديد";
@@ -79,7 +81,7 @@ public class ItemEditViewModel : ViewModelBase
         set
         {
             if (SetProperty(ref _defaultPurchasePrice, value))
-                DefaultSalePrice = SalePricePolicy.FromPurchasePrice(value);
+                DefaultSalePrice = SalePricePolicy.FromPurchasePrice(value, PurchaseType);
         }
     }
     public decimal TaxRatePercent { get => _taxRatePercent; set => SetProperty(ref _taxRatePercent, value); }
@@ -99,6 +101,7 @@ public class ItemEditViewModel : ViewModelBase
     public async Task LoadForCreateAsync()
     {
         _id = null;
+        PurchaseType = PurchasePricingType.Other;
         DefaultPurchasePrice = 0;
         DefaultSalePrice = 0;
         IsActive = true;
@@ -124,8 +127,9 @@ public class ItemEditViewModel : ViewModelBase
         ManufacturerId = dto.ManufacturerId;
         RequiresPrescription = dto.RequiresPrescription;
         IsControlledSubstance = dto.IsControlledSubstance;
+        PurchaseType = dto.PurchaseType;
         DefaultPurchasePrice = dto.DefaultPurchasePrice;
-        DefaultSalePrice = dto.DefaultSalePrice ?? SalePricePolicy.FromPurchasePrice(dto.DefaultPurchasePrice);
+        DefaultSalePrice = dto.DefaultSalePrice ?? SalePricePolicy.FromPurchasePrice(dto.DefaultPurchasePrice, PurchaseType);
         TaxRatePercent = dto.TaxRatePercent;
         ReorderPoint = dto.ReorderPoint;
         MinStockLevel = dto.MinStockLevel;
@@ -176,6 +180,7 @@ public class ItemEditViewModel : ViewModelBase
                 RequiresPrescription = RequiresPrescription,
                 IsControlledSubstance = IsControlledSubstance,
                 DefaultSalePrice = DefaultSalePrice,
+                PurchaseType = PurchaseType,
                 DefaultPurchasePrice = DefaultPurchasePrice,
                 TaxRatePercent = TaxRatePercent,
                 ReorderPoint = ReorderPoint,

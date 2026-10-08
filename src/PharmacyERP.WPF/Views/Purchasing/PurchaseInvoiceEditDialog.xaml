@@ -71,6 +71,12 @@
 
         <Border Grid.Row="2" Background="White" BorderBrush="#E5E7EB" BorderThickness="1">
             <DockPanel>
+                <StackPanel DockPanel.Dock="Top" Margin="10">
+                    <TextBlock Text="نوع الشراء / نسبة زيادة البيع" Margin="0,0,0,4"/>
+                    <ComboBox ItemsSource="{Binding PurchaseTypes}" DisplayMemberPath="Name" SelectedValuePath="Value"
+                              SelectedValue="{Binding PurchaseType}" IsEnabled="{Binding CanChoosePurchaseType}" Padding="6" Margin="0,0,0,8"/>
+                    <TextBlock Text="الفاتورة المرتبطة تأخذ نوع الاستلام. حدّد أسعار البيع في سند الاستلام قبل ترحيله للمخزن." TextWrapping="Wrap" Foreground="#64748B" FontSize="11" Margin="0,0,0,8"/>
+                </StackPanel>
                 <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="10" HorizontalAlignment="Left">
                     <Button Content="إضافة سطر" Padding="12,6" Margin="0,0,8,0" Command="{Binding AddLineCommand}"/>
                     <Button Content="حذف السطر" Padding="12,6" Foreground="#DC2626" Command="{Binding RemoveLineCommand}"/>

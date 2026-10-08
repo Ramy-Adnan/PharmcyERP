@@ -1,7 +1,10 @@
+using PharmacyERP.Domain.Enums;
+
 namespace PharmacyERP.Application.Features.Inventory.DTOs;
 
 public class BatchDto
 {
+    public PurchasePricingType PurchaseType { get; set; }
     public int Id { get; set; }
     public int ItemId { get; set; }
     public string ItemName { get; set; } = string.Empty;
@@ -25,6 +28,7 @@ public class BatchDto
 
 public class ReceiveBatchDto
 {
+    public PurchasePricingType PurchaseType { get; set; }
     public int ItemId { get; set; }
     public int WarehouseId { get; set; }
     public string BatchNumber { get; set; } = string.Empty;

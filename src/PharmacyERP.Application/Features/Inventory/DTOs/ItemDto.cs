@@ -4,6 +4,8 @@ namespace PharmacyERP.Application.Features.Inventory.DTOs;
 
 public class ItemDto
 {
+    public PurchasePricingType PurchaseType { get; set; }
+
     public int Id { get; set; }
     public string Code { get; set; } = string.Empty;
     public string? Barcode { get; set; }

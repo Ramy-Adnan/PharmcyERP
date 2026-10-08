@@ -198,6 +198,7 @@ public class InventoryService : IInventoryService
             RequiresPrescription = i.RequiresPrescription,
             IsControlledSubstance = i.IsControlledSubstance,
             DefaultSalePrice = i.DefaultSalePrice,
+            PurchaseType = i.PurchaseType,
             DefaultPurchasePrice = i.DefaultPurchasePrice,
             TaxRatePercent = i.TaxRatePercent,
             ReorderPoint = i.ReorderPoint,
@@ -228,6 +229,7 @@ public class InventoryService : IInventoryService
             RequiresPrescription = item.RequiresPrescription,
             IsControlledSubstance = item.IsControlledSubstance,
             DefaultSalePrice = item.DefaultSalePrice,
+            PurchaseType = item.PurchaseType,
             DefaultPurchasePrice = item.DefaultPurchasePrice,
             TaxRatePercent = item.TaxRatePercent,
             ReorderPoint = item.ReorderPoint,
@@ -255,7 +257,8 @@ public class InventoryService : IInventoryService
             ManufacturerId = dto.ManufacturerId,
             RequiresPrescription = dto.RequiresPrescription,
             IsControlledSubstance = dto.IsControlledSubstance,
-            DefaultSalePrice = dto.DefaultSalePrice ?? SalePricePolicy.FromPurchasePrice(dto.DefaultPurchasePrice),
+            DefaultSalePrice = dto.DefaultSalePrice ?? SalePricePolicy.FromPurchasePrice(dto.DefaultPurchasePrice, dto.PurchaseType),
+            PurchaseType = dto.PurchaseType,
             DefaultPurchasePrice = dto.DefaultPurchasePrice,
             TaxRatePercent = dto.TaxRatePercent,
             ReorderPoint = dto.ReorderPoint,
@@ -291,7 +294,8 @@ public class InventoryService : IInventoryService
         item.ManufacturerId = dto.ManufacturerId;
         item.RequiresPrescription = dto.RequiresPrescription;
         item.IsControlledSubstance = dto.IsControlledSubstance;
-        item.DefaultSalePrice = dto.DefaultSalePrice ?? SalePricePolicy.FromPurchasePrice(dto.DefaultPurchasePrice);
+        item.DefaultSalePrice = dto.DefaultSalePrice ?? SalePricePolicy.FromPurchasePrice(dto.DefaultPurchasePrice, dto.PurchaseType);
+        item.PurchaseType = dto.PurchaseType;
         item.DefaultPurchasePrice = dto.DefaultPurchasePrice;
         item.TaxRatePercent = dto.TaxRatePercent;
         item.ReorderPoint = dto.ReorderPoint;
@@ -320,6 +324,7 @@ public class InventoryService : IInventoryService
         if (dto.CategoryId <= 0) return "الرجاء اختيار تصنيف.";
         if (dto.UnitOfMeasureId <= 0) return "الرجاء اختيار وحدة قياس.";
         if (dto.DefaultSalePrice < 0) return "سعر البيع لا يمكن أن يكون سالباً.";
+        if (!Enum.IsDefined(dto.PurchaseType)) return "نوع الشراء غير صالح.";
         if (dto.DefaultPurchasePrice < 0) return "سعر الشراء لا يمكن أن يكون سالباً.";
 
         var codeTaken = await _context.Items.AnyAsync(i => i.Code == dto.Code.Trim().ToUpper() && i.Id != dto.Id, cancellationToken);
@@ -360,6 +365,7 @@ public class InventoryService : IInventoryService
 
     public async Task<Result<BatchDto>> ReceiveBatchAsync(ReceiveBatchDto dto, int? performedByUserId, CancellationToken cancellationToken = default)
     {
+        if (!Enum.IsDefined(dto.PurchaseType)) return Result<BatchDto>.Failure("نوع الشراء غير صالح.");
         if (dto.Quantity <= 0) return Result<BatchDto>.Failure("الكمية المستلمة يجب أن تكون أكبر من صفر.");
         if (dto.PurchasePrice < 0 || dto.SalePriceOverride < 0)
             return Result<BatchDto>.Failure("سعر الشراء والبيع لا يمكن أن يكونا سالبين.");
@@ -380,8 +386,9 @@ public class InventoryService : IInventoryService
             ManufactureDate = dto.ManufactureDate,
             ExpiryDate = dto.ExpiryDate,
             QuantityOnHand = dto.Quantity,
+            PurchaseType = dto.PurchaseType,
             PurchasePrice = dto.PurchasePrice,
-            SalePriceOverride = dto.SalePriceOverride ?? SalePricePolicy.FromPurchasePrice(dto.PurchasePrice),
+            SalePriceOverride = dto.SalePriceOverride ?? SalePricePolicy.FromPurchasePrice(dto.PurchasePrice, dto.PurchaseType),
             HasConfiguredSalePrice = true,
             ReceivedAtUtc = _dateTime.UtcNow,
             SupplierReference = dto.SupplierReference
@@ -608,6 +615,7 @@ public class InventoryService : IInventoryService
         ManufactureDate = b.ManufactureDate,
         ExpiryDate = b.ExpiryDate,
         QuantityOnHand = b.QuantityOnHand,
+        PurchaseType = b.PurchaseType,
         PurchasePrice = b.PurchasePrice,
         SalePriceOverride = b.SalePriceOverride,
         ReceivedAtUtc = b.ReceivedAtUtc,

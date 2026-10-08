@@ -11,6 +11,8 @@ namespace PharmacyERP.Domain.Entities;
 /// </summary>
 public class PurchaseInvoice : AuditableEntity
 {
+    public PurchasePricingType PurchaseType { get; set; }
+
     public string Number { get; set; } = string.Empty;
 
     public int SupplierId { get; set; }

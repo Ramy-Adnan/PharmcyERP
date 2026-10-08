@@ -1,3 +1,4 @@
+using PharmacyERP.Domain.Enums;
 using PharmacyERP.Domain.Common;
 
 namespace PharmacyERP.Domain.Entities;
@@ -11,6 +12,8 @@ namespace PharmacyERP.Domain.Entities;
 /// </summary>
 public class Batch : AuditableEntity
 {
+    public PurchasePricingType PurchaseType { get; set; }
+
     public int ItemId { get; set; }
     public Item Item { get; set; } = null!;
 

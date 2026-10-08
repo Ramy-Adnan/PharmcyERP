@@ -45,6 +45,12 @@
 
         <Border Grid.Row="2" Background="White" BorderBrush="#E5E7EB" BorderThickness="1">
             <DockPanel>
+                <StackPanel DockPanel.Dock="Top" Margin="10">
+                    <TextBlock Text="نوع الشراء / نسبة زيادة البيع" Margin="0,0,0,4"/>
+                    <ComboBox ItemsSource="{Binding PurchaseTypes}" DisplayMemberPath="Name" SelectedValuePath="Value"
+                              SelectedValue="{Binding PurchaseType}" Padding="6" Margin="0,0,0,8"/>
+                    <TextBlock Text="تغيير النوع أو سعر الشراء يعيد الحساب؛ يمكنك تعديل البيع بعد ذلك." TextWrapping="Wrap" Foreground="#64748B" FontSize="11" Margin="0,0,0,8"/>
+                </StackPanel>
                 <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="10" HorizontalAlignment="Left">
                     <Button Content="إضافة سطر" Padding="12,6" Margin="0,0,8,0" Command="{Binding AddLineCommand}"/>
                     <Button Content="حذف السطر" Padding="12,6" Foreground="#DC2626" Command="{Binding RemoveLineCommand}"/>
@@ -72,11 +78,11 @@
                         </DataGridTemplateColumn>
                         <DataGridTextColumn Header="الكمية" Binding="{Binding QuantityOrdered, UpdateSourceTrigger=PropertyChanged}" Width="90"/>
                         <DataGridTextColumn Header="سعر الشراء" Binding="{Binding UnitCost, UpdateSourceTrigger=PropertyChanged}" Width="100"/>
-                        <DataGridTextColumn Header="سعر البيع (+3%)" Binding="{Binding SalePrice, UpdateSourceTrigger=PropertyChanged}" Width="110"/>
+                        <DataGridTextColumn Header="سعر البيع" Binding="{Binding SalePrice, UpdateSourceTrigger=PropertyChanged}" Width="110"/>
                         <DataGridTemplateColumn Header="إعادة" Width="55">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
-                                    <Button Content="+3%" Command="{Binding CalculateSalePriceCommand}" ToolTip="إعادة سعر البيع إلى الشراء +3%" Padding="3,2"/>
+                                    <Button Content="{Binding MarkupLabel}" Command="{Binding CalculateSalePriceCommand}" ToolTip="{Binding RecalculatePriceLabel}" Padding="3,2"/>
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>

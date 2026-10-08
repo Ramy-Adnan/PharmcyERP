@@ -15,7 +15,7 @@ namespace PharmacyERP.WPF.ViewModels.Purchasing;
 /// pre-filled from an already-Posted Goods Receipt so the accountant doesn't
 /// retype quantities/costs (PrefillInvoiceFromGoodsReceiptAsync).
 /// </summary>
-public class PurchaseInvoiceEditViewModel : ViewModelBase
+public class PurchaseInvoiceEditViewModel : PurchasePricingViewModel
 {
     private readonly IPurchasingService _purchasingService;
     private readonly IInventoryService _inventoryService;
@@ -72,10 +72,16 @@ public class PurchaseInvoiceEditViewModel : ViewModelBase
         set
         {
             if (SetProperty(ref _goodsReceiptNoteId, value))
+            {
+                var receipt = PostedGoodsReceipts.FirstOrDefault(n => n.Id == value);
+                if (receipt is not null) PurchaseType = receipt.PurchaseType;
+                OnPropertyChanged(nameof(CanChoosePurchaseType));
                 System.Windows.Input.CommandManager.InvalidateRequerySuggested();
+            }
         }
     }
 
+    public bool CanChoosePurchaseType => !GoodsReceiptNoteId.HasValue;
     public int BranchId { get => _branchId; set => SetProperty(ref _branchId, value); }
     public DateTime InvoiceDate { get => _invoiceDate; set => SetProperty(ref _invoiceDate, value); }
     public DateTime? DueDate { get => _dueDate; set => SetProperty(ref _dueDate, value); }
@@ -138,6 +144,7 @@ public class PurchaseInvoiceEditViewModel : ViewModelBase
         GoodsReceiptNoteId = prefill.GoodsReceiptNoteId;
         BranchId = prefill.BranchId;
         InvoiceDate = prefill.InvoiceDate;
+        PurchaseType = prefill.PurchaseType;
 
         Lines.Clear();
         foreach (var line in prefill.Lines)
@@ -208,6 +215,7 @@ public class PurchaseInvoiceEditViewModel : ViewModelBase
                 InvoiceDate = InvoiceDate,
                 DueDate = DueDate,
                 DiscountAmount = DiscountAmount,
+                PurchaseType = PurchaseType,
                 Notes = Notes,
                 Lines = Lines.Select(l => new PurchaseInvoiceLineUpsertDto
                 {

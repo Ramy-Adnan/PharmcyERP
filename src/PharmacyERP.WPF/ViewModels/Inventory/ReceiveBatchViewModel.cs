@@ -1,3 +1,4 @@
+using PharmacyERP.Domain.Enums;
 using System.Collections.ObjectModel;
 using PharmacyERP.Application.Common.Interfaces;
 using PharmacyERP.Application.Features.Branches;
@@ -10,7 +11,7 @@ using PharmacyERP.WPF.MVVM;
 namespace PharmacyERP.WPF.ViewModels.Inventory;
 
 /// <summary>ViewModel for the "Receive Batch" dialog — records a newly-purchased lot of an Item into a specific Warehouse.</summary>
-public class ReceiveBatchViewModel : ViewModelBase
+public class ReceiveBatchViewModel : PurchasePricingViewModel
 {
     private readonly IInventoryService _inventoryService;
     private readonly IBranchService _branchService;
@@ -36,8 +37,10 @@ public class ReceiveBatchViewModel : ViewModelBase
 
         Warehouses = new ObservableCollection<WarehouseDto>();
         SaveCommand = new AsyncRelayCommand(SaveAsync, () => !IsBusy);
-        CalculateSalePriceCommand = new RelayCommand(() => SalePriceOverride = SalePricePolicy.FromPurchasePrice(PurchasePrice));
+        CalculateSalePriceCommand = new RelayCommand(() => SalePriceOverride = SalePricePolicy.FromPurchasePrice(PurchasePrice, PurchaseType));
     }
+
+    protected override void OnPurchaseTypeChanged() => SalePriceOverride = SalePricePolicy.FromPurchasePrice(PurchasePrice, PurchaseType);
 
     public ObservableCollection<WarehouseDto> Warehouses { get; }
 
@@ -52,7 +55,7 @@ public class ReceiveBatchViewModel : ViewModelBase
         set
         {
             if (SetProperty(ref _purchasePrice, value))
-                SalePriceOverride = SalePricePolicy.FromPurchasePrice(value);
+                SalePriceOverride = SalePricePolicy.FromPurchasePrice(value, PurchaseType);
         }
     }
     public decimal? SalePriceOverride { get => _salePriceOverride; set => SetProperty(ref _salePriceOverride, value); }
@@ -70,8 +73,9 @@ public class ReceiveBatchViewModel : ViewModelBase
     {
         _itemId = itemId;
         var item = await _inventoryService.GetItemForEditAsync(itemId);
+        PurchaseType = item?.PurchaseType ?? PurchasePricingType.Other;
         PurchasePrice = item?.DefaultPurchasePrice ?? 0;
-        SalePriceOverride = SalePricePolicy.FromPurchasePrice(PurchasePrice);
+        SalePriceOverride = SalePricePolicy.FromPurchasePrice(PurchasePrice, PurchaseType);
 
         var warehouses = await _branchService.GetWarehousesAsync(defaultBranchId);
         Warehouses.Clear();
@@ -94,6 +98,7 @@ public class ReceiveBatchViewModel : ViewModelBase
                 ManufactureDate = ManufactureDate,
                 ExpiryDate = ExpiryDate,
                 Quantity = Quantity,
+                PurchaseType = PurchaseType,
                 PurchasePrice = PurchasePrice,
                 SalePriceOverride = SalePriceOverride,
                 SupplierReference = SupplierReference

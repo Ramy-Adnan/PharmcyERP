@@ -11,6 +11,8 @@ namespace PharmacyERP.Domain.Entities;
 /// </summary>
 public class Item : AuditableEntity
 {
+    public PurchasePricingType PurchaseType { get; set; }
+
     public string Code { get; set; } = string.Empty;
     public string? Barcode { get; set; }
     public string Name { get; set; } = string.Empty;

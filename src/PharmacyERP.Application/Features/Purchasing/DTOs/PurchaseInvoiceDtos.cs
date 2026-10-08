@@ -4,6 +4,7 @@ namespace PharmacyERP.Application.Features.Purchasing.DTOs;
 
 public class PurchaseInvoiceDto
 {
+    public PurchasePricingType PurchaseType { get; set; }
     public int Id { get; set; }
     public string Number { get; set; } = string.Empty;
     public string SupplierName { get; set; } = string.Empty;
@@ -35,6 +36,7 @@ public class PurchaseInvoiceLineDto
 
 public class PurchaseInvoiceUpsertDto
 {
+    public PurchasePricingType PurchaseType { get; set; }
     public int SupplierId { get; set; }
     public int? GoodsReceiptNoteId { get; set; }
     public int BranchId { get; set; }

@@ -16,7 +16,7 @@ namespace PharmacyERP.WPF.ViewModels.Purchasing;
 /// through a nested dialog, matching how pharmacy staff expect to key in a
 /// multi-line order quickly.
 /// </summary>
-public class PurchaseOrderEditViewModel : ViewModelBase
+public class PurchaseOrderEditViewModel : PurchasePricingViewModel
 {
     private readonly IPurchasingService _purchasingService;
     private readonly IInventoryService _inventoryService;
@@ -45,9 +45,14 @@ public class PurchaseOrderEditViewModel : ViewModelBase
         AvailableItems = new ObservableCollection<ItemDto>();
         Lines = new ObservableCollection<POLineRow>();
 
-        AddLineCommand = new RelayCommand(() => Lines.Add(new POLineRow()));
+        AddLineCommand = new RelayCommand(() => Lines.Add(new POLineRow { PurchaseType = PurchaseType }));
         RemoveLineCommand = new RelayCommand(() => { if (SelectedLine is not null) Lines.Remove(SelectedLine); }, () => SelectedLine is not null);
         SaveCommand = new AsyncRelayCommand(SaveAsync, () => !IsBusy);
+    }
+
+    protected override void OnPurchaseTypeChanged()
+    {
+        foreach (var line in Lines) line.PurchaseType = PurchaseType;
     }
 
     public bool IsEditMode => _id.HasValue;
@@ -115,21 +120,22 @@ public class PurchaseOrderEditViewModel : ViewModelBase
         WarehouseId = dto.WarehouseId;
         OrderDate = dto.OrderDate;
         ExpectedDeliveryDate = dto.ExpectedDeliveryDate;
-        Notes = dto.Notes;
-
         Lines.Clear();
+        PurchaseType = dto.PurchaseType;
+        Notes = dto.Notes;
         foreach (var line in dto.Lines)
         {
             var item = AvailableItems.FirstOrDefault(i => i.Id == line.ItemId);
             Lines.Add(new POLineRow
             {
+                PurchaseType = PurchaseType,
                 Id = line.Id,
                 ItemId = line.ItemId,
                 ItemCode = item?.Code ?? string.Empty,
                 ItemName = item?.Name ?? string.Empty,
                 QuantityOrdered = line.QuantityOrdered,
                 UnitCost = line.UnitCost,
-                SalePrice = line.SalePrice ?? SalePricePolicy.FromPurchasePrice(line.UnitCost),
+                SalePrice = line.SalePrice ?? SalePricePolicy.FromPurchasePrice(line.UnitCost, PurchaseType),
                 TaxRatePercent = line.TaxRatePercent
             });
         }
@@ -202,6 +208,7 @@ public class PurchaseOrderEditViewModel : ViewModelBase
                 WarehouseId = WarehouseId,
                 OrderDate = OrderDate,
                 ExpectedDeliveryDate = ExpectedDeliveryDate,
+                PurchaseType = PurchaseType,
                 Notes = Notes,
                 Lines = Lines.Select(l => new PurchaseOrderLineUpsertDto
                 {

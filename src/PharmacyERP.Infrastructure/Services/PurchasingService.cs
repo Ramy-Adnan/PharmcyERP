@@ -178,6 +178,7 @@ public class PurchasingService : IPurchasingService
             WarehouseId = order.WarehouseId,
             OrderDate = order.OrderDate,
             ExpectedDeliveryDate = order.ExpectedDeliveryDate,
+            PurchaseType = order.PurchaseType,
             Notes = order.Notes,
             Lines = order.Items.Select(i => new PurchaseOrderLineUpsertDto
             {
@@ -194,6 +195,7 @@ public class PurchasingService : IPurchasingService
     public async Task<List<PurchaseOrderLineDto>> GetPurchaseOrderLinesAsync(int purchaseOrderId, CancellationToken cancellationToken = default)
     {
         var lines = await _context.PurchaseOrderItems
+            .Include(i => i.PurchaseOrder)
             .Include(i => i.Item).ThenInclude(item => item.UnitOfMeasure)
             .Where(i => i.PurchaseOrderId == purchaseOrderId)
             .ToListAsync(cancellationToken);
@@ -214,6 +216,7 @@ public class PurchasingService : IPurchasingService
             WarehouseId = dto.WarehouseId,
             OrderDate = dto.OrderDate,
             ExpectedDeliveryDate = dto.ExpectedDeliveryDate,
+            PurchaseType = dto.PurchaseType,
             Notes = dto.Notes,
             Status = PurchaseOrderStatus.Draft
         };
@@ -225,7 +228,7 @@ public class PurchasingService : IPurchasingService
                 ItemId = line.ItemId,
                 QuantityOrdered = line.QuantityOrdered,
                 UnitCost = line.UnitCost,
-                SalePrice = line.SalePrice ?? SalePricePolicy.FromPurchasePrice(line.UnitCost),
+                SalePrice = line.SalePrice ?? SalePricePolicy.FromPurchasePrice(line.UnitCost, dto.PurchaseType),
                 TaxRatePercent = line.TaxRatePercent
             });
         }
@@ -256,6 +259,7 @@ public class PurchasingService : IPurchasingService
         order.WarehouseId = dto.WarehouseId;
         order.OrderDate = dto.OrderDate;
         order.ExpectedDeliveryDate = dto.ExpectedDeliveryDate;
+        order.PurchaseType = dto.PurchaseType;
         order.Notes = dto.Notes;
 
         // Replace all lines wholesale — the PO is still Draft so no receipts can reference old line IDs yet.
@@ -269,7 +273,7 @@ public class PurchasingService : IPurchasingService
                 ItemId = line.ItemId,
                 QuantityOrdered = line.QuantityOrdered,
                 UnitCost = line.UnitCost,
-                SalePrice = line.SalePrice ?? SalePricePolicy.FromPurchasePrice(line.UnitCost),
+                SalePrice = line.SalePrice ?? SalePricePolicy.FromPurchasePrice(line.UnitCost, dto.PurchaseType),
                 TaxRatePercent = line.TaxRatePercent
             });
         }
@@ -315,6 +319,7 @@ public class PurchasingService : IPurchasingService
     public async Task<List<PurchaseOrderLineDto>> GetOutstandingLinesForReceiptAsync(int purchaseOrderId, CancellationToken cancellationToken = default)
     {
         var lines = await _context.PurchaseOrderItems
+            .Include(i => i.PurchaseOrder)
             .Include(i => i.Item).ThenInclude(item => item.UnitOfMeasure)
             .Where(i => i.PurchaseOrderId == purchaseOrderId && i.QuantityReceived < i.QuantityOrdered)
             .ToListAsync(cancellationToken);
@@ -354,6 +359,7 @@ public class PurchasingService : IPurchasingService
             BranchId = note.BranchId,
             WarehouseId = note.WarehouseId,
             ReceiptDate = note.ReceiptDate,
+            PurchaseType = note.PurchaseType,
             Notes = note.Notes,
             Lines = note.Items.Select(i => new GoodsReceiptLineUpsertDto
             {
@@ -395,6 +401,7 @@ public class PurchasingService : IPurchasingService
             BranchId = dto.BranchId,
             WarehouseId = dto.WarehouseId,
             ReceiptDate = dto.ReceiptDate,
+            PurchaseType = dto.PurchaseType,
             Notes = dto.Notes,
             Status = GoodsReceiptStatus.Draft
         };
@@ -410,7 +417,7 @@ public class PurchasingService : IPurchasingService
                 ExpiryDate = line.ExpiryDate,
                 QuantityReceived = line.QuantityReceived,
                 UnitCost = line.UnitCost,
-                SalePrice = line.SalePrice ?? SalePricePolicy.FromPurchasePrice(line.UnitCost)
+                SalePrice = line.SalePrice ?? SalePricePolicy.FromPurchasePrice(line.UnitCost, dto.PurchaseType)
             });
         }
 
@@ -436,6 +443,7 @@ public class PurchasingService : IPurchasingService
         note.BranchId = dto.BranchId;
         note.WarehouseId = dto.WarehouseId;
         note.ReceiptDate = dto.ReceiptDate;
+        note.PurchaseType = dto.PurchaseType;
         note.Notes = dto.Notes;
 
         foreach (var existingLine in note.Items.ToList())
@@ -452,7 +460,7 @@ public class PurchasingService : IPurchasingService
                 ExpiryDate = line.ExpiryDate,
                 QuantityReceived = line.QuantityReceived,
                 UnitCost = line.UnitCost,
-                SalePrice = line.SalePrice ?? SalePricePolicy.FromPurchasePrice(line.UnitCost)
+                SalePrice = line.SalePrice ?? SalePricePolicy.FromPurchasePrice(line.UnitCost, dto.PurchaseType)
             });
         }
 
@@ -487,6 +495,7 @@ public class PurchasingService : IPurchasingService
                 ManufactureDate = line.ManufactureDate,
                 ExpiryDate = line.ExpiryDate,
                 Quantity = line.QuantityReceived,
+                PurchaseType = note.PurchaseType,
                 PurchasePrice = line.UnitCost,
                 SalePriceOverride = line.SalePrice,
                 SupplierReference = note.Number
@@ -535,6 +544,7 @@ public class PurchasingService : IPurchasingService
 
     private async Task<string?> ValidateGoodsReceiptAsync(GoodsReceiptUpsertDto dto, CancellationToken cancellationToken)
     {
+        if (!Enum.IsDefined(dto.PurchaseType)) return "نوع الشراء غير صالح.";
         if (dto.SupplierId <= 0) return "الرجاء اختيار المورد.";
         if (dto.BranchId <= 0) return "الرجاء اختيار الفرع.";
         if (dto.WarehouseId <= 0) return "الرجاء اختيار المخزن.";
@@ -564,6 +574,7 @@ public class PurchasingService : IPurchasingService
         WarehouseName = n.Warehouse.Name,
         ReceiptDate = n.ReceiptDate,
         Status = n.Status,
+        PurchaseType = n.PurchaseType,
         Notes = n.Notes,
         TotalCost = n.Items.Sum(i => i.UnitCost * i.QuantityReceived),
         LineCount = n.Items.Count
@@ -613,6 +624,14 @@ public class PurchasingService : IPurchasingService
         var validation = await ValidatePurchaseInvoiceAsync(dto, cancellationToken);
         if (validation is not null) return Result<PurchaseInvoiceDto>.Failure(validation);
 
+        if (dto.GoodsReceiptNoteId.HasValue)
+        {
+            var receipt = await _context.GoodsReceiptNotes.FirstOrDefaultAsync(n => n.Id == dto.GoodsReceiptNoteId.Value, cancellationToken);
+            if (receipt is null || receipt.Status != GoodsReceiptStatus.Posted)
+                return Result<PurchaseInvoiceDto>.Failure("يجب اختيار سند استلام مُرحّل.");
+            dto.PurchaseType = receipt.PurchaseType;
+        }
+
         var number = await GenerateNumberAsync("PINV", () => _context.PurchaseInvoices.CountAsync(cancellationToken));
 
         var invoice = new PurchaseInvoice
@@ -624,6 +643,7 @@ public class PurchasingService : IPurchasingService
             InvoiceDate = dto.InvoiceDate,
             DueDate = dto.DueDate,
             DiscountAmount = dto.DiscountAmount,
+            PurchaseType = dto.PurchaseType,
             Notes = dto.Notes,
             Status = PurchaseInvoiceStatus.Unpaid
         };
@@ -710,6 +730,7 @@ public class PurchasingService : IPurchasingService
         return new PurchaseInvoiceUpsertDto
         {
             SupplierId = note.SupplierId,
+            PurchaseType = note.PurchaseType,
             GoodsReceiptNoteId = note.Id,
             BranchId = note.BranchId,
             InvoiceDate = DateTime.Today,
@@ -726,6 +747,7 @@ public class PurchasingService : IPurchasingService
 
     private async Task<string?> ValidatePurchaseInvoiceAsync(PurchaseInvoiceUpsertDto dto, CancellationToken cancellationToken)
     {
+        if (!Enum.IsDefined(dto.PurchaseType)) return "نوع الشراء غير صالح.";
         if (dto.SupplierId <= 0) return "الرجاء اختيار المورد.";
         if (dto.BranchId <= 0) return "الرجاء اختيار الفرع.";
         if (!dto.Lines.Any()) return "يجب إضافة صنف واحد على الأقل.";
@@ -755,6 +777,7 @@ public class PurchasingService : IPurchasingService
         AmountPaid = i.AmountPaid,
         AmountDue = i.AmountDue,
         Status = i.Status,
+        PurchaseType = i.PurchaseType,
         Notes = i.Notes
     };
 
@@ -772,6 +795,7 @@ public class PurchasingService : IPurchasingService
 
     private async Task<string?> ValidatePurchaseOrderAsync(PurchaseOrderUpsertDto dto, CancellationToken cancellationToken)
     {
+        if (!Enum.IsDefined(dto.PurchaseType)) return "نوع الشراء غير صالح.";
         if (dto.SupplierId <= 0) return "الرجاء اختيار المورد.";
         if (dto.BranchId <= 0) return "الرجاء اختيار الفرع.";
         if (dto.WarehouseId <= 0) return "الرجاء اختيار المخزن.";
@@ -797,6 +821,7 @@ public class PurchasingService : IPurchasingService
         OrderDate = p.OrderDate,
         ExpectedDeliveryDate = p.ExpectedDeliveryDate,
         Status = p.Status,
+        PurchaseType = p.PurchaseType,
         Notes = p.Notes,
         TotalAmount = p.Items.Sum(i => i.LineTotal),
         LineCount = p.Items.Count,
@@ -814,7 +839,7 @@ public class PurchasingService : IPurchasingService
         QuantityReceived = i.QuantityReceived,
         QuantityOutstanding = i.QuantityOutstanding,
         UnitCost = i.UnitCost,
-        SalePrice = i.SalePrice ?? SalePricePolicy.FromPurchasePrice(i.UnitCost),
+        SalePrice = i.SalePrice ?? SalePricePolicy.FromPurchasePrice(i.UnitCost, i.PurchaseOrder.PurchaseType),
         TaxRatePercent = i.TaxRatePercent,
         LineTotal = i.LineTotal
     };

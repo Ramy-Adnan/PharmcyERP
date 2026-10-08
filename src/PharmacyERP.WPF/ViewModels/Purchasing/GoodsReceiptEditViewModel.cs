@@ -19,7 +19,7 @@ namespace PharmacyERP.WPF.ViewModels.Purchasing;
 /// PostGoodsReceiptAsync (triggered from the list screen) commits it to
 /// Inventory — this screen never touches stock directly.
 /// </summary>
-public class GoodsReceiptEditViewModel : ViewModelBase
+public class GoodsReceiptEditViewModel : PurchasePricingViewModel
 {
     private readonly IPurchasingService _purchasingService;
     private readonly IInventoryService _inventoryService;
@@ -50,9 +50,14 @@ public class GoodsReceiptEditViewModel : ViewModelBase
         Lines = new ObservableCollection<GRLineRow>();
 
         LoadFromPurchaseOrderCommand = new AsyncRelayCommand(LoadFromPurchaseOrderAsync, () => PurchaseOrderId.HasValue);
-        AddLineCommand = new RelayCommand(() => Lines.Add(new GRLineRow()));
+        AddLineCommand = new RelayCommand(() => Lines.Add(new GRLineRow { PurchaseType = PurchaseType }));
         RemoveLineCommand = new RelayCommand(() => { if (SelectedLine is not null) Lines.Remove(SelectedLine); }, () => SelectedLine is not null);
         SaveCommand = new AsyncRelayCommand(SaveAsync, () => !IsBusy);
+    }
+
+    protected override void OnPurchaseTypeChanged()
+    {
+        foreach (var line in Lines) line.PurchaseType = PurchaseType;
     }
 
     public bool IsEditMode => _id.HasValue;
@@ -140,14 +145,15 @@ public class GoodsReceiptEditViewModel : ViewModelBase
         await LoadWarehousesForBranchAsync();
         WarehouseId = dto.WarehouseId;
         ReceiptDate = dto.ReceiptDate;
-        Notes = dto.Notes;
-
         Lines.Clear();
+        PurchaseType = dto.PurchaseType;
+        Notes = dto.Notes;
         foreach (var line in dto.Lines)
         {
             var item = AvailableItems.FirstOrDefault(i => i.Id == line.ItemId);
             Lines.Add(new GRLineRow
             {
+                PurchaseType = PurchaseType,
                 Id = line.Id,
                 PurchaseOrderItemId = line.PurchaseOrderItemId,
                 ItemId = line.ItemId,
@@ -158,7 +164,7 @@ public class GoodsReceiptEditViewModel : ViewModelBase
                 ExpiryDate = line.ExpiryDate,
                 QuantityReceived = line.QuantityReceived,
                 UnitCost = line.UnitCost,
-                SalePrice = line.SalePrice ?? SalePricePolicy.FromPurchasePrice(line.UnitCost)
+                SalePrice = line.SalePrice ?? SalePricePolicy.FromPurchasePrice(line.UnitCost, PurchaseType)
             });
         }
 
@@ -217,6 +223,8 @@ public class GoodsReceiptEditViewModel : ViewModelBase
         var poDetails = await _purchasingService.GetPurchaseOrderForEditAsync(PurchaseOrderId.Value);
         if (poDetails is not null)
         {
+            Lines.Clear();
+            PurchaseType = poDetails.PurchaseType;
             BranchId = poDetails.BranchId;
             await LoadWarehousesForBranchAsync();
             WarehouseId = poDetails.WarehouseId;
@@ -229,6 +237,7 @@ public class GoodsReceiptEditViewModel : ViewModelBase
         {
             Lines.Add(new GRLineRow
             {
+                PurchaseType = PurchaseType,
                 PurchaseOrderItemId = line.Id,
                 ItemId = line.ItemId,
                 ItemCode = line.ItemCode,
@@ -276,6 +285,7 @@ public class GoodsReceiptEditViewModel : ViewModelBase
                 BranchId = BranchId,
                 WarehouseId = WarehouseId,
                 ReceiptDate = ReceiptDate,
+                PurchaseType = PurchaseType,
                 Notes = Notes,
                 Lines = Lines.Select(l => new GoodsReceiptLineUpsertDto
                 {

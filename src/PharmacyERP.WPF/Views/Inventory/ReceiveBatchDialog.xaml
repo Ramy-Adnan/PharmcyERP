@@ -29,13 +29,18 @@
                 <TextBlock Text="الكمية المستلمة" Margin="0,0,0,4"/>
                 <TextBox Text="{Binding Quantity, UpdateSourceTrigger=PropertyChanged}" Padding="6" Margin="0,0,0,12"/>
 
+                <TextBlock Text="نوع الشراء / نسبة زيادة البيع" Margin="0,0,0,4"/>
+                <ComboBox ItemsSource="{Binding PurchaseTypes}" DisplayMemberPath="Name" SelectedValuePath="Value"
+                          SelectedValue="{Binding PurchaseType}" Padding="6" Margin="0,0,0,8"/>
+                <TextBlock Text="تغيير النوع أو سعر الشراء يعيد الحساب؛ يمكنك تعديل البيع بعد ذلك." TextWrapping="Wrap" Foreground="#64748B" FontSize="11" Margin="0,0,0,8"/>
+
                 <TextBlock Text="سعر الشراء (للوحدة)" Margin="0,0,0,4"/>
                 <TextBox Text="{Binding PurchasePrice, UpdateSourceTrigger=PropertyChanged}" Padding="6" Margin="0,0,0,12"/>
 
-                <TextBlock Text="سعر البيع لهذه الدفعة (الشراء + 3%)" Margin="0,0,0,4"/>
+                <TextBlock Text="{Binding SalePriceLabel}" Margin="0,0,0,4"/>
                 <TextBox Text="{Binding SalePriceOverride, UpdateSourceTrigger=PropertyChanged}" Padding="6" Margin="0,0,0,12"/>
-                <TextBlock Text="يمكن تعديل البيع يدوياً؛ تغيير الشراء يعيد حساب زيادة 3%." TextWrapping="Wrap" Foreground="#64748B" FontSize="11" Margin="0,0,0,6"/>
-                <Button Content="إعادة حساب +3%" Command="{Binding CalculateSalePriceCommand}" Padding="8,4" Margin="0,0,0,12"/>
+                <TextBlock Text="يمكن تعديل البيع يدوياً؛ تغيير الشراء يعيد الحساب حسب النوع المحدد." TextWrapping="Wrap" Foreground="#64748B" FontSize="11" Margin="0,0,0,6"/>
+                <Button Content="{Binding RecalculatePriceLabel}" Command="{Binding CalculateSalePriceCommand}" Padding="8,4" Margin="0,0,0,12"/>
 
                 <TextBlock Text="مرجع المورد / رقم الفاتورة (اختياري)" Margin="0,0,0,4"/>
                 <TextBox Text="{Binding SupplierReference, UpdateSourceTrigger=PropertyChanged}" Padding="6" Margin="0,0,0,12"/>

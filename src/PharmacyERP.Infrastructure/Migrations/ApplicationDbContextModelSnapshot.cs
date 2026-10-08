@@ -247,6 +247,9 @@ namespace PharmacyERP.Infrastructure.Migrations
                     b.Property<decimal>("PurchasePrice")
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<int>("PurchaseType")
+                        .HasColumnType("int");
+
                     b.Property<int>("QuantityOnHand")
                         .HasColumnType("int");
 
@@ -998,6 +1001,9 @@ namespace PharmacyERP.Infrastructure.Migrations
                     b.Property<int?>("PurchaseOrderId")
                         .HasColumnType("int");
 
+                    b.Property<int>("PurchaseType")
+                        .HasColumnType("int");
+
                     b.Property<DateTime>("ReceiptDate")
                         .HasColumnType("datetime2");
 
@@ -1305,6 +1311,9 @@ namespace PharmacyERP.Infrastructure.Migrations
                         .IsRequired()
                         .HasMaxLength(250)
                         .HasColumnType("nvarchar(250)");
+
+                    b.Property<int>("PurchaseType")
+                        .HasColumnType("int");
 
                     b.Property<int>("ReorderPoint")
                         .HasColumnType("int");
@@ -2097,6 +2106,9 @@ namespace PharmacyERP.Infrastructure.Migrations
                         .HasMaxLength(30)
                         .HasColumnType("nvarchar(30)");
 
+                    b.Property<int>("PurchaseType")
+                        .HasColumnType("int");
+
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
                         .ValueGeneratedOnAddOrUpdate()
@@ -2215,6 +2227,9 @@ namespace PharmacyERP.Infrastructure.Migrations
 
                     b.Property<DateTime>("OrderDate")
                         .HasColumnType("datetime2");
+
+                    b.Property<int>("PurchaseType")
+                        .HasColumnType("int");
 
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
