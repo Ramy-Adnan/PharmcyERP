@@ -96,6 +96,7 @@ public class ItemEditViewModel : PurchasePricingViewModel
     public AsyncRelayCommand SaveCommand { get; }
     public RelayCommand CalculateSalePriceCommand { get; }
     public bool SavedSuccessfully { get; private set; }
+    public int? SavedItemId { get; private set; }
     public event Action? RequestClose;
 
     public async Task LoadForCreateAsync()
@@ -199,6 +200,7 @@ public class ItemEditViewModel : PurchasePricingViewModel
                 return;
             }
 
+            SavedItemId = result.Value!.Id;
             SavedSuccessfully = true;
             RequestClose?.Invoke();
         }

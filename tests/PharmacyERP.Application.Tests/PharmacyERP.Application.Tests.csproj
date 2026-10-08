@@ -44,6 +44,8 @@
     <Compile Include="../../src/PharmacyERP.WPF/ViewModels/Purchasing/PurchaseOrderEditViewModel.cs" Link="Pricing/PurchaseOrderEditViewModel.cs" />
     <Compile Include="../../src/PharmacyERP.WPF/ViewModels/Purchasing/PILineRow.cs" Link="Pricing/PILineRow.cs" />
     <Compile Include="../../src/PharmacyERP.WPF/ViewModels/Purchasing/PurchaseInvoiceEditViewModel.cs" Link="Pricing/PurchaseInvoiceEditViewModel.cs" />
+    <Compile Include="../../src/PharmacyERP.WPF/ViewModels/Purchasing/PurchasingWorkspaceViewModel.cs" Link="Purchasing/PurchasingWorkspaceViewModel.cs" />
+    <Compile Include="../../src/PharmacyERP.WPF/ViewModels/Purchasing/SupplierEditViewModel.cs" Link="Purchasing/SupplierEditViewModel.cs" />
     <Compile Include="../../src/PharmacyERP.WPF/ViewModels/Purchasing/GoodsReceiptEditViewModel.cs" Link="Pricing/GoodsReceiptEditViewModel.cs" />
   </ItemGroup>
 </Project>

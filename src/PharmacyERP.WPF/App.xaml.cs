@@ -128,6 +128,9 @@ public partial class App : System.Windows.Application
                     services.AddTransient<StockOverviewViewModel>();
                     services.AddTransient<StockOverviewView>();
 
+                    services.AddTransient<PurchasingWorkspaceViewModel>();
+                    services.AddTransient<PurchasingWorkspaceView>();
+
                     // Purchasing module (Suppliers, Purchase Orders, Goods Receipts, Purchase Invoices)
                     services.AddTransient<SuppliersViewModel>();
                     services.AddTransient<SuppliersView>();

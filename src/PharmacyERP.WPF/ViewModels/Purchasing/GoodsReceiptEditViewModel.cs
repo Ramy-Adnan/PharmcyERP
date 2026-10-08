@@ -122,11 +122,13 @@ public class GoodsReceiptEditViewModel : PurchasePricingViewModel
     public RelayCommand RemoveLineCommand { get; }
     public AsyncRelayCommand SaveCommand { get; }
     public bool SavedSuccessfully { get; private set; }
+    public int? SavedReceiptId => _id;
     public event Action? RequestClose;
 
-    public async Task LoadForCreateAsync()
+    public async Task LoadForCreateAsync(int? defaultBranchId = null)
     {
         _id = null;
+        if (defaultBranchId.HasValue) SetProperty(ref _branchId, defaultBranchId.Value, nameof(BranchId));
         await LoadLookupsAsync();
     }
 
@@ -138,10 +140,10 @@ public class GoodsReceiptEditViewModel : PurchasePricingViewModel
         if (dto is null) return;
 
         _id = dto.Id;
-        SupplierId = dto.SupplierId;
+        SetProperty(ref _supplierId, dto.SupplierId, nameof(SupplierId));
         await LoadOpenPurchaseOrdersForSupplierAsync();
         PurchaseOrderId = dto.PurchaseOrderId;
-        BranchId = dto.BranchId;
+        SetProperty(ref _branchId, dto.BranchId, nameof(BranchId));
         await LoadWarehousesForBranchAsync();
         WarehouseId = dto.WarehouseId;
         ReceiptDate = dto.ReceiptDate;
@@ -186,8 +188,24 @@ public class GoodsReceiptEditViewModel : PurchasePricingViewModel
         AvailableItems.Clear();
         foreach (var i in items.Where(i => i.IsActive)) AvailableItems.Add(i);
 
-        if (BranchId == 0 && Branches.Count > 0) BranchId = Branches.First().Id;
-        else await LoadWarehousesForBranchAsync();
+        if (BranchId == 0 && Branches.Count > 0) SetProperty(ref _branchId, Branches.First().Id, nameof(BranchId));
+        await LoadWarehousesForBranchAsync();
+    }
+
+    public async Task SelectSupplierAsync(int supplierId)
+    {
+        var suppliers = await _purchasingService.GetSuppliersAsync();
+        Suppliers.Clear();
+        foreach (var supplier in suppliers.Where(s => s.IsActive)) Suppliers.Add(supplier);
+        SetProperty(ref _supplierId, supplierId, nameof(SupplierId));
+        await LoadOpenPurchaseOrdersForSupplierAsync();
+    }
+
+    public async Task ReloadItemsAsync()
+    {
+        var items = await _inventoryService.GetItemsAsync();
+        AvailableItems.Clear();
+        foreach (var item in items.Where(i => i.IsActive)) AvailableItems.Add(item);
     }
 
     private async Task LoadOpenPurchaseOrdersForSupplierAsync()
@@ -225,7 +243,7 @@ public class GoodsReceiptEditViewModel : PurchasePricingViewModel
         {
             Lines.Clear();
             PurchaseType = poDetails.PurchaseType;
-            BranchId = poDetails.BranchId;
+            SetProperty(ref _branchId, poDetails.BranchId, nameof(BranchId));
             await LoadWarehousesForBranchAsync();
             WarehouseId = poDetails.WarehouseId;
         }
@@ -264,6 +282,7 @@ public class GoodsReceiptEditViewModel : PurchasePricingViewModel
 
     public async Task SaveAsync()
     {
+        SavedSuccessfully = false;
         ErrorMessage = string.Empty;
 
         if (SupplierId <= 0) { ErrorMessage = "الرجاء اختيار المورد."; return; }
@@ -311,6 +330,8 @@ public class GoodsReceiptEditViewModel : PurchasePricingViewModel
                 return;
             }
 
+            _id = result.Value!.Id;
+            OnPropertyChanged(nameof(SavedReceiptId));
             SavedSuccessfully = true;
             RequestClose?.Invoke();
         }

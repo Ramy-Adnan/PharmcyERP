@@ -45,6 +45,7 @@ public class SupplierEditViewModel : ViewModelBase
 
     public AsyncRelayCommand SaveCommand { get; }
     public bool SavedSuccessfully { get; private set; }
+    public int? SavedSupplierId { get; private set; }
     public event Action? RequestClose;
 
     public void LoadForCreate()
@@ -73,8 +74,9 @@ public class SupplierEditViewModel : ViewModelBase
         OnPropertyChanged(nameof(DialogTitle));
     }
 
-    private async Task SaveAsync()
+    public async Task SaveAsync()
     {
+        SavedSuccessfully = false;
         ErrorMessage = string.Empty;
         IsBusy = true;
         try
@@ -103,6 +105,8 @@ public class SupplierEditViewModel : ViewModelBase
                 return;
             }
 
+            SavedSupplierId = result.Value!.Id;
+            _id = result.Value.Id;
             SavedSuccessfully = true;
             RequestClose?.Invoke();
         }

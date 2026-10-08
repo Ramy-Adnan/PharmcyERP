@@ -724,35 +724,11 @@
 
                             <RadioButton Style="{StaticResource NavItemStyle}"
                                          GroupName="MainNav"
-                                         Content="الموردون"
-                                         ToolTip="الموردون"
-                                         Tag="{StaticResource Icon.Supplier}"
-                                         Command="{Binding NavigateToSuppliersCommand}"
-                                         Visibility="{Binding CanManageSuppliers, Converter={StaticResource BoolToVisibilityConverter}}"/>
-
-                            <RadioButton Style="{StaticResource NavItemStyle}"
-                                         GroupName="MainNav"
-                                         Content="أوامر الشراء"
-                                         ToolTip="أوامر الشراء"
-                                         Tag="{StaticResource Icon.PurchaseOrder}"
-                                         Command="{Binding NavigateToPurchaseOrdersCommand}"
-                                         Visibility="{Binding CanManagePurchaseOrders, Converter={StaticResource BoolToVisibilityConverter}}"/>
-
-                            <RadioButton Style="{StaticResource NavItemStyle}"
-                                         GroupName="MainNav"
-                                         Content="استلام البضاعة"
-                                         ToolTip="استلام البضاعة"
-                                         Tag="{StaticResource Icon.GoodsReceipt}"
-                                         Command="{Binding NavigateToGoodsReceiptsCommand}"
-                                         Visibility="{Binding CanReceiveGoods, Converter={StaticResource BoolToVisibilityConverter}}"/>
-
-                            <RadioButton Style="{StaticResource NavItemStyle}"
-                                         GroupName="MainNav"
-                                         Content="فواتير الشراء"
-                                         ToolTip="فواتير الشراء"
+                                         Content="المشتريات خطوة بخطوة"
+                                         ToolTip="المورد ← البضاعة ← الفاتورة ← التسديد"
                                          Tag="{StaticResource Icon.Cart}"
-                                         Command="{Binding NavigateToPurchaseInvoicesCommand}"
-                                         Visibility="{Binding CanManagePurchaseInvoices, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                                         Command="{Binding NavigateToPurchasingCommand}"
+                                         Visibility="{Binding CanAccessPurchasing, Converter={StaticResource BoolToVisibilityConverter}}"/>
 
 
                             <!-- ============================= -->

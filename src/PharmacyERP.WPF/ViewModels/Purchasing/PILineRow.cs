@@ -41,5 +41,5 @@ public class PILineRow : ViewModelBase
         set { if (SetProperty(ref _discountAmount, value)) OnPropertyChanged(nameof(LineTotal)); }
     }
 
-    public decimal LineTotal => Math.Round(UnitCost * Quantity * (1 + TaxRatePercent / 100m) - DiscountAmount, 2);
+    public decimal LineTotal => Math.Round(UnitCost * Quantity * (1 + TaxRatePercent / 100m) - DiscountAmount, 2, MidpointRounding.AwayFromZero);
 }

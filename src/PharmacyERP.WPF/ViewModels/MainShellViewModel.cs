@@ -49,10 +49,7 @@ public class MainShellViewModel : ViewModelBase
         NavigateToStockOverviewCommand = new RelayCommand(() => CurrentView = _serviceProvider.GetService(typeof(StockOverviewView)));
         NavigateToItemLookupsCommand = new RelayCommand(() => CurrentView = _serviceProvider.GetService(typeof(ItemLookupsView)));
 
-        NavigateToSuppliersCommand = new RelayCommand(() => CurrentView = _serviceProvider.GetService(typeof(SuppliersView)));
-        NavigateToPurchaseOrdersCommand = new RelayCommand(() => CurrentView = _serviceProvider.GetService(typeof(PurchaseOrdersView)));
-        NavigateToGoodsReceiptsCommand = new RelayCommand(() => CurrentView = _serviceProvider.GetService(typeof(GoodsReceiptsView)));
-        NavigateToPurchaseInvoicesCommand = new RelayCommand(() => CurrentView = _serviceProvider.GetService(typeof(PurchaseInvoicesView)));
+        NavigateToPurchasingCommand = new RelayCommand(() => CurrentView = _serviceProvider.GetService(typeof(PurchasingWorkspaceView)), () => CanAccessPurchasing);
 
         NavigateToPosCommand = new RelayCommand(() => CurrentView = _serviceProvider.GetService(typeof(POSView)));
         NavigateToCustomersCommand = new RelayCommand(() => CurrentView = _serviceProvider.GetService(typeof(CustomersView)));
@@ -113,6 +110,7 @@ public class MainShellViewModel : ViewModelBase
         (_sessionService.CurrentSession?.Permissions.Contains("Inventory.AdjustStock") ?? false);
     public bool CanManageInventoryLookups => _sessionService.CurrentSession?.Permissions.Contains("Inventory.ManageLookups") ?? false;
 
+    public bool CanAccessPurchasing => CanManageSuppliers || CanManagePurchaseOrders || CanReceiveGoods || CanManagePurchaseInvoices;
     public bool CanManageSuppliers => _sessionService.CurrentSession?.Permissions.Contains("Purchasing.ManageSuppliers") ?? false;
     public bool CanManagePurchaseOrders => _sessionService.CurrentSession?.Permissions.Contains("Purchasing.ManageOrders") ?? false;
     public bool CanReceiveGoods => _sessionService.CurrentSession?.Permissions.Contains("Purchasing.ReceiveGoods") ?? false;
@@ -155,10 +153,7 @@ public class MainShellViewModel : ViewModelBase
     public RelayCommand NavigateToItemsCommand { get; }
     public RelayCommand NavigateToStockOverviewCommand { get; }
     public RelayCommand NavigateToItemLookupsCommand { get; }
-    public RelayCommand NavigateToSuppliersCommand { get; }
-    public RelayCommand NavigateToPurchaseOrdersCommand { get; }
-    public RelayCommand NavigateToGoodsReceiptsCommand { get; }
-    public RelayCommand NavigateToPurchaseInvoicesCommand { get; }
+    public RelayCommand NavigateToPurchasingCommand { get; }
     public RelayCommand NavigateToPosCommand { get; }
     public RelayCommand NavigateToCustomersCommand { get; }
     public RelayCommand NavigateToSalesInvoicesCommand { get; }

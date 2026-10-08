@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using PharmacyERP.Application.Features.Branches;
 using PharmacyERP.Application.Features.Branches.DTOs;
 using PharmacyERP.Application.Features.Inventory;
@@ -43,6 +44,14 @@ public class PurchaseInvoiceEditViewModel : PurchasePricingViewModel
         Branches = new ObservableCollection<BranchDto>();
         AvailableItems = new ObservableCollection<ItemDto>();
         Lines = new ObservableCollection<PILineRow>();
+        Lines.CollectionChanged += (_, e) =>
+        {
+            if (e.OldItems is not null)
+                foreach (PILineRow line in e.OldItems) line.PropertyChanged -= LineChanged;
+            if (e.NewItems is not null)
+                foreach (PILineRow line in e.NewItems) line.PropertyChanged += LineChanged;
+            OnPropertyChanged(nameof(GrandTotal));
+        };
 
         LoadFromGoodsReceiptCommand = new AsyncRelayCommand(LoadFromGoodsReceiptAsync, () => GoodsReceiptNoteId.HasValue);
         AddLineCommand = new RelayCommand(() => Lines.Add(new PILineRow()));
@@ -96,6 +105,11 @@ public class PurchaseInvoiceEditViewModel : PurchasePricingViewModel
 
     public decimal GrandTotal => Math.Max(0, Lines.Sum(l => l.LineTotal) - DiscountAmount);
 
+    private void LineChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(PILineRow.LineTotal)) OnPropertyChanged(nameof(GrandTotal));
+    }
+
     public PILineRow? SelectedLine
     {
         get => _selectedLine;
@@ -114,6 +128,7 @@ public class PurchaseInvoiceEditViewModel : PurchasePricingViewModel
     public RelayCommand RemoveLineCommand { get; }
     public AsyncRelayCommand SaveCommand { get; }
     public bool SavedSuccessfully { get; private set; }
+    public PurchaseInvoiceDto? SavedInvoice { get; private set; }
     public event Action? RequestClose;
 
     public async Task LoadForCreateAsync()
@@ -139,7 +154,7 @@ public class PurchaseInvoiceEditViewModel : PurchasePricingViewModel
         var prefill = await _purchasingService.PrefillInvoiceFromGoodsReceiptAsync(goodsReceiptNoteId);
         if (prefill is null) return;
 
-        SupplierId = prefill.SupplierId;
+        SetProperty(ref _supplierId, prefill.SupplierId, nameof(SupplierId));
         await LoadPostedGoodsReceiptsForSupplierAsync();
         GoodsReceiptNoteId = prefill.GoodsReceiptNoteId;
         BranchId = prefill.BranchId;
@@ -194,8 +209,10 @@ public class PurchaseInvoiceEditViewModel : PurchasePricingViewModel
         if (line.TaxRatePercent == 0) line.TaxRatePercent = item.TaxRatePercent;
     }
 
-    private async Task SaveAsync()
+    public async Task SaveAsync()
     {
+        if (SavedInvoice is not null) return;
+        SavedSuccessfully = false;
         ErrorMessage = string.Empty;
 
         if (SupplierId <= 0) { ErrorMessage = "الرجاء اختيار المورد."; return; }
@@ -235,6 +252,7 @@ public class PurchaseInvoiceEditViewModel : PurchasePricingViewModel
                 return;
             }
 
+            SavedInvoice = result.Value;
             SavedSuccessfully = true;
             RequestClose?.Invoke();
         }

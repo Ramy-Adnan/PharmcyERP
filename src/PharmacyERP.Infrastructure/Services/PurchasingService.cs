@@ -1,3 +1,4 @@
+using System.Data;
 using Microsoft.EntityFrameworkCore;
 using PharmacyERP.Application.Common.Interfaces;
 using PharmacyERP.Application.Common.Models;
@@ -475,7 +476,10 @@ public class PurchasingService : IPurchasingService
     /// authoritative, then reconciles the linked PurchaseOrder's received
     /// quantities and rolls its status forward (PartiallyReceived/Received).
     /// </summary>
-    public async Task<Result> PostGoodsReceiptAsync(int goodsReceiptNoteId, int? performedByUserId, CancellationToken cancellationToken = default)
+    public Task<Result> PostGoodsReceiptAsync(int goodsReceiptNoteId, int? performedByUserId, CancellationToken cancellationToken = default) =>
+        InTransactionAsync(() => PostGoodsReceiptCoreAsync(goodsReceiptNoteId, performedByUserId, cancellationToken), r => r.Succeeded, cancellationToken);
+
+    private async Task<Result> PostGoodsReceiptCoreAsync(int goodsReceiptNoteId, int? performedByUserId, CancellationToken cancellationToken)
     {
         var note = await _context.GoodsReceiptNotes
             .Include(n => n.Items)
@@ -619,7 +623,10 @@ public class PurchasingService : IPurchasingService
         return lines.Select(MapPurchaseInvoiceLineToDto).ToList();
     }
 
-    public async Task<Result<PurchaseInvoiceDto>> CreatePurchaseInvoiceAsync(PurchaseInvoiceUpsertDto dto, CancellationToken cancellationToken = default)
+    public Task<Result<PurchaseInvoiceDto>> CreatePurchaseInvoiceAsync(PurchaseInvoiceUpsertDto dto, CancellationToken cancellationToken = default) =>
+        InTransactionAsync(() => CreatePurchaseInvoiceCoreAsync(dto, cancellationToken), r => r.Succeeded, cancellationToken);
+
+    private async Task<Result<PurchaseInvoiceDto>> CreatePurchaseInvoiceCoreAsync(PurchaseInvoiceUpsertDto dto, CancellationToken cancellationToken)
     {
         var validation = await ValidatePurchaseInvoiceAsync(dto, cancellationToken);
         if (validation is not null) return Result<PurchaseInvoiceDto>.Failure(validation);
@@ -629,6 +636,12 @@ public class PurchasingService : IPurchasingService
             var receipt = await _context.GoodsReceiptNotes.FirstOrDefaultAsync(n => n.Id == dto.GoodsReceiptNoteId.Value, cancellationToken);
             if (receipt is null || receipt.Status != GoodsReceiptStatus.Posted)
                 return Result<PurchaseInvoiceDto>.Failure("يجب اختيار سند استلام مُرحّل.");
+            if (dto.SupplierId != receipt.SupplierId || dto.BranchId != receipt.BranchId)
+                return Result<PurchaseInvoiceDto>.Failure("المورد والفرع يجب أن يطابقا سند الاستلام.");
+            var existing = await _context.PurchaseInvoices.Include(i => i.Supplier).Include(i => i.Branch)
+                .Include(i => i.GoodsReceiptNote)
+                .FirstOrDefaultAsync(i => i.GoodsReceiptNoteId == receipt.Id && i.Status != PurchaseInvoiceStatus.Cancelled, cancellationToken);
+            if (existing is not null) return Result<PurchaseInvoiceDto>.Success(MapPurchaseInvoiceToDto(existing));
             dto.PurchaseType = receipt.PurchaseType;
         }
 
@@ -650,7 +663,7 @@ public class PurchasingService : IPurchasingService
 
         foreach (var line in dto.Lines)
         {
-            var lineTotal = Math.Round(line.UnitCost * line.Quantity * (1 + line.TaxRatePercent / 100m) - line.DiscountAmount, 2);
+            var lineTotal = Math.Round(line.UnitCost * line.Quantity * (1 + line.TaxRatePercent / 100m) - line.DiscountAmount, 2, MidpointRounding.AwayFromZero);
             invoice.Items.Add(new PurchaseInvoiceItem
             {
                 ItemId = line.ItemId,
@@ -663,8 +676,9 @@ public class PurchasingService : IPurchasingService
         }
 
         invoice.SubTotal = invoice.Items.Sum(i => i.UnitCost * i.Quantity);
-        invoice.TaxAmount = invoice.Items.Sum(i => i.UnitCost * i.Quantity * i.TaxRatePercent / 100m);
-        invoice.TotalAmount = Math.Round(invoice.SubTotal + invoice.TaxAmount - invoice.DiscountAmount, 2);
+        invoice.TaxAmount = invoice.Items.Sum(i => Math.Round(i.UnitCost * i.Quantity * i.TaxRatePercent / 100m, 2, MidpointRounding.AwayFromZero));
+        invoice.DiscountAmount += invoice.Items.Sum(i => i.DiscountAmount);
+        invoice.TotalAmount = Math.Round(invoice.Items.Sum(i => i.LineTotal) - dto.DiscountAmount, 2, MidpointRounding.AwayFromZero);
 
         _context.PurchaseInvoices.Add(invoice);
         await _context.SaveChangesAsync(cancellationToken);
@@ -683,7 +697,10 @@ public class PurchasingService : IPurchasingService
         return Result<PurchaseInvoiceDto>.Success((await GetPurchaseInvoicesAsync(cancellationToken)).First(i => i.Id == invoice.Id));
     }
 
-    public async Task<Result> RecordPaymentAsync(RecordPaymentDto dto, CancellationToken cancellationToken = default)
+    public Task<Result> RecordPaymentAsync(RecordPaymentDto dto, CancellationToken cancellationToken = default) =>
+        InTransactionAsync(() => RecordPaymentCoreAsync(dto, cancellationToken), r => r.Succeeded, cancellationToken);
+
+    private async Task<Result> RecordPaymentCoreAsync(RecordPaymentDto dto, CancellationToken cancellationToken)
     {
         var invoice = await _context.PurchaseInvoices.FirstOrDefaultAsync(i => i.Id == dto.PurchaseInvoiceId, cancellationToken);
         if (invoice is null) return Result.Failure("فاتورة الشراء غير موجودة.");
@@ -754,6 +771,11 @@ public class PurchasingService : IPurchasingService
         if (dto.Lines.Any(l => l.Quantity <= 0)) return "الكمية يجب أن تكون أكبر من صفر لكل صنف.";
         if (dto.Lines.Any(l => l.UnitCost < 0)) return "سعر الشراء لا يمكن أن يكون سالباً.";
         if (dto.DiscountAmount < 0) return "قيمة الخصم لا يمكن أن تكون سالبة.";
+        if (dto.Lines.Any(l => l.TaxRatePercent < 0 || l.TaxRatePercent > 100)) return "نسبة الضريبة يجب أن تكون بين 0 و100.";
+        if (dto.Lines.Any(l => l.DiscountAmount < 0 || l.DiscountAmount > Math.Round(l.UnitCost * l.Quantity * (1 + l.TaxRatePercent / 100m), 2, MidpointRounding.AwayFromZero)))
+            return "خصم السطر يجب ألا يتجاوز قيمة السطر أو يكون سالباً.";
+        if (dto.DiscountAmount > dto.Lines.Sum(l => Math.Round(l.UnitCost * l.Quantity * (1 + l.TaxRatePercent / 100m) - l.DiscountAmount, 2, MidpointRounding.AwayFromZero)))
+            return "خصم الفاتورة أكبر من قيمتها.";
 
         var supplierExists = await _context.Suppliers.AnyAsync(s => s.Id == dto.SupplierId, cancellationToken);
         if (!supplierExists) return "المورد المحدد غير موجود.";
@@ -763,6 +785,9 @@ public class PurchasingService : IPurchasingService
 
     private static PurchaseInvoiceDto MapPurchaseInvoiceToDto(PurchaseInvoice i) => new()
     {
+        SupplierId = i.SupplierId,
+        BranchId = i.BranchId,
+        GoodsReceiptNoteId = i.GoodsReceiptNoteId,
         Id = i.Id,
         Number = i.Number,
         SupplierName = i.Supplier.Name,
@@ -856,4 +881,31 @@ public class PurchasingService : IPurchasingService
         var count = await countAsync();
         return $"{prefix}-{(count + 1):D6}";
     }
+
+    private async Task<T> InTransactionAsync<T>(Func<Task<T>> action, Func<T, bool> succeeded, CancellationToken cancellationToken)
+    {
+        if (_context is not DbContext db || !db.Database.IsRelational()) return await action();
+        return await db.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
+        {
+            await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+            try
+            {
+                var result = await action();
+                if (succeeded(result)) await transaction.CommitAsync(cancellationToken);
+                else
+                {
+                    await transaction.RollbackAsync(cancellationToken);
+                    db.ChangeTracker.Clear();
+                }
+                return result;
+            }
+            catch
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                db.ChangeTracker.Clear();
+                throw;
+            }
+        });
+    }
+
 }
