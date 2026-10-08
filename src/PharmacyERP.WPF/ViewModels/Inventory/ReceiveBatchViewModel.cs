@@ -44,6 +44,7 @@ public class ReceiveBatchViewModel : PurchasePricingViewModel
 
     public ObservableCollection<WarehouseDto> Warehouses { get; }
 
+    public string PackagingDescription { get; private set; } = string.Empty;
     public int WarehouseId { get => _warehouseId; set => SetProperty(ref _warehouseId, value); }
     public string BatchNumber { get => _batchNumber; set => SetProperty(ref _batchNumber, value); }
     public DateTime? ManufactureDate { get => _manufactureDate; set => SetProperty(ref _manufactureDate, value); }
@@ -73,6 +74,8 @@ public class ReceiveBatchViewModel : PurchasePricingViewModel
     {
         _itemId = itemId;
         var item = await _inventoryService.GetItemForEditAsync(itemId);
+        PackagingDescription = item is null ? string.Empty : item.UnitsPerPackage == 1 ? "الكمية والأسعار بوحدة الصنف الحالية (وحدة واحدة)." : $"الكمية والأسعار للعبوة: {item.PackageUnitName} = {item.UnitsPerPackage} وحدة مخزون صغيرة.";
+        OnPropertyChanged(nameof(PackagingDescription));
         PurchaseType = item?.PurchaseType ?? PurchasePricingType.Other;
         PurchasePrice = item?.DefaultPurchasePrice ?? 0;
         SalePriceOverride = SalePricePolicy.FromPurchasePrice(PurchasePrice, PurchaseType);

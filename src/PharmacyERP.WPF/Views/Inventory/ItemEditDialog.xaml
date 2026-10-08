@@ -25,7 +25,7 @@
                         <TextBox Text="{Binding Code, UpdateSourceTrigger=PropertyChanged}" Padding="6" Margin="0,0,0,12"/>
                     </StackPanel>
                     <StackPanel Grid.Column="2">
-                        <TextBlock Text="الباركود" Margin="0,0,0,4"/>
+                        <TextBlock Text="باركود العبوة" Margin="0,0,0,4"/>
                         <TextBox Text="{Binding Barcode, UpdateSourceTrigger=PropertyChanged}" Padding="6" Margin="0,0,0,12"/>
                     </StackPanel>
                 </Grid>
@@ -66,12 +66,24 @@
                                   SelectedValue="{Binding CategoryId}" Padding="6" Margin="0,0,0,12"/>
                     </StackPanel>
                     <StackPanel Grid.Column="2">
-                        <TextBlock Text="وحدة القياس" Margin="0,0,0,4"/>
+                        <TextBlock Text="وحدة المخزون الصغيرة (شريط مثلاً)" Margin="0,0,0,4"/>
                         <ComboBox ItemsSource="{Binding Units}" DisplayMemberPath="Name" SelectedValuePath="Id"
                                   SelectedValue="{Binding UnitOfMeasureId}" Padding="6" Margin="0,0,0,12"/>
                     </StackPanel>
                 </Grid>
 
+                <Border Background="#E8F6F3" Padding="12" CornerRadius="8" Margin="0,0,0,12">
+                    <StackPanel>
+                        <TextBlock Text="تعبئة العبوة ووحدات البيع" FontWeight="Bold" Margin="0,0,0,8"/>
+                        <TextBlock Text="اسم العبوة (علبة / باكيت)"/>
+                        <TextBox Text="{Binding PackageUnitName, UpdateSourceTrigger=PropertyChanged}" Padding="6" Margin="0,4,0,8"/>
+                        <TextBlock Text="عدد الوحدات الصغيرة داخل العبوة"/>
+                        <TextBox Text="{Binding UnitsPerPackage, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}" Padding="6" Margin="0,4,0,8"/>
+                        <TextBlock Text="باركود الوحدة الصغيرة (اختياري)"/>
+                        <TextBox Text="{Binding BaseUnitBarcode, UpdateSourceTrigger=PropertyChanged}" Padding="6" Margin="0,4,0,8"/>
+                        <TextBlock Text="مثال: الوحدة شريط، العبوة علبة، العدد 5. أسعار الشراء والبيع أدناه للعلبة. المخزون وحدود الطلب بالأشرطة. العدد 1 يبقي الصنف بوحدة واحدة." TextWrapping="Wrap" Foreground="#475569"/>
+                    </StackPanel>
+                </Border>
                 <TextBlock Text="الشركة المصنّعة" Margin="0,0,0,4"/>
                 <ComboBox ItemsSource="{Binding Manufacturers}" DisplayMemberPath="Name" SelectedValuePath="Id"
                           SelectedValue="{Binding ManufacturerId}" Padding="6" Margin="0,0,0,12"/>
@@ -142,7 +154,7 @@
 
         <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,16,0,0">
             <Button Content="حفظ" Padding="18,8" Background="#1F6F50" Foreground="White" BorderThickness="0"
-                    Command="{Binding SaveCommand}" Margin="0,0,8,0"/>
+                    Click="SaveButton_Click" Margin="0,0,8,0"/>
             <Button Content="إلغاء" Padding="18,8" Click="CancelButton_Click"/>
         </StackPanel>
     </Grid>

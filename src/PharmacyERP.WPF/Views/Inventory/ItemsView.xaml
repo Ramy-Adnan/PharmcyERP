@@ -44,11 +44,12 @@
                           RowHeight="34" FontSize="13">
                     <DataGrid.Columns>
                         <DataGridTextColumn Header="الرمز" Binding="{Binding Code}" Width="90"/>
-                        <DataGridTextColumn Header="اسم الصنف" Binding="{Binding Name}" Width="*"/>
+                        <DataGridTextColumn Header="اسم الصنف" Binding="{Binding DisplayName}" Width="*"/>
                         <DataGridTextColumn Header="الاسم العلمي" Binding="{Binding GenericName}" Width="150"/>
                         <DataGridTextColumn Header="التصنيف" Binding="{Binding CategoryName}" Width="120"/>
-                        <DataGridTextColumn Header="الوحدة" Binding="{Binding UnitOfMeasureName}" Width="90"/>
-                        <DataGridTextColumn Header="سعر البيع" Binding="{Binding DefaultSalePrice, StringFormat=N2}" Width="90"/>
+                        <DataGridTextColumn Header="تعبئة العبوة" Binding="{Binding PackagingDescription}" Width="135"/>
+                        <DataGridTextColumn Header="وحدة المخزون" Binding="{Binding UnitOfMeasureName}" Width="90"/>
+                        <DataGridTextColumn Header="بيع العبوة" Binding="{Binding DefaultSalePrice, StringFormat=N2}" Width="90"/>
                         <DataGridTextColumn Header="الرصيد الكلي" Binding="{Binding TotalQuantityOnHand}" Width="90"/>
                         <DataGridCheckBoxColumn Header="وصفة" Binding="{Binding RequiresPrescription}" Width="60"/>
                         <DataGridCheckBoxColumn Header="نشط" Binding="{Binding IsActive}" Width="60"/>

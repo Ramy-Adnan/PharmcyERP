@@ -113,7 +113,8 @@ public class PrescriptionEditViewModel : ViewModelBase
         if (item is null) return;
 
         line.ItemId = item.Id;
-        line.ItemName = item.Name;
+        line.ItemName = item.DisplayName;
+        line.UnitName = item.UnitOfMeasureName;
     }
 
     private async Task SaveAsync()

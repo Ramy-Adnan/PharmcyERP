@@ -177,6 +177,8 @@ public class InventoryService : IInventoryService
             query = query.Where(i =>
                 i.Name.Contains(term) ||
                 i.Code.Contains(term) ||
+                (i.Manufacturer != null && i.Manufacturer.Name.Contains(term)) ||
+                i.BaseUnitBarcode == term ||
                 (i.Barcode != null && i.Barcode.Contains(term)) ||
                 (i.GenericName != null && i.GenericName.Contains(term)));
         }
@@ -187,7 +189,10 @@ public class InventoryService : IInventoryService
         {
             Id = i.Id,
             Code = i.Code,
-            Barcode = i.Barcode,
+            Barcode = i.Barcode?.Trim(),
+            BaseUnitBarcode = i.BaseUnitBarcode?.Trim(),
+            UnitsPerPackage = i.UnitsPerPackage,
+            PackageUnitName = i.PackageUnitName.Trim(),
             Name = i.Name,
             GenericName = i.GenericName,
             Strength = i.Strength,
@@ -218,7 +223,10 @@ public class InventoryService : IInventoryService
         {
             Id = item.Id,
             Code = item.Code,
-            Barcode = item.Barcode,
+            Barcode = item.Barcode?.Trim(),
+            BaseUnitBarcode = item.BaseUnitBarcode?.Trim(),
+            UnitsPerPackage = item.UnitsPerPackage,
+            PackageUnitName = item.PackageUnitName.Trim(),
             Name = item.Name,
             GenericName = item.GenericName,
             Strength = item.Strength,
@@ -247,7 +255,10 @@ public class InventoryService : IInventoryService
         var item = new Item
         {
             Code = dto.Code.Trim().ToUpperInvariant(),
-            Barcode = dto.Barcode,
+            Barcode = dto.Barcode?.Trim(),
+            BaseUnitBarcode = dto.BaseUnitBarcode?.Trim(),
+            UnitsPerPackage = dto.UnitsPerPackage,
+            PackageUnitName = dto.PackageUnitName.Trim(),
             Name = dto.Name.Trim(),
             GenericName = dto.GenericName,
             Strength = dto.Strength,
@@ -283,8 +294,23 @@ public class InventoryService : IInventoryService
         var validation = await ValidateItemAsync(dto, cancellationToken);
         if (validation is not null) return Result<ItemDto>.Failure(validation);
 
+        if (item.UnitsPerPackage != dto.UnitsPerPackage || item.UnitOfMeasureId != dto.UnitOfMeasureId || item.PackageUnitName != dto.PackageUnitName.Trim())
+        {
+            var used = await _context.Batches.AnyAsync(b => b.ItemId == item.Id, cancellationToken)
+                || await _context.StockTransactions.AnyAsync(t => t.ItemId == item.Id, cancellationToken)
+                || await _context.PurchaseOrderItems.IgnoreQueryFilters().AnyAsync(l => l.ItemId == item.Id, cancellationToken)
+                || await _context.GoodsReceiptItems.IgnoreQueryFilters().AnyAsync(l => l.ItemId == item.Id, cancellationToken)
+                || await _context.PurchaseInvoiceItems.IgnoreQueryFilters().AnyAsync(l => l.ItemId == item.Id, cancellationToken)
+                || await _context.SalesInvoiceItems.IgnoreQueryFilters().AnyAsync(l => l.ItemId == item.Id, cancellationToken)
+                || await _context.PrescriptionItems.IgnoreQueryFilters().AnyAsync(l => l.ItemId == item.Id, cancellationToken);
+            if (used) return Result<ItemDto>.Failure("لا يمكن تغيير وحدات صنف له حركات سابقة. أنشئ بطاقة جديدة بتعبئة صحيحة، وسوِّ رصيد البطاقة القديمة بوحدتها الأصلية.");
+        }
+
         item.Code = dto.Code.Trim().ToUpperInvariant();
-        item.Barcode = dto.Barcode;
+        item.Barcode = dto.Barcode?.Trim();
+        item.BaseUnitBarcode = dto.BaseUnitBarcode?.Trim();
+        item.UnitsPerPackage = dto.UnitsPerPackage;
+        item.PackageUnitName = dto.PackageUnitName.Trim();
         item.Name = dto.Name.Trim();
         item.GenericName = dto.GenericName;
         item.Strength = dto.Strength;
@@ -327,6 +353,15 @@ public class InventoryService : IInventoryService
         if (!Enum.IsDefined(dto.PurchaseType)) return "نوع الشراء غير صالح.";
         if (dto.DefaultPurchasePrice < 0) return "سعر الشراء لا يمكن أن يكون سالباً.";
 
+        if (dto.UnitsPerPackage < 1 || dto.UnitsPerPackage > 100000) return "عدد الوحدات في العلبة يجب أن يكون بين 1 و100000.";
+        if (string.IsNullOrWhiteSpace(dto.PackageUnitName) || dto.PackageUnitName.Length > 50) return "اسم وحدة العبوة مطلوب (حتى 50 حرفاً).";
+        if (dto.Barcode?.Trim().Length > 50 || dto.BaseUnitBarcode?.Trim().Length > 50) return "الباركود لا يتجاوز 50 حرفاً.";
+        if (!string.IsNullOrWhiteSpace(dto.BaseUnitBarcode) && dto.BaseUnitBarcode.Trim() == dto.Barcode?.Trim()) return "باركود الشريط يجب أن يختلف عن باركود العلبة.";
+        if (!string.IsNullOrWhiteSpace(dto.BaseUnitBarcode) && dto.UnitsPerPackage == 1) return "باركود الوحدة الصغيرة يحتاج تعريف عبوة متعددة الوحدات.";
+        foreach (var barcode in new[] { dto.Barcode?.Trim(), dto.BaseUnitBarcode?.Trim() }.Where(b => !string.IsNullOrWhiteSpace(b)))
+            if (await _context.Items.AnyAsync(i => i.Id != dto.Id && (i.Barcode == barcode || i.BaseUnitBarcode == barcode), cancellationToken))
+                return "الباركود مستخدم لصنف آخر؛ لكل شركة/عبوة باركود مستقل.";
+
         var codeTaken = await _context.Items.AnyAsync(i => i.Code == dto.Code.Trim().ToUpper() && i.Id != dto.Id, cancellationToken);
         if (codeTaken) return "رمز الصنف مستخدم مسبقاً.";
 
@@ -350,7 +385,7 @@ public class InventoryService : IInventoryService
     public async Task<List<BatchDto>> GetBatchesForItemAsync(int itemId, int? warehouseId = null, CancellationToken cancellationToken = default)
     {
         var query = _context.Batches
-            .Include(b => b.Item)
+            .Include(b => b.Item).ThenInclude(i => i.UnitOfMeasure)
             .Include(b => b.Warehouse)
             .Where(b => b.ItemId == itemId);
 
@@ -372,8 +407,11 @@ public class InventoryService : IInventoryService
         if (string.IsNullOrWhiteSpace(dto.BatchNumber)) return Result<BatchDto>.Failure("رقم الدفعة (Batch Number) مطلوب.");
         if (dto.ExpiryDate.Date <= _dateTime.UtcNow.Date) return Result<BatchDto>.Failure("تاريخ الانتهاء يجب أن يكون في المستقبل.");
 
-        var itemExists = await _context.Items.AnyAsync(i => i.Id == dto.ItemId, cancellationToken);
-        if (!itemExists) return Result<BatchDto>.Failure("الصنف غير موجود.");
+        var item = await _context.Items.FirstOrDefaultAsync(i => i.Id == dto.ItemId, cancellationToken);
+        if (item is null || !item.IsActive) return Result<BatchDto>.Failure("الصنف غير موجود أو غير نشط.");
+        if (dto.Quantity > int.MaxValue / item.UnitsPerPackage) return Result<BatchDto>.Failure("الكمية كبيرة جداً.");
+        var stockQuantity = dto.Quantity * item.UnitsPerPackage;
+        var packageSalePrice = dto.SalePriceOverride ?? SalePricePolicy.FromPurchasePrice(dto.PurchasePrice, dto.PurchaseType);
 
         var warehouseExists = await _context.Warehouses.AnyAsync(w => w.Id == dto.WarehouseId, cancellationToken);
         if (!warehouseExists) return Result<BatchDto>.Failure("المخزن غير موجود.");
@@ -385,10 +423,11 @@ public class InventoryService : IInventoryService
             BatchNumber = dto.BatchNumber.Trim(),
             ManufactureDate = dto.ManufactureDate,
             ExpiryDate = dto.ExpiryDate,
-            QuantityOnHand = dto.Quantity,
+            QuantityOnHand = stockQuantity,
             PurchaseType = dto.PurchaseType,
-            PurchasePrice = dto.PurchasePrice,
-            SalePriceOverride = dto.SalePriceOverride ?? SalePricePolicy.FromPurchasePrice(dto.PurchasePrice, dto.PurchaseType),
+            PurchasePrice = Math.Round(dto.PurchasePrice / item.UnitsPerPackage, 6, MidpointRounding.AwayFromZero),
+            PackageSalePrice = packageSalePrice,
+            SalePriceOverride = Math.Round(packageSalePrice / item.UnitsPerPackage, 2, MidpointRounding.AwayFromZero),
             HasConfiguredSalePrice = true,
             ReceivedAtUtc = _dateTime.UtcNow,
             SupplierReference = dto.SupplierReference
@@ -397,7 +436,7 @@ public class InventoryService : IInventoryService
         _context.Batches.Add(batch);
         await _context.SaveChangesAsync(cancellationToken);
 
-        await RecordStockTransactionAsync(batch, StockTransactionType.PurchaseReceipt, dto.Quantity,
+        await RecordStockTransactionAsync(batch, StockTransactionType.PurchaseReceipt, stockQuantity,
             referenceType: "ManualReceipt", referenceId: null, notes: "استلام دفعة جديدة (إدخال يدوي)",
             performedByUserId, cancellationToken);
 
@@ -491,7 +530,7 @@ public class InventoryService : IInventoryService
         var threshold = now.Date.AddDays(withinDays);
 
         var batches = await _context.Batches
-            .Include(b => b.Item)
+            .Include(b => b.Item).ThenInclude(i => i.UnitOfMeasure)
             .Include(b => b.Warehouse)
             .Where(b => b.WarehouseId == warehouseId && b.QuantityOnHand > 0 && b.ExpiryDate.Date <= threshold)
             .OrderBy(b => b.ExpiryDate)
@@ -502,6 +541,7 @@ public class InventoryService : IInventoryService
             BatchId = b.Id,
             ItemCode = b.Item.Code,
             ItemName = b.Item.Name,
+            UnitOfMeasureName = b.Item.UnitOfMeasure.Name,
             WarehouseName = b.Warehouse.Name,
             BatchNumber = b.BatchNumber,
             ExpiryDate = b.ExpiryDate,
@@ -602,13 +642,14 @@ public class InventoryService : IInventoryService
     }
 
     private async Task<Batch> ReloadBatchAsync(int batchId, CancellationToken cancellationToken) =>
-        await _context.Batches.Include(b => b.Item).Include(b => b.Warehouse).FirstAsync(b => b.Id == batchId, cancellationToken);
+        await _context.Batches.Include(b => b.Item).ThenInclude(i => i.UnitOfMeasure).Include(b => b.Warehouse).FirstAsync(b => b.Id == batchId, cancellationToken);
 
     private static BatchDto MapBatchToDto(Batch b, DateTime now) => new()
     {
         Id = b.Id,
         ItemId = b.ItemId,
         ItemName = b.Item.Name,
+        UnitOfMeasureName = b.Item.UnitOfMeasure.Name,
         WarehouseId = b.WarehouseId,
         WarehouseName = b.Warehouse.Name,
         BatchNumber = b.BatchNumber,

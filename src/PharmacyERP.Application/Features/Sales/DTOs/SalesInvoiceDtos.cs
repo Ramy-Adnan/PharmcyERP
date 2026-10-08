@@ -31,6 +31,8 @@ public class SalesInvoiceLineDto
     public int ItemId { get; set; }
     public string ItemCode { get; set; } = string.Empty;
     public string ItemName { get; set; } = string.Empty;
+    public int UnitsPerSale { get; set; } = 1;
+    public string UnitName { get; set; } = string.Empty;
     public int Quantity { get; set; }
     public int QuantityReturned { get; set; }
     public int QuantityReturnable { get; set; }

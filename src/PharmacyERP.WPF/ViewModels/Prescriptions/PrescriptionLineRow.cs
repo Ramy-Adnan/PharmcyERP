@@ -10,6 +10,7 @@ public class PrescriptionLineRow : ViewModelBase
     private int _quantityPrescribed;
     private string? _dosageInstructions;
 
+    public string UnitName { get; set; } = string.Empty;
     public int Id { get; set; }
     public int ItemId { get => _itemId; set => SetProperty(ref _itemId, value); }
     public string ItemName { get => _itemName; set => SetProperty(ref _itemName, value); }

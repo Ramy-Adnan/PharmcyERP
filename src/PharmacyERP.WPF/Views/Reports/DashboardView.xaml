@@ -101,7 +101,7 @@
                           RowHeight="32" FontSize="13">
                     <DataGrid.Columns>
                         <DataGridTextColumn Header="الصنف" Binding="{Binding ItemName}" Width="*"/>
-                        <DataGridTextColumn Header="الكمية المباعة" Binding="{Binding QuantitySold}" Width="120"/>
+                        <DataGridTextColumn Header="المباع بوحدة المخزون" Binding="{Binding QuantitySold}" Width="120"/>
                         <DataGridTextColumn Header="الإيراد" Binding="{Binding Revenue, StringFormat=N2}" Width="120"/>
                     </DataGrid.Columns>
                 </DataGrid>

@@ -35,6 +35,7 @@
                     <DataGridTextColumn Header="رقم الدفعة" Binding="{Binding BatchNumber}" Width="120"/>
                     <DataGridTextColumn Header="تاريخ الانتهاء" Binding="{Binding ExpiryDate, StringFormat=yyyy-MM-dd}" Width="110"/>
                     <DataGridTextColumn Header="أيام متبقية" Binding="{Binding DaysUntilExpiry}" Width="90"/>
+                    <DataGridTextColumn Header="وحدة المخزون" Binding="{Binding UnitOfMeasureName}" Width="90"/>
                     <DataGridTextColumn Header="الكمية" Binding="{Binding QuantityOnHand}" Width="80"/>
                     <DataGridTextColumn Header="سعر الشراء" Binding="{Binding PurchasePrice, StringFormat=N2}" Width="90"/>
                     <DataGridTextColumn Header="مرجع المورد" Binding="{Binding SupplierReference}" Width="120"/>

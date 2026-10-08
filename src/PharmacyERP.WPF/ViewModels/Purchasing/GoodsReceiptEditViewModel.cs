@@ -160,7 +160,8 @@ public class GoodsReceiptEditViewModel : PurchasePricingViewModel
                 PurchaseOrderItemId = line.PurchaseOrderItemId,
                 ItemId = line.ItemId,
                 ItemCode = item?.Code ?? string.Empty,
-                ItemName = item?.Name ?? string.Empty,
+                ItemName = item?.DisplayName ?? string.Empty,
+                PurchaseUnitDescription = item?.PackagingDescription ?? string.Empty,
                 BatchNumber = line.BatchNumber,
                 ManufactureDate = line.ManufactureDate,
                 ExpiryDate = line.ExpiryDate,
@@ -259,7 +260,8 @@ public class GoodsReceiptEditViewModel : PurchasePricingViewModel
                 PurchaseOrderItemId = line.Id,
                 ItemId = line.ItemId,
                 ItemCode = line.ItemCode,
-                ItemName = line.ItemName,
+                ItemName = AvailableItems.FirstOrDefault(i => i.Id == line.ItemId)?.DisplayName ?? line.ItemName,
+                PurchaseUnitDescription = AvailableItems.FirstOrDefault(i => i.Id == line.ItemId)?.PackagingDescription ?? string.Empty,
                 QuantityReceived = line.QuantityOutstanding,
                 UnitCost = line.UnitCost,
                 SalePrice = line.SalePrice,
@@ -276,7 +278,8 @@ public class GoodsReceiptEditViewModel : PurchasePricingViewModel
 
         line.ItemId = item.Id;
         line.ItemCode = item.Code;
-        line.ItemName = item.Name;
+        line.ItemName = item.DisplayName;
+        line.PurchaseUnitDescription = item.PackagingDescription;
         if (line.UnitCost == 0) line.UnitCost = item.DefaultPurchasePrice;
     }
 

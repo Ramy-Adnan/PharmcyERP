@@ -141,25 +141,30 @@ public class SalesService : ISalesService
         if (searchText.Length == 0) return new();
         var today = _dateTime.UtcNow.Date;
         var matches = _context.Items.AsNoTracking().Where(i => i.IsActive &&
-            (i.Barcode == searchText || i.Code.Contains(searchText) || i.Name.Contains(searchText) ||
+            (i.Barcode == searchText || i.BaseUnitBarcode == searchText || i.Code.Contains(searchText) || i.Name.Contains(searchText) ||
+             (i.GenericName != null && i.GenericName.Contains(searchText)) ||
+             (i.Manufacturer != null && i.Manufacturer.Name.Contains(searchText)) ||
              (i.Barcode != null && i.Barcode.Contains(searchText))));
-        var items = await matches.OrderByDescending(i => i.Barcode == searchText)
+        var items = await matches.OrderByDescending(i => i.Barcode == searchText || i.BaseUnitBarcode == searchText)
             .ThenByDescending(i => i.Code == searchText).ThenBy(i => i.Name)
-            .Include(i => i.UnitOfMeasure).Take(30).ToListAsync(cancellationToken);
+            .Include(i => i.UnitOfMeasure).Include(i => i.Manufacturer).Take(30).ToListAsync(cancellationToken);
         var ids = items.Select(i => i.Id).ToList();
         var batches = await _context.Batches.AsNoTracking()
             .Where(b => ids.Contains(b.ItemId) && b.WarehouseId == warehouseId && b.ExpiryDate >= today && b.QuantityOnHand > 0)
             .OrderBy(b => b.ExpiryDate).ThenBy(b => b.ReceivedAtUtc).ThenBy(b => b.Id)
-            .Select(b => new { b.ItemId, b.QuantityOnHand,
+            .Select(b => new { b.ItemId, b.QuantityOnHand, b.PackageSalePrice,
                 SalePriceOverride = b.HasConfiguredSalePrice || b.SalePriceOverride > 0 ? b.SalePriceOverride : null })
             .ToListAsync(cancellationToken);
         var stock = batches.GroupBy(b => b.ItemId).ToDictionary(g => g.Key,
-            g => new { Quantity = g.Sum(b => b.QuantityOnHand), SalePrice = g.First().SalePriceOverride });
+            g => new { Quantity = g.Sum(b => b.QuantityOnHand), SalePrice = g.First().SalePriceOverride, PackagePrice = g.First().PackageSalePrice });
         return items.Select(item => new SaleItemLookupDto
         {
             ItemId = item.Id, Code = item.Code, Barcode = item.Barcode, Name = item.Name,
+            BaseUnitBarcode = item.BaseUnitBarcode, UnitsPerPackage = item.UnitsPerPackage,
+            PackageUnitName = item.PackageUnitName, ManufacturerName = item.Manufacturer?.Name, Strength = item.Strength,
+            PackageSalePrice = stock.GetValueOrDefault(item.Id)?.PackagePrice ?? item.DefaultSalePrice,
             UnitOfMeasureName = item.UnitOfMeasure.Name,
-            DefaultSalePrice = stock.GetValueOrDefault(item.Id)?.SalePrice ?? item.DefaultSalePrice,
+            DefaultSalePrice = stock.GetValueOrDefault(item.Id)?.SalePrice ?? Math.Round(item.DefaultSalePrice / item.UnitsPerPackage, 2, MidpointRounding.AwayFromZero),
             TaxRatePercent = item.TaxRatePercent, RequiresPrescription = item.RequiresPrescription,
             AvailableQuantity = stock.GetValueOrDefault(item.Id)?.Quantity ?? 0
         }).ToList();
@@ -193,8 +198,8 @@ public class SalesService : ISalesService
         if (dto.Lines.Any(l => l.UnitPrice < 0 || l.TaxRatePercent < 0 || l.TaxRatePercent > 100 || l.DiscountAmount < 0 ||
             l.DiscountAmount > l.UnitPrice * l.Quantity) || dto.DiscountAmount < 0 || dto.AmountTendered < 0)
             return Result<SalesInvoiceDto>.Failure("راجع السعر والضريبة والخصومات ومبلغ الدفع.");
-        if (dto.Lines.GroupBy(l => l.ItemId).Any(g => g.Count() > 1))
-            return Result<SalesInvoiceDto>.Failure("اجمع الصنف المتكرر في سطر واحد.");
+        if (dto.Lines.GroupBy(l => new { l.ItemId, l.SellAsPackage }).Any(g => g.Count() > 1))
+            return Result<SalesInvoiceDto>.Failure("اجمع الصنف المتكرر بنفس وحدة البيع في سطر واحد.");
         if (dto.BranchId <= 0) return Result<SalesInvoiceDto>.Failure("الرجاء اختيار الفرع.");
         if (dto.WarehouseId <= 0) return Result<SalesInvoiceDto>.Failure("الرجاء اختيار المخزن.");
         if (!dto.Lines.Any()) return Result<SalesInvoiceDto>.Failure("لا يمكن إتمام بيع بدون أصناف.");
@@ -212,10 +217,15 @@ public class SalesService : ISalesService
         // still-fillable Prescription belonging to the same customer — enforced here rather
         // than only in the UI, since CheckoutAsync is the single choke point for every sale.
         var lineItemIds = dto.Lines.Select(l => l.ItemId).Distinct().ToList();
-        var itemsById = await _context.Items.Where(i => lineItemIds.Contains(i.Id)).ToDictionaryAsync(i => i.Id, cancellationToken);
+        var itemsById = await _context.Items.Where(i => lineItemIds.Contains(i.Id)).Include(i => i.UnitOfMeasure).Include(i => i.Manufacturer).ToDictionaryAsync(i => i.Id, cancellationToken);
 
         if (itemsById.Count != lineItemIds.Count || itemsById.Values.Any(i => !i.IsActive))
             return Result<SalesInvoiceDto>.Failure("أحد الأصناف غير موجود أو غير نشط.");
+        int Factor(SaleLineInputDto line) => line.SellAsPackage ? itemsById[line.ItemId].UnitsPerPackage : 1;
+        if (dto.Lines.Any(l => l.SellAsPackage && itemsById[l.ItemId].UnitsPerPackage == 1))
+            return Result<SalesInvoiceDto>.Failure("هذا الصنف لا يحتوي وحدة عبوة منفصلة.");
+        if (dto.Lines.Any(l => l.Quantity > int.MaxValue / Factor(l)))
+            return Result<SalesInvoiceDto>.Failure("الكمية كبيرة جداً.");
         var requiresPrescription = lineItemIds.Any(id => itemsById.TryGetValue(id, out var item) && item.RequiresPrescription);
 
         Prescription? prescription = null;
@@ -240,17 +250,17 @@ public class SalesService : ISalesService
                 var prescriptionLine = prescription.Items.FirstOrDefault(i => i.ItemId == line.ItemId);
                 if (prescriptionLine is null)
                     return Result<SalesInvoiceDto>.Failure($"الصنف '{item.Name}' غير مذكور في الوصفة الطبية المحددة.");
-                if (line.Quantity > prescriptionLine.QuantityRemaining)
+                if (dto.Lines.Where(l => l.ItemId == line.ItemId).Sum(l => (long)l.Quantity * Factor(l)) > prescriptionLine.QuantityRemaining)
                     return Result<SalesInvoiceDto>.Failure($"الكمية المطلوبة من '{item.Name}' تتجاوز الكمية المتبقية بالوصفة ({prescriptionLine.QuantityRemaining}).");
             }
         }
 
         // Pre-check stock availability for every line before committing any change,
         // so a shortfall on line 3 doesn't leave lines 1-2 already deducted.
-        foreach (var line in dto.Lines)
+        foreach (var group in dto.Lines.GroupBy(l => l.ItemId))
         {
-            var available = await _inventoryService.GetAvailableQuantityAsync(line.ItemId, dto.WarehouseId, cancellationToken);
-            if (available < line.Quantity)
+            var available = await _inventoryService.GetAvailableQuantityAsync(group.Key, dto.WarehouseId, cancellationToken);
+            if (available < group.Sum(l => (long)l.Quantity * Factor(l)))
                 return Result<SalesInvoiceDto>.Failure($"الكمية المتوفرة غير كافية لأحد الأصناف. المتوفر: {available}.");
         }
 
@@ -295,7 +305,7 @@ public class SalesService : ISalesService
         foreach (var line in dto.Lines)
         {
             var issueResult = await _inventoryService.IssueStockFefoAsync(
-                line.ItemId, dto.WarehouseId, line.Quantity,
+                line.ItemId, dto.WarehouseId, line.Quantity * Factor(line),
                 referenceType: "SalesInvoice", referenceId: invoice.Id,
                 performedByUserId: cashierUserId, cancellationToken: cancellationToken);
 
@@ -314,6 +324,9 @@ public class SalesService : ISalesService
                 SalesInvoiceId = invoice.Id,
                 ItemId = line.ItemId,
                 Quantity = line.Quantity,
+                UnitsPerSale = Factor(line),
+                UnitName = line.SellAsPackage ? itemsById[line.ItemId].PackageUnitName : itemsById[line.ItemId].UnitOfMeasure.Name,
+                ItemDisplayName = string.Join(" · ", new[] { itemsById[line.ItemId].Name, itemsById[line.ItemId].Strength, itemsById[line.ItemId].Manufacturer?.Name }.Where(v => !string.IsNullOrWhiteSpace(v))),
                 UnitPrice = line.UnitPrice,
                 TaxRatePercent = line.TaxRatePercent,
                 DiscountAmount = line.DiscountAmount,
@@ -344,7 +357,7 @@ public class SalesService : ISalesService
                 var prescriptionLine = prescription.Items.FirstOrDefault(i => i.ItemId == line.ItemId);
                 if (prescriptionLine is null) continue;
 
-                prescriptionLine.QuantityDispensed += line.Quantity;
+                prescriptionLine.QuantityDispensed += line.Quantity * Factor(line);
             }
 
             prescription.Status = prescription.Items.All(i => i.QuantityRemaining == 0)
@@ -464,7 +477,7 @@ public class SalesService : ISalesService
                 {
                     var prescriptionLine = prescription.Items.FirstOrDefault(i => i.ItemId == item.ItemId);
                     if (prescriptionLine is null) continue;
-                    prescriptionLine.QuantityDispensed = Math.Max(0, prescriptionLine.QuantityDispensed - item.Quantity);
+                    prescriptionLine.QuantityDispensed = Math.Max(0, prescriptionLine.QuantityDispensed - item.Quantity * item.UnitsPerSale);
                 }
 
                 prescription.Status = prescription.Items.Any(i => i.QuantityDispensed > 0)
@@ -579,7 +592,7 @@ public class SalesService : ISalesService
         foreach (var line in dto.Lines)
         {
             var invoiceItem = invoice.Items.First(i => i.Id == line.SalesInvoiceItemId);
-            var remainingToRestock = line.Quantity;
+            var remainingToRestock = line.Quantity * invoiceItem.UnitsPerSale;
 
             // Restock from the exact batches this line was originally taken from, in
             // the same order, respecting how much of each allocation was already
@@ -638,7 +651,7 @@ public class SalesService : ISalesService
                     var invoiceItem = invoice.Items.First(i => i.Id == line.SalesInvoiceItemId);
                     var prescriptionLine = prescription.Items.FirstOrDefault(i => i.ItemId == invoiceItem.ItemId);
                     if (prescriptionLine is null) continue;
-                    prescriptionLine.QuantityDispensed = Math.Max(0, prescriptionLine.QuantityDispensed - line.Quantity);
+                    prescriptionLine.QuantityDispensed = Math.Max(0, prescriptionLine.QuantityDispensed - line.Quantity * invoiceItem.UnitsPerSale);
                 }
 
                 prescription.Status = prescription.Items.All(i => i.QuantityDispensed == 0)
@@ -901,7 +914,9 @@ public class SalesService : ISalesService
                 Id = i.Id,
                 ItemId = i.ItemId,
                 ItemCode = i.Item.Code,
-                ItemName = i.Item.Name,
+                ItemName = i.ItemDisplayName ?? i.Item.Name,
+                UnitsPerSale = i.UnitsPerSale,
+                UnitName = i.UnitName,
                 Quantity = i.Quantity,
                 QuantityReturned = i.QuantityReturned,
                 QuantityReturnable = i.QuantityReturnable,

@@ -52,6 +52,7 @@ public class POSViewModel : ViewModelBase
         PayAllCreditCommand = new RelayCommand(() => AmountTendered = TotalAmount, () => IsCredit && !IsBusy);
         IncrementLineCommand = new RelayCommand(p => AdjustQuantity((POSLineRow)p!, 1), p => !IsBusy && p is POSLineRow line && line.Quantity < line.AvailableQuantity);
         DecrementLineCommand = new RelayCommand(p => AdjustQuantity((POSLineRow)p!, -1), p => !IsBusy && p is POSLineRow line && line.Quantity > 1);
+        AddOtherUnitCommand = new RelayCommand(AddOtherUnit, () => !IsBusy && SelectedCartLine?.SaleUnits.Count > 1);
         RemoveItemCommand = new RelayCommand(p => CartLines.Remove((POSLineRow)p!), p => !IsBusy && p is POSLineRow);
         ReprintCommand = new AsyncRelayCommand(ReprintAsync, () => !IsBusy && _lastInvoiceId.HasValue);
         CartLines.CollectionChanged += (_, _) =>
@@ -127,6 +128,7 @@ public class POSViewModel : ViewModelBase
     public RelayCommand PayAllCreditCommand { get; }
     public RelayCommand IncrementLineCommand { get; }
     public RelayCommand DecrementLineCommand { get; }
+    public RelayCommand AddOtherUnitCommand { get; }
     public RelayCommand RemoveItemCommand { get; }
     public AsyncRelayCommand CheckoutCommand { get; }
     public AsyncRelayCommand ReprintCommand { get; }
@@ -191,10 +193,10 @@ public class POSViewModel : ViewModelBase
         {
             ErrorMessage = string.Empty; SuccessMessage = string.Empty;
             var results = await _salesService.SearchSaleItemsAsync(text, WarehouseId);
-            var exact = results.Where(r => string.Equals(r.Barcode, text, StringComparison.OrdinalIgnoreCase)).ToList();
+            var exact = results.Where(r => (string.Equals(r.Barcode, text, StringComparison.OrdinalIgnoreCase) || string.Equals(r.BaseUnitBarcode, text, StringComparison.OrdinalIgnoreCase))).ToList();
             if (exact.Count == 0 && !barcodeOnly) exact = results.Where(r => string.Equals(r.Code, text, StringComparison.OrdinalIgnoreCase)).ToList();
             SearchResults.Clear();
-            if (exact.Count == 1) AddItem(exact[0]);
+            if (exact.Count == 1) AddItem(exact[0], text);
             else
             {
                 foreach (var item in results) SearchResults.Add(item);
@@ -206,28 +208,61 @@ public class POSViewModel : ViewModelBase
         finally { _pendingScans--; _operations.Release(); Requery(); ScanFocusRequested?.Invoke(); }
     }
 
-    private void AddItem(SaleItemLookupDto item)
+    private void AddItem(SaleItemLookupDto item, string? scannedBarcode = null)
     {
-        var line = CartLines.FirstOrDefault(l => l.ItemId == item.ItemId);
-        if ((line?.Quantity ?? 0) + 1 > item.AvailableQuantity)
-        { ErrorMessage = $"الكمية المتوفرة من {item.Name}: {item.AvailableQuantity}."; return; }
-        if (line is not null) { line.AvailableQuantity = item.AvailableQuantity; line.Quantity++; }
+        var scanBase = !string.IsNullOrWhiteSpace(scannedBarcode) && string.Equals(item.BaseUnitBarcode, scannedBarcode, StringComparison.OrdinalIgnoreCase);
+        var line = CartLines.LastOrDefault(l => l.ItemId == item.ItemId && (!scanBase || !l.SellAsPackage));
+        var factor = scanBase ? 1 : line?.UnitsPerSale ?? (item.AvailableQuantity >= item.UnitsPerPackage ? item.UnitsPerPackage : 1);
+        if (ReservedStock(item.ItemId) + factor > item.AvailableQuantity)
+        { ErrorMessage = $"المتوفر من {item.DisplayName}: {item.StockDisplay}. اختر الوحدة الصغيرة عند عدم توفر عبوة كاملة."; return; }
+        foreach (var existing in CartLines.Where(l => l.ItemId == item.ItemId)) existing.AvailableBaseQuantity = item.AvailableQuantity;
+        if (line is not null)
+        {
+            line.Quantity++;
+        }
         else
         {
-            line = new POSLineRow { ItemId = item.ItemId, Code = item.Code, Name = item.Name,
+            var units = new List<SaleUnitOption> { new(false, item.UnitOfMeasureName, 1) };
+            if (item.UnitsPerPackage > 1) units.Add(new(true, item.PackageUnitName, item.UnitsPerPackage));
+            line = new POSLineRow { ItemId = item.ItemId, Code = item.Code, Name = item.DisplayName,
                 UnitOfMeasureName = item.UnitOfMeasureName, TaxRatePercent = item.TaxRatePercent,
-                AvailableQuantity = item.AvailableQuantity, RequiresPrescription = item.RequiresPrescription,
-                UnitPrice = item.DefaultSalePrice, Quantity = 1 };
+                AvailableBaseQuantity = item.AvailableQuantity, RequiresPrescription = item.RequiresPrescription,
+                UnitsPerPackage = item.UnitsPerPackage, BaseSalePrice = item.DefaultSalePrice,
+                PackageSalePrice = item.UnitsPerPackage > 1 ? item.PackageSalePrice : item.DefaultSalePrice,
+                SaleUnits = units, Quantity = 1 };
+            line.SelectedSaleUnit = factor == 1 ? units.First() : units.Last();
             CartLines.Add(line);
         }
         SelectedCartLine = line;
-        SuccessMessage = $"{item.Name} — الكمية {line.Quantity}";
+        SuccessMessage = $"{item.DisplayName} — {line.Quantity} {line.SelectedUnitName}";
+        ScanFocusRequested?.Invoke();
+    }
+
+    private long ReservedStock(int itemId) => CartLines.Where(l => l.ItemId == itemId).Sum(l => (long)l.Quantity * l.UnitsPerSale);
+
+    private void AddOtherUnit()
+    {
+        if (SelectedCartLine is not { } source || source.SaleUnits.Count < 2) return;
+        var otherUnit = source.SaleUnits.First(u => u.IsPackage != source.SellAsPackage);
+        if (ReservedStock(source.ItemId) + otherUnit.Factor > source.AvailableBaseQuantity)
+        { ErrorMessage = "المخزون المتبقي لا يكفي للوحدة الأخرى."; return; }
+        var existing = CartLines.FirstOrDefault(l => l.ItemId == source.ItemId && l.SellAsPackage == otherUnit.IsPackage);
+        if (existing is not null) { existing.Quantity++; SelectedCartLine = existing; ScanFocusRequested?.Invoke(); return; }
+        var row = new POSLineRow
+        {
+            ItemId = source.ItemId, Code = source.Code, Name = source.Name, UnitOfMeasureName = source.UnitOfMeasureName,
+            TaxRatePercent = source.TaxRatePercent, AvailableBaseQuantity = source.AvailableBaseQuantity,
+            RequiresPrescription = source.RequiresPrescription, UnitsPerPackage = source.UnitsPerPackage,
+            BaseSalePrice = source.BaseSalePrice, PackageSalePrice = source.PackageSalePrice, SaleUnits = source.SaleUnits
+        };
+        row.SelectedSaleUnit = otherUnit; CartLines.Add(row); SelectedCartLine = row;
+        ErrorMessage = string.Empty;
         ScanFocusRequested?.Invoke();
     }
 
     private void AdjustQuantity(POSLineRow line, int delta)
     {
-        if (!CartLines.Contains(line) || line.Quantity + delta < 1 || line.Quantity + delta > line.AvailableQuantity) return;
+        if (!CartLines.Contains(line) || line.Quantity + delta < 1 || ReservedStock(line.ItemId) + (long)delta * line.UnitsPerSale > line.AvailableBaseQuantity) return;
         line.Quantity += delta;
         ScanFocusRequested?.Invoke();
     }
@@ -240,6 +275,10 @@ public class POSViewModel : ViewModelBase
         if (CartLines.Any(l => l.Quantity <= 0 || l.Quantity > l.AvailableQuantity || l.UnitPrice < 0 || l.DiscountAmount < 0 || l.DiscountAmount > l.UnitPrice * l.Quantity)
             || DiscountAmount < 0 || DiscountAmount + CartLines.Sum(l => l.DiscountAmount) > SubTotal)
         { ErrorMessage = "راجع الكميات والأسعار والخصومات."; return; }
+        if (CartLines.GroupBy(l => new { l.ItemId, l.SellAsPackage }).Any(g => g.Count() > 1))
+        { ErrorMessage = "يوجد سطران لنفس الصنف والوحدة؛ اجمع الكمية في سطر واحد."; return; }
+        if (CartLines.GroupBy(l => l.ItemId).Any(g => g.Sum(l => (long)l.Quantity * l.UnitsPerSale) > g.Min(l => l.AvailableBaseQuantity)))
+        { ErrorMessage = "إجمالي العلب والوحدات الصغيرة يتجاوز المخزون المتوفر."; return; }
         if (IsCredit && SelectedCustomer?.Id is null) { ErrorMessage = "اختر عميلاً مسجلاً للبيع الآجل."; return; }
         if (IsCredit && (AmountTendered < 0 || AmountTendered > TotalAmount || Math.Round(AmountTendered, 2) != AmountTendered))
         { ErrorMessage = "المبلغ المستلم الآن يجب أن يكون بين صفر وإجمالي الفاتورة وبمنزلتين عشريتين كحد أقصى."; return; }
@@ -250,7 +289,7 @@ public class POSViewModel : ViewModelBase
             RequestId = _checkoutRequestId, BranchId = _currentUserService.CurrentBranchId ?? 0, WarehouseId = WarehouseId,
             CustomerId = SelectedCustomer?.Id, PrescriptionId = SelectedPrescription?.Id, DiscountAmount = DiscountAmount,
             PaymentMethod = PaymentMethod, AmountTendered = IsCredit ? AmountTendered : TotalAmount,
-            Lines = CartLines.Select(l => new SaleLineInputDto { ItemId = l.ItemId, Quantity = l.Quantity, UnitPrice = l.UnitPrice,
+            Lines = CartLines.Select(l => new SaleLineInputDto { ItemId = l.ItemId, SellAsPackage = l.SellAsPackage, Quantity = l.Quantity, UnitPrice = l.UnitPrice,
                 TaxRatePercent = l.TaxRatePercent, DiscountAmount = l.DiscountAmount }).ToList()
         };
         IsBusy = true;

@@ -20,7 +20,9 @@ public class ItemEditViewModel : PurchasePricingViewModel
 
     private int? _id;
     private string _code = string.Empty;
-    private string? _barcode;
+    private string? _barcode, _baseUnitBarcode;
+    private int _unitsPerPackage = 1;
+    private string _packageUnitName = "علبة";
     private string _name = string.Empty;
     private string? _genericName;
     private string? _strength;
@@ -65,6 +67,9 @@ public class ItemEditViewModel : PurchasePricingViewModel
 
     public string Code { get => _code; set => SetProperty(ref _code, value); }
     public string? Barcode { get => _barcode; set => SetProperty(ref _barcode, value); }
+    public string? BaseUnitBarcode { get => _baseUnitBarcode; set => SetProperty(ref _baseUnitBarcode, value); }
+    public int UnitsPerPackage { get => _unitsPerPackage; set => SetProperty(ref _unitsPerPackage, value); }
+    public string PackageUnitName { get => _packageUnitName; set => SetProperty(ref _packageUnitName, value); }
     public string Name { get => _name; set => SetProperty(ref _name, value); }
     public string? GenericName { get => _genericName; set => SetProperty(ref _genericName, value); }
     public string? Strength { get => _strength; set => SetProperty(ref _strength, value); }
@@ -119,6 +124,9 @@ public class ItemEditViewModel : PurchasePricingViewModel
         _id = dto.Id;
         Code = dto.Code;
         Barcode = dto.Barcode;
+        BaseUnitBarcode = dto.BaseUnitBarcode;
+        UnitsPerPackage = dto.UnitsPerPackage;
+        PackageUnitName = dto.PackageUnitName;
         Name = dto.Name;
         GenericName = dto.GenericName;
         Strength = dto.Strength;
@@ -171,6 +179,9 @@ public class ItemEditViewModel : PurchasePricingViewModel
                 Id = _id,
                 Code = Code,
                 Barcode = Barcode,
+                BaseUnitBarcode = BaseUnitBarcode,
+                UnitsPerPackage = UnitsPerPackage,
+                PackageUnitName = PackageUnitName,
                 Name = Name,
                 GenericName = GenericName,
                 Strength = Strength,

@@ -12,6 +12,10 @@ public class ItemConfiguration : IEntityTypeConfiguration<Item>
 
         builder.Property(i => i.Code).IsRequired().HasMaxLength(30);
         builder.Property(i => i.Barcode).HasMaxLength(50);
+        builder.Property(i => i.BaseUnitBarcode).HasMaxLength(50);
+        builder.HasIndex(i => i.BaseUnitBarcode);
+        builder.Property(i => i.PackageUnitName).IsRequired().HasMaxLength(50).HasDefaultValue("علبة");
+        builder.Property(i => i.UnitsPerPackage).HasDefaultValue(1);
         builder.Property(i => i.Name).IsRequired().HasMaxLength(250);
         builder.Property(i => i.GenericName).HasMaxLength(250);
         builder.Property(i => i.Strength).HasMaxLength(50);

@@ -75,11 +75,12 @@
                             <DataGridTemplateColumn.CellEditingTemplate>
                                 <DataTemplate>
                                     <ComboBox ItemsSource="{Binding DataContext.AvailableItems, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                              DisplayMemberPath="Name" SelectedValuePath="Id" SelectedValue="{Binding ItemId}"
+                                              DisplayMemberPath="DisplayName" SelectedValuePath="Id" SelectedValue="{Binding ItemId}"
                                               SelectionChanged="ItemCombo_SelectionChanged"/>
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellEditingTemplate>
                         </DataGridTemplateColumn>
+                        <DataGridTextColumn Header="تعبئة وحدة الشراء" Binding="{Binding PurchaseUnitDescription}" Width="135" IsReadOnly="True"/>
                         <DataGridTextColumn Header="رقم الدفعة" Binding="{Binding BatchNumber, UpdateSourceTrigger=PropertyChanged}" Width="110"/>
                         <DataGridTemplateColumn Header="تاريخ الانتهاء" Width="110">
                             <DataGridTemplateColumn.CellTemplate>
@@ -94,8 +95,8 @@
                             </DataGridTemplateColumn.CellEditingTemplate>
                         </DataGridTemplateColumn>
                         <DataGridTextColumn Header="الكمية" Binding="{Binding QuantityReceived, UpdateSourceTrigger=PropertyChanged}" Width="80"/>
-                        <DataGridTextColumn Header="سعر الشراء" Binding="{Binding UnitCost, UpdateSourceTrigger=PropertyChanged}" Width="90"/>
-                        <DataGridTextColumn Header="سعر البيع" Binding="{Binding SalePrice, UpdateSourceTrigger=PropertyChanged}" Width="90"/>
+                        <DataGridTextColumn Header="شراء العبوة" Binding="{Binding UnitCost, UpdateSourceTrigger=PropertyChanged}" Width="90"/>
+                        <DataGridTextColumn Header="بيع العبوة" Binding="{Binding SalePrice, UpdateSourceTrigger=PropertyChanged}" Width="90"/>
                         <DataGridTemplateColumn Header="إعادة" Width="55">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>

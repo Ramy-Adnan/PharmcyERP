@@ -18,6 +18,9 @@ public class SalesInvoiceItem : BaseEntity
     public int ItemId { get; set; }
     public Item Item { get; set; } = null!;
 
+    public int UnitsPerSale { get; set; } = 1;
+    public string UnitName { get; set; } = string.Empty;
+    public string? ItemDisplayName { get; set; }
     public int Quantity { get; set; }
     public decimal UnitPrice { get; set; }
     public decimal TaxRatePercent { get; set; }

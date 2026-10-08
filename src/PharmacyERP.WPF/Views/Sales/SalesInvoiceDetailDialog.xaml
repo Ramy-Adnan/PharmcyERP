@@ -52,6 +52,7 @@
                       RowHeight="32" FontSize="13">
                 <DataGrid.Columns>
                     <DataGridTextColumn Header="الصنف" Binding="{Binding ItemName}" Width="2*" IsReadOnly="True"/>
+                    <DataGridTextColumn Header="الوحدة" Binding="{Binding UnitName}" Width="75" IsReadOnly="True"/>
                     <DataGridTextColumn Header="الكمية المباعة" Binding="{Binding Quantity}" Width="95" IsReadOnly="True"/>
                     <DataGridTextColumn Header="سعر الوحدة" Binding="{Binding UnitPrice, StringFormat=N2}" Width="90" IsReadOnly="True"/>
                     <DataGridTextColumn Header="الإجمالي" Binding="{Binding LineTotal, StringFormat=N2}" Width="90" IsReadOnly="True"/>

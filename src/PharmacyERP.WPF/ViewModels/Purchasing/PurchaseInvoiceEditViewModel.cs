@@ -169,7 +169,8 @@ public class PurchaseInvoiceEditViewModel : PurchasePricingViewModel
             {
                 ItemId = line.ItemId,
                 ItemCode = item?.Code ?? string.Empty,
-                ItemName = item?.Name ?? string.Empty,
+                ItemName = item?.DisplayName ?? string.Empty,
+                PurchaseUnitDescription = item?.PackagingDescription ?? string.Empty,
                 Quantity = line.Quantity,
                 UnitCost = line.UnitCost,
                 TaxRatePercent = line.TaxRatePercent,
@@ -204,7 +205,8 @@ public class PurchaseInvoiceEditViewModel : PurchasePricingViewModel
 
         line.ItemId = item.Id;
         line.ItemCode = item.Code;
-        line.ItemName = item.Name;
+        line.ItemName = item.DisplayName;
+        line.PurchaseUnitDescription = item.PackagingDescription;
         if (line.UnitCost == 0) line.UnitCost = item.DefaultPurchasePrice;
         if (line.TaxRatePercent == 0) line.TaxRatePercent = item.TaxRatePercent;
     }

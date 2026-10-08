@@ -25,6 +25,7 @@ public class Batch : AuditableEntity
     public DateTime ExpiryDate { get; set; }
 
     public int QuantityOnHand { get; set; }
+    public decimal? PackageSalePrice { get; set; }
     public decimal PurchasePrice { get; set; }
 
     /// <summary>Overrides Item.DefaultSalePrice for units sold from this specific batch, if set.</summary>

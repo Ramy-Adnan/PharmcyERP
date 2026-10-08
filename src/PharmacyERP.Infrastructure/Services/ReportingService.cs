@@ -94,7 +94,7 @@ public class ReportingService : IReportingService
             .Select(g => new TopSellingItemDto
             {
                 ItemName = g.Key,
-                QuantitySold = g.Sum(i => i.Quantity),
+                QuantitySold = g.Sum(i => i.Quantity * i.UnitsPerSale),
                 Revenue = g.Sum(i => i.LineTotal)
             })
             .OrderByDescending(t => t.QuantitySold)

@@ -93,7 +93,7 @@
      <DockPanel><Button DockPanel.Dock="Bottom" Content="إضافة الصنف المحدد إلى السلة" Command="{Binding AddToCartCommand}" Margin="0,9,0,0"/>
       <DataGrid ItemsSource="{Binding SearchResults}" SelectedItem="{Binding SelectedSearchResult}" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" MaxHeight="145" BorderThickness="0" HeadersVisibility="Column" GridLinesVisibility="None">
        <DataGrid.InputBindings><MouseBinding MouseAction="LeftDoubleClick" Command="{Binding AddToCartCommand}"/></DataGrid.InputBindings>
-       <DataGrid.Columns><DataGridTextColumn Header="الصنف" Binding="{Binding Name}" ElementStyle="{StaticResource CellText}" Width="*"/><DataGridTextColumn Header="الباركود" Binding="{Binding Barcode}" ElementStyle="{StaticResource CellText}" Width="130"/><DataGridTextColumn Header="السعر" Binding="{Binding DefaultSalePrice, StringFormat=N2}" ElementStyle="{StaticResource MoneyText}" Width="90"/><DataGridTextColumn Header="المتوفر" Binding="{Binding AvailableQuantity}" ElementStyle="{StaticResource CellText}" Width="70"/></DataGrid.Columns>
+       <DataGrid.Columns><DataGridTextColumn Header="الصنف والشركة" Binding="{Binding DisplayName}" ElementStyle="{StaticResource CellText}" Width="*"/><DataGridTextColumn Header="الباركود" Binding="{Binding Barcode}" ElementStyle="{StaticResource CellText}" Width="130"/><DataGridTextColumn Header="سعر الوحدة الصغيرة" Binding="{Binding DefaultSalePrice, StringFormat=N2}" ElementStyle="{StaticResource MoneyText}" Width="90"/><DataGridTextColumn Header="المتوفر" Binding="{Binding StockDisplay}" ElementStyle="{StaticResource CellText}" Width="70"/></DataGrid.Columns>
       </DataGrid>
      </DockPanel>
     </Border>
@@ -102,13 +102,20 @@
      <Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
       <DockPanel Margin="18,16"><StackPanel Orientation="Horizontal"><TextBlock Text="سلة المشتريات" FontSize="18" FontWeight="Bold" VerticalAlignment="Center"/>
         <Border Background="#E8F6F3" CornerRadius="8" Padding="9,4" Margin="10,0,0,0"><TextBlock Text="{Binding ItemCount, StringFormat='{}{0} قطعة'}" Foreground="#0F766E" FontWeight="SemiBold"/></Border></StackPanel>
+       <Button Content="إضافة بوحدة أخرى" Command="{Binding AddOtherUnitCommand}" Padding="10,7" HorizontalAlignment="Left" Margin="8,0"/>
        <Button Content="تفريغ السلة" Command="{Binding ClearCartCommand}" Foreground="#BE4056" Background="#FFF1F3" Padding="10,7" HorizontalAlignment="Left"/>
       </DockPanel>
       <Grid Grid.Row="1">
        <DataGrid x:Name="CartGrid" ItemsSource="{Binding CartLines}" SelectedItem="{Binding SelectedCartLine}" AutoGenerateColumns="False" CanUserAddRows="False" CanUserDeleteRows="False" GridLinesVisibility="None" BorderThickness="0" HeadersVisibility="Column" EnableRowVirtualization="True" Background="White" Margin="1,0">
         <DataGrid.Columns>
          <DataGridTemplateColumn Header="المنتج" Width="*" MinWidth="135" IsReadOnly="True"><DataGridTemplateColumn.CellTemplate><DataTemplate>
-          <StackPanel Margin="12,9" VerticalAlignment="Center"><TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/><StackPanel Orientation="Horizontal" Margin="0,4,0,0"><TextBlock Text="{Binding Code}" Style="{StaticResource Caption}"/><TextBlock Text=" · " Style="{StaticResource Caption}"/><TextBlock Text="{Binding UnitOfMeasureName}" Style="{StaticResource Caption}"/></StackPanel></StackPanel>
+          <StackPanel Margin="12,9" VerticalAlignment="Center"><TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/><StackPanel Orientation="Horizontal" Margin="0,4,0,0"><TextBlock Text="{Binding Code}" Style="{StaticResource Caption}"/><TextBlock Text=" · " Style="{StaticResource Caption}"/><TextBlock Text="{Binding SelectedUnitName}" Style="{StaticResource Caption}"/></StackPanel></StackPanel>
+         </DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+         <DataGridTemplateColumn Header="وحدة البيع" Width="115"><DataGridTemplateColumn.CellTemplate><DataTemplate>
+          <StackPanel Margin="4" VerticalAlignment="Center">
+           <ComboBox DropDownClosed="SaleUnitClosed" PreviewKeyDown="SaleUnitKeyDown" ItemsSource="{Binding SaleUnits}" DisplayMemberPath="Name" SelectedItem="{Binding SelectedSaleUnit, UpdateSourceTrigger=PropertyChanged}" Padding="5"/>
+           <TextBlock Text="{Binding AvailableQuantity, StringFormat='متوفر: {0}'}" Style="{StaticResource Caption}" FontSize="10" Margin="0,4,0,0"/>
+          </StackPanel>
          </DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
          <DataGridTemplateColumn Header="الكمية" Width="128"><DataGridTemplateColumn.CellTemplate><DataTemplate>
           <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
@@ -132,7 +139,7 @@
         <TextBlock Text="امسح الباركود، وسنضيف الصنف هنا" Style="{StaticResource Caption}" HorizontalAlignment="Center" Margin="0,8,0,0"/>
        </StackPanel>
       </Grid>
-      <Border Grid.Row="2" BorderBrush="#EEF2F7" BorderThickness="0,1,0,0" Padding="18,12"><DockPanel><TextBlock Text="{Binding CartLines.Count, StringFormat='{}{0} أصناف في السلة'}" Style="{StaticResource Caption}"/><TextBlock Text="يمكنك تعديل السعر والكمية والخصم مباشرة" Style="{StaticResource Caption}" HorizontalAlignment="Left"/></DockPanel></Border>
+      <Border Grid.Row="2" BorderBrush="#EEF2F7" BorderThickness="0,1,0,0" Padding="18,12"><DockPanel><TextBlock Text="{Binding CartLines.Count, StringFormat='{}{0} أصناف في السلة'}" Style="{StaticResource Caption}"/><TextBlock Text="اختر العلبة أو الوحدة الصغيرة؛ السعر يتغير تلقائياً ويمكن تعديله" Style="{StaticResource Caption}" HorizontalAlignment="Left"/></DockPanel></Border>
      </Grid>
     </Border>
    </Grid>

@@ -15,6 +15,7 @@ public class ReturnableLineRow : ViewModelBase
 
     public int SalesInvoiceItemId { get; init; }
     public string ItemName { get; init; } = string.Empty;
+    public string UnitName { get; init; } = string.Empty;
     public int Quantity { get; init; }
     public decimal UnitPrice { get; init; }
     public decimal LineTotal { get; init; }
@@ -95,6 +96,7 @@ public class SalesInvoiceDetailViewModel : ViewModelBase
             {
                 SalesInvoiceItemId = line.Id,
                 ItemName = line.ItemName,
+                UnitName = line.UnitName,
                 Quantity = line.Quantity,
                 UnitPrice = line.UnitPrice,
                 LineTotal = line.LineTotal,

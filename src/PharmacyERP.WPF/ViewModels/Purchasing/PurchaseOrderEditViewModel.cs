@@ -132,7 +132,8 @@ public class PurchaseOrderEditViewModel : PurchasePricingViewModel
                 Id = line.Id,
                 ItemId = line.ItemId,
                 ItemCode = item?.Code ?? string.Empty,
-                ItemName = item?.Name ?? string.Empty,
+                ItemName = item?.DisplayName ?? string.Empty,
+                PurchaseUnitDescription = item?.PackagingDescription ?? string.Empty,
                 QuantityOrdered = line.QuantityOrdered,
                 UnitCost = line.UnitCost,
                 SalePrice = line.SalePrice ?? SalePricePolicy.FromPurchasePrice(line.UnitCost, PurchaseType),
@@ -182,7 +183,8 @@ public class PurchaseOrderEditViewModel : PurchasePricingViewModel
 
         line.ItemId = item.Id;
         line.ItemCode = item.Code;
-        line.ItemName = item.Name;
+        line.ItemName = item.DisplayName;
+        line.PurchaseUnitDescription = item.PackagingDescription;
         if (line.UnitCost == 0) line.UnitCost = item.DefaultPurchasePrice;
         if (line.TaxRatePercent == 0) line.TaxRatePercent = item.TaxRatePercent;
     }

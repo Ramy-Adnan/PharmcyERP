@@ -8,6 +8,7 @@ public class BatchDto
     public int Id { get; set; }
     public int ItemId { get; set; }
     public string ItemName { get; set; } = string.Empty;
+    public string UnitOfMeasureName { get; set; } = string.Empty;
     public int WarehouseId { get; set; }
     public string WarehouseName { get; set; } = string.Empty;
 
@@ -67,6 +68,7 @@ public class ExpiringBatchDto
     public int BatchId { get; set; }
     public string ItemCode { get; set; } = string.Empty;
     public string ItemName { get; set; } = string.Empty;
+    public string UnitOfMeasureName { get; set; } = string.Empty;
     public string WarehouseName { get; set; } = string.Empty;
     public string BatchNumber { get; set; } = string.Empty;
     public DateTime ExpiryDate { get; set; }

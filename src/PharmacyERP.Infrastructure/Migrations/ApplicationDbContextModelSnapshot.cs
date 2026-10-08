@@ -244,8 +244,11 @@ namespace PharmacyERP.Infrastructure.Migrations
                     b.Property<int?>("ModifiedByUserId")
                         .HasColumnType("int");
 
-                    b.Property<decimal>("PurchasePrice")
+                    b.Property<decimal?>("PackageSalePrice")
                         .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("PurchasePrice")
+                        .HasColumnType("decimal(22,6)");
 
                     b.Property<int>("PurchaseType")
                         .HasColumnType("int");
@@ -1250,6 +1253,10 @@ namespace PharmacyERP.Infrastructure.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
+                    b.Property<string>("BaseUnitBarcode")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
                     b.Property<int>("CategoryId")
                         .HasColumnType("int");
 
@@ -1312,6 +1319,13 @@ namespace PharmacyERP.Infrastructure.Migrations
                         .HasMaxLength(250)
                         .HasColumnType("nvarchar(250)");
 
+                    b.Property<string>("PackageUnitName")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)")
+                        .HasDefaultValue("علبة");
+
                     b.Property<int>("PurchaseType")
                         .HasColumnType("int");
 
@@ -1336,9 +1350,16 @@ namespace PharmacyERP.Infrastructure.Migrations
                     b.Property<int>("UnitOfMeasureId")
                         .HasColumnType("int");
 
+                    b.Property<int>("UnitsPerPackage")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(1);
+
                     b.HasKey("Id");
 
                     b.HasIndex("Barcode");
+
+                    b.HasIndex("BaseUnitBarcode");
 
                     b.HasIndex("CategoryId");
 
@@ -2583,6 +2604,10 @@ namespace PharmacyERP.Infrastructure.Migrations
                     b.Property<decimal>("DiscountAmount")
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<string>("ItemDisplayName")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
                     b.Property<int>("ItemId")
                         .HasColumnType("int");
 
@@ -2601,8 +2626,18 @@ namespace PharmacyERP.Infrastructure.Migrations
                     b.Property<decimal>("TaxRatePercent")
                         .HasColumnType("decimal(5,2)");
 
+                    b.Property<string>("UnitName")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
                     b.Property<decimal>("UnitPrice")
                         .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("UnitsPerSale")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(1);
 
                     b.HasKey("Id");
 
@@ -2634,7 +2669,7 @@ namespace PharmacyERP.Infrastructure.Migrations
                         .HasColumnType("int");
 
                     b.Property<decimal>("UnitCost")
-                        .HasColumnType("decimal(18,2)");
+                        .HasColumnType("decimal(22,6)");
 
                     b.HasKey("Id");
 

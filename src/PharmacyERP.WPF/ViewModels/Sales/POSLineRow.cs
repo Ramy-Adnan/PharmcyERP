@@ -6,6 +6,30 @@ namespace PharmacyERP.WPF.ViewModels.Sales;
 public class POSLineRow : ViewModelBase
 {
     private int _quantity = 1;
+    private SaleUnitOption? _selectedSaleUnit;
+    private int _availableQuantity;
+    public IReadOnlyList<SaleUnitOption> SaleUnits { get; init; } = Array.Empty<SaleUnitOption>();
+    public int UnitsPerPackage { get; init; } = 1;
+    public decimal BaseSalePrice { get; init; }
+    public decimal PackageSalePrice { get; init; }
+    public SaleUnitOption? SelectedSaleUnit
+    {
+        get => _selectedSaleUnit;
+        set
+        {
+            if (value is null || !SaleUnits.Contains(value) || !SetProperty(ref _selectedSaleUnit, value)) return;
+            UnitPrice = value.IsPackage ? PackageSalePrice : BaseSalePrice;
+            OnPropertyChanged(nameof(UnitsPerSale));
+            OnPropertyChanged(nameof(AvailableQuantity));
+            OnPropertyChanged(nameof(SelectedUnitName));
+            OnPropertyChanged(nameof(SellAsPackage));
+        }
+    }
+    public int UnitsPerSale => SelectedSaleUnit?.Factor ?? 1;
+    public bool SellAsPackage => SelectedSaleUnit?.IsPackage ?? false;
+    public string SelectedUnitName => SelectedSaleUnit?.Name ?? UnitOfMeasureName;
+    public int AvailableBaseQuantity { get => _availableQuantity; set { if (SetProperty(ref _availableQuantity, value)) OnPropertyChanged(nameof(AvailableQuantity)); } }
+
     private decimal _unitPrice;
     private decimal _discountAmount;
 
@@ -14,7 +38,7 @@ public class POSLineRow : ViewModelBase
     public string Name { get; init; } = string.Empty;
     public string UnitOfMeasureName { get; init; } = string.Empty;
     public decimal TaxRatePercent { get; init; }
-    public int AvailableQuantity { get; set; }
+    public int AvailableQuantity { get => AvailableBaseQuantity / UnitsPerSale; set => AvailableBaseQuantity = value * UnitsPerSale; }
     public bool RequiresPrescription { get; init; }
 
     public int Quantity
@@ -37,3 +61,5 @@ public class POSLineRow : ViewModelBase
 
     public decimal LineTotal => Math.Round(UnitPrice * Quantity * (1 + TaxRatePercent / 100m) - DiscountAmount, 2);
 }
+
+public sealed record SaleUnitOption(bool IsPackage, string Name, int Factor);

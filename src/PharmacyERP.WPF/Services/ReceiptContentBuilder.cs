@@ -34,7 +34,7 @@ public static class ReceiptContentBuilder
         {
             var product = new List<ReceiptText>
             {
-                new($"{line.ItemName}  —  الكمية: {line.Quantity}", true, 11)
+                new($"{line.ItemName}  —  الكمية: {line.Quantity}{(string.IsNullOrWhiteSpace(line.UnitName) ? "" : " " + line.UnitName)}", true, 11)
             };
             content.Products.Add(product);
         }

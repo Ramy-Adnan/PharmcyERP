@@ -51,6 +51,11 @@ public partial class POSView : UserControl
                 if (IsLoaded && _viewModel.CanScan) ScanBox.Focus();
             }));
     }
+    private void SaleUnitClosed(object sender, EventArgs e) => FocusScanner();
+    private void SaleUnitKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter) { e.Handled = true; FocusScanner(); }
+    }
     private void ScanTextChanged(object sender, TextChangedEventArgs e)
     {
         _scanTimer.Stop();

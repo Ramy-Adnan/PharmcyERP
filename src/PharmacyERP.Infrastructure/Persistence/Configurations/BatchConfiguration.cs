@@ -11,7 +11,8 @@ public class BatchConfiguration : IEntityTypeConfiguration<Batch>
         builder.ToTable("Batches");
 
         builder.Property(b => b.BatchNumber).IsRequired().HasMaxLength(60);
-        builder.Property(b => b.PurchasePrice).HasColumnType("decimal(18,2)");
+        builder.Property(b => b.PurchasePrice).HasColumnType("decimal(22,6)");
+        builder.Property(b => b.PackageSalePrice).HasColumnType("decimal(18,2)");
         builder.Property(b => b.SalePriceOverride).HasColumnType("decimal(18,2)");
         builder.Property(b => b.SupplierReference).HasMaxLength(100);
 

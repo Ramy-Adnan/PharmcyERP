@@ -15,6 +15,9 @@ public class SalesInvoiceItemConfiguration : IEntityTypeConfiguration<SalesInvoi
         builder.Property(i => i.DiscountAmount).HasColumnType("decimal(18,2)");
         builder.Property(i => i.LineTotal).HasColumnType("decimal(18,2)");
         builder.Ignore(i => i.QuantityReturnable);
+        builder.Property(i => i.UnitsPerSale).HasDefaultValue(1);
+        builder.Property(i => i.UnitName).IsRequired().HasMaxLength(50);
+        builder.Property(i => i.ItemDisplayName).HasMaxLength(500);
 
         builder.HasOne(i => i.SalesInvoice)
             .WithMany(s => s.Items)

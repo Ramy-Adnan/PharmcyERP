@@ -70,11 +70,12 @@
                                 <DataTemplate>
                                     <ComboBox x:Name="ItemCombo"
                                               ItemsSource="{Binding DataContext.AvailableItems, RelativeSource={RelativeSource AncestorType=Window}}"
-                                              DisplayMemberPath="Name" SelectedValuePath="Id" SelectedValue="{Binding ItemId}"
+                                              DisplayMemberPath="DisplayName" SelectedValuePath="Id" SelectedValue="{Binding ItemId}"
                                               SelectionChanged="ItemCombo_SelectionChanged"/>
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellEditingTemplate>
                         </DataGridTemplateColumn>
+                        <DataGridTextColumn Header="وحدة المخزون الصغيرة" Binding="{Binding UnitName}" Width="100" IsReadOnly="True"/>
                         <DataGridTextColumn Header="الكمية الموصوفة" Binding="{Binding QuantityPrescribed, UpdateSourceTrigger=PropertyChanged}" Width="110"/>
                         <DataGridTextColumn Header="تعليمات الجرعة" Binding="{Binding DosageInstructions, UpdateSourceTrigger=PropertyChanged}" Width="2*"/>
                     </DataGrid.Columns>

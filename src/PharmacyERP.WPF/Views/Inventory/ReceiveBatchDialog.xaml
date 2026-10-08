@@ -27,6 +27,7 @@
                 <DatePicker SelectedDate="{Binding ExpiryDate}" Padding="6" Margin="0,0,0,12"/>
 
                 <TextBlock Text="الكمية المستلمة" Margin="0,0,0,4"/>
+                <TextBlock Text="{Binding PackagingDescription}" TextWrapping="Wrap" Foreground="#0F766E" Margin="0,0,0,8"/>
                 <TextBox Text="{Binding Quantity, UpdateSourceTrigger=PropertyChanged}" Padding="6" Margin="0,0,0,12"/>
 
                 <TextBlock Text="نوع الشراء / نسبة زيادة البيع" Margin="0,0,0,4"/>

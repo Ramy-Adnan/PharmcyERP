@@ -10,7 +10,7 @@ public class SalesInvoiceItemBatchConfiguration : IEntityTypeConfiguration<Sales
     {
         builder.ToTable("SalesInvoiceItemBatches");
 
-        builder.Property(b => b.UnitCost).HasColumnType("decimal(18,2)");
+        builder.Property(b => b.UnitCost).HasColumnType("decimal(22,6)");
         builder.Ignore(b => b.QuantityAvailableToReturn);
 
         builder.HasOne(b => b.SalesInvoiceItem)

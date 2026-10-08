@@ -71,14 +71,15 @@
                                 <DataTemplate>
                                     <ComboBox x:Name="ItemCombo"
                                               ItemsSource="{Binding DataContext.AvailableItems, RelativeSource={RelativeSource AncestorType=Window}}"
-                                              DisplayMemberPath="Name" SelectedValuePath="Id" SelectedValue="{Binding ItemId}"
+                                              DisplayMemberPath="DisplayName" SelectedValuePath="Id" SelectedValue="{Binding ItemId}"
                                               SelectionChanged="ItemCombo_SelectionChanged"/>
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellEditingTemplate>
                         </DataGridTemplateColumn>
+                        <DataGridTextColumn Header="تعبئة وحدة الشراء" Binding="{Binding PurchaseUnitDescription}" Width="135" IsReadOnly="True"/>
                         <DataGridTextColumn Header="الكمية" Binding="{Binding QuantityOrdered, UpdateSourceTrigger=PropertyChanged}" Width="90"/>
-                        <DataGridTextColumn Header="سعر الشراء" Binding="{Binding UnitCost, UpdateSourceTrigger=PropertyChanged}" Width="100"/>
-                        <DataGridTextColumn Header="سعر البيع" Binding="{Binding SalePrice, UpdateSourceTrigger=PropertyChanged}" Width="110"/>
+                        <DataGridTextColumn Header="شراء العبوة" Binding="{Binding UnitCost, UpdateSourceTrigger=PropertyChanged}" Width="100"/>
+                        <DataGridTextColumn Header="بيع العبوة" Binding="{Binding SalePrice, UpdateSourceTrigger=PropertyChanged}" Width="110"/>
                         <DataGridTemplateColumn Header="إعادة" Width="55">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
