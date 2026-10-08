@@ -25,11 +25,13 @@
         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="16"/><RowDefinition Height="*"/></Grid.RowDefinitions>
         <Border Background="#0F172A" CornerRadius="12" Padding="20,16">
             <StackPanel>
-                <TextBlock Text="إعدادات الصيدلية والفاتورة" Foreground="White" FontSize="23" FontWeight="Bold"/>
-                <TextBlock Text="هوية صيدليتك على كل وصل • طباعة حرارية 80mm" Foreground="#CBD5E1" FontSize="13" Margin="0,6,0,0"/>
+                <TextBlock Text="إعدادات النظام" Foreground="White" FontSize="23" FontWeight="Bold"/>
+                <TextBlock Text="هوية الصيدلية والطباعة وقراءة فواتير المذاخر" Foreground="#CBD5E1" FontSize="13" Margin="0,6,0,0"/>
             </StackPanel>
         </Border>
-        <Grid Grid.Row="2">
+        <TabControl Grid.Row="2" Background="Transparent" BorderThickness="0">
+            <TabItem Header="الصيدلية والوصل" Padding="18,10">
+        <Grid>
             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="18"/><ColumnDefinition Width="370"/></Grid.ColumnDefinitions>
             <Border Background="White" CornerRadius="12" Padding="20">
                 <DockPanel>
@@ -79,5 +81,10 @@
                 </DockPanel>
             </Border>
         </Grid>
+            </TabItem>
+            <TabItem Header="قراءة الفواتير" Padding="18,10">
+                <ContentControl x:Name="AiSettingsHost"/>
+            </TabItem>
+        </TabControl>
     </Grid>
 </UserControl>

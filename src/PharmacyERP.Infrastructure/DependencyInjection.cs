@@ -59,7 +59,10 @@ public static class DependencyInjection
         services.AddScoped<PharmacyERP.Application.Features.Purchasing.Imports.IPurchaseImageImportService, PharmacyERP.Infrastructure.Services.Imports.PurchaseImageImportService>();
         services.AddSingleton(new PharmacyERP.Infrastructure.Services.Imports.InvoiceVisionOptions());
         services.AddSingleton(new PharmacyERP.Infrastructure.Services.Imports.GeminiVisionOptions());
-        services.AddSingleton<PharmacyERP.Application.Features.Purchasing.Imports.IInvoiceImageReader>(sp => new PharmacyERP.Infrastructure.Services.Imports.ConfiguredInvoiceImageReader(new HttpClient { Timeout = TimeSpan.FromSeconds(90) }, sp.GetRequiredService<PharmacyERP.Infrastructure.Services.Imports.InvoiceVisionOptions>(), sp.GetRequiredService<PharmacyERP.Infrastructure.Services.Imports.GeminiVisionOptions>()));
+        services.AddSingleton<PharmacyERP.Infrastructure.Services.Imports.IInvoiceAiSecretProtector, PharmacyERP.Infrastructure.Services.Imports.WindowsInvoiceAiSecretProtector>();
+        services.AddSingleton<PharmacyERP.Application.Features.Purchasing.Imports.IInvoiceAiSettingsStore, PharmacyERP.Infrastructure.Services.Imports.EncryptedInvoiceAiSettingsStore>();
+        services.AddSingleton<PharmacyERP.Application.Features.Purchasing.Imports.IInvoiceAiConnectionTester>(_ => new PharmacyERP.Infrastructure.Services.Imports.InvoiceAiConnectionTester(new HttpClient { Timeout = TimeSpan.FromSeconds(20) }));
+        services.AddSingleton<PharmacyERP.Application.Features.Purchasing.Imports.IInvoiceImageReader>(sp => new PharmacyERP.Infrastructure.Services.Imports.ConfiguredInvoiceImageReader(new HttpClient { Timeout = TimeSpan.FromSeconds(90) }, sp.GetRequiredService<PharmacyERP.Infrastructure.Services.Imports.InvoiceVisionOptions>(), sp.GetRequiredService<PharmacyERP.Infrastructure.Services.Imports.GeminiVisionOptions>(), settingsStore: sp.GetRequiredService<PharmacyERP.Application.Features.Purchasing.Imports.IInvoiceAiSettingsStore>()));
         services.AddScoped<ISalesService, SalesService>();
         services.AddScoped<IPrescriptionService, PrescriptionService>();
         services.AddScoped<IInsuranceService, InsuranceService>();

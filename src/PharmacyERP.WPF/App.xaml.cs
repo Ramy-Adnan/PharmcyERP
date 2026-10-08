@@ -89,6 +89,8 @@ public partial class App : System.Windows.Application
                     services.AddTransient<MainShellView>();
                     services.AddTransient<ReceiptSettingsViewModel>();
                     services.AddTransient<ReceiptSettingsView>();
+                    services.AddTransient<InvoiceAiSettingsViewModel>();
+                    services.AddTransient<InvoiceAiSettingsView>();
 
                     // Branches & Warehouses module
                     services.AddTransient<BranchesViewModel>();

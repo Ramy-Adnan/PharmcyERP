@@ -11,11 +11,12 @@ public sealed class ConfiguredInvoiceImageReader : IInvoiceImageReader, IDisposa
     private readonly GeminiVisionOptions _geminiOptions;
     private readonly Func<string?> _provider;
     private readonly IInvoiceImageReader _openAi, _gemini;
+    private readonly IInvoiceAiSettingsStore? _settingsStore;
 
     public ConfiguredInvoiceImageReader(HttpClient http, InvoiceVisionOptions openAiOptions, GeminiVisionOptions geminiOptions,
-        Func<string?>? provider = null)
+        Func<string?>? provider = null, IInvoiceAiSettingsStore? settingsStore = null)
     {
-        _http = http; _openAiOptions = openAiOptions; _geminiOptions = geminiOptions;
+        _http = http; _openAiOptions = openAiOptions; _geminiOptions = geminiOptions; _settingsStore = settingsStore;
         _provider = provider ?? (() => Environment.GetEnvironmentVariable("PHARMACYERP_VISION_PROVIDER"));
         _openAi = new OpenAiInvoiceImageReader(http, openAiOptions);
         _gemini = new GeminiInvoiceImageReader(http, geminiOptions);
@@ -25,22 +26,44 @@ public sealed class ConfiguredInvoiceImageReader : IInvoiceImageReader, IDisposa
     {
         get
         {
-            var configured = _provider()?.Trim();
-            if (!string.IsNullOrWhiteSpace(configured))
-                return configured.ToLowerInvariant() switch { "gemini" => "Gemini", "openai" => "OpenAI", _ => "غير محدد" };
-            // Preserve installed OpenAI configurations; prefer Gemini when its key is present.
-            if (!string.IsNullOrWhiteSpace(_geminiOptions.ApiKey())) return "Gemini";
-            return !string.IsNullOrWhiteSpace(_openAiOptions.ApiKey()) ? "OpenAI" : "Gemini";
+            try { if (_settingsStore?.Load() is { } saved) return saved.Provider; }
+            catch (InvalidOperationException) { return "خدمة الصور المحفوظة"; }
+            return EnvironmentProviderName();
         }
     }
 
+    private string EnvironmentProviderName()
+    {
+        var configured = _provider()?.Trim();
+        if (!string.IsNullOrWhiteSpace(configured))
+            return configured.ToLowerInvariant() switch { "gemini" => "Gemini", "openai" => "OpenAI", _ => "غير محدد" };
+        // Preserve installed OpenAI configurations; prefer Gemini when its key is present.
+        if (!string.IsNullOrWhiteSpace(_geminiOptions.ApiKey())) return "Gemini";
+        return !string.IsNullOrWhiteSpace(_openAiOptions.ApiKey()) ? "OpenAI" : "Gemini";
+    }
+
     public Task<Result<InvoiceImageDocument>> ReadAsync(InvoiceImageInput image, CancellationToken cancellationToken = default)
-        => ProviderName switch
+    {
+        try
+        {
+            // Snapshot once per request. Saving new settings takes effect on the next analysis.
+            if (_settingsStore?.Load() is { } saved)
+            {
+                IInvoiceImageReader reader = saved.Provider == "Gemini"
+                    ? new GeminiInvoiceImageReader(_http, new GeminiVisionOptions { ApiKey = () => saved.ApiKey, Model = () => saved.Model })
+                    : new OpenAiInvoiceImageReader(_http, new InvoiceVisionOptions { ApiKey = () => saved.ApiKey, Model = () => saved.Model });
+                return reader.ReadAsync(image, cancellationToken);
+            }
+        }
+        catch (InvalidOperationException)
+        { return Task.FromResult(Result<InvoiceImageDocument>.Failure("تعذر قراءة إعدادات خدمة الصور. افتح إعدادات النظام وأعد حفظ المفتاح. لم تُرسل الصورة.")); }
+        return EnvironmentProviderName() switch
         {
             "Gemini" => _gemini.ReadAsync(image, cancellationToken),
             "OpenAI" => _openAi.ReadAsync(image, cancellationToken),
             _ => Task.FromResult(Result<InvoiceImageDocument>.Failure("قيمة PHARMACYERP_VISION_PROVIDER يجب أن تكون Gemini أو OpenAI. لم تُرسل الصورة."))
         };
+    }
 
     public void Dispose() => _http.Dispose();
 }

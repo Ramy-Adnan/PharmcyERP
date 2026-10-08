@@ -1,0 +1,31 @@
+<UserControl x:Class="PharmacyERP.WPF.Views.SystemManagement.InvoiceAiSettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             FlowDirection="RightToLeft">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <Border Background="White" CornerRadius="12" Padding="24" Margin="0,14,0,0">
+            <StackPanel MaxWidth="720" HorizontalAlignment="Stretch">
+                <TextBlock Text="قراءة فواتير المذاخر بالذكاء الاصطناعي" FontSize="22" FontWeight="Bold" Foreground="#0F172A"/>
+                <TextBlock Text="أدخل مفتاح خدمة صيدليتك مرة واحدة من هنا؛ لا تحتاج تعديل إعدادات Windows." TextWrapping="Wrap" Foreground="#64748B" Margin="0,10,0,20"/>
+                <StackPanel IsEnabled="{Binding CanEdit}">
+                    <TextBlock Text="الخدمة" FontWeight="SemiBold"/>
+                    <ComboBox ItemsSource="{Binding Providers}" SelectedItem="{Binding Provider}" Padding="10,8" Margin="0,6,0,14"/>
+                    <TextBlock Text="النموذج" FontWeight="SemiBold"/>
+                    <TextBox Text="{Binding Model, UpdateSourceTrigger=PropertyChanged}" FlowDirection="LeftToRight" Padding="10,8" MaxLength="100" Margin="0,6,0,14"/>
+                    <TextBlock Text="مفتاح API" FontWeight="SemiBold"/>
+                    <PasswordBox x:Name="ApiKeyBox" PasswordChanged="ApiKeyChanged" FlowDirection="LeftToRight" Padding="10,8" MaxLength="512" Margin="0,6,0,8"/>
+                    <TextBlock Text="{Binding KeyStatus}" TextWrapping="Wrap" Foreground="#64748B" Margin="0,0,0,18"/>
+                </StackPanel>
+                <WrapPanel>
+                    <Button Content="اختبار الاتصال" Command="{Binding TestCommand}" Padding="18,10" Margin="0,0,0,8"/>
+                    <Button Content="حفظ إعدادات قراءة الصور" Command="{Binding SaveCommand}" Background="#0F766E" Foreground="White" BorderThickness="0" Padding="18,10" Margin="10,0,0,8"/>
+                    <Button Content="حذف المفتاح" Command="{Binding RemoveKeyCommand}" Foreground="#B91C1C" Padding="18,10" Margin="10,0,0,8"/>
+                </WrapPanel>
+                <TextBlock Text="{Binding StatusMessage}" TextWrapping="Wrap" Foreground="#0F766E" Margin="0,10,0,16"/>
+                <Separator/>
+                <TextBlock Text="Gemini له خطة مجانية بحدود حسب الحساب والنموذج. الاختبار يتحقق من المفتاح والنموذج دون إرسال فاتورة. تُرسل الصور إلى الخدمة المختارة عند التحليل، وقد تستخدم Google بيانات الخطة المجانية لتحسين منتجاتها وفق شروط حسابك." TextWrapping="Wrap" Foreground="#64748B" Margin="0,14,0,10"/>
+                <TextBlock Text="يحفظ التطبيق المفتاح مشفّراً على هذا الجهاز لحساب Windows الحالي، ويظل محفوظاً بعد تحديث البرنامج. عند نقل البرنامج إلى جهاز أو حساب Windows آخر، أدخل المفتاح من الإعدادات مجدداً." TextWrapping="Wrap" Foreground="#64748B"/>
+            </StackPanel>
+        </Border>
+    </ScrollViewer>
+</UserControl>

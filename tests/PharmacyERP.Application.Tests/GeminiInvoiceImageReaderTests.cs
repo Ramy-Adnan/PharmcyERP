@@ -78,7 +78,7 @@ public class GeminiInvoiceImageReaderTests
         var handler = new Handler(); using var reader = Configured(handler, "Gemini", geminiKey: null);
         var result = await reader.ReadAsync(Image());
         reader.ProviderName.Should().Be("Gemini"); result.Succeeded.Should().BeFalse();
-        result.Errors.Single().Should().Contain("GEMINI_API_KEY"); handler.Calls.Should().Be(0);
+        result.Errors.Single().Should().Contain("إعدادات النظام"); handler.Calls.Should().Be(0);
     }
 
     [Theory]

@@ -25,7 +25,7 @@ public sealed class OpenAiInvoiceImageReader : IInvoiceImageReader
         if (error is not null) return Result<InvoiceImageDocument>.Failure(error);
         var bytes = image.Content;
         var key = _options.ApiKey();
-        if (string.IsNullOrWhiteSpace(key)) return Result<InvoiceImageDocument>.Failure("قراءة الصور تحتاج مفتاح OpenAI API. أضف PHARMACYERP_VISION_API_KEY إلى متغيرات Windows ثم أعد تشغيل التطبيق. لا تضع المفتاح في ملفات المشروع.");
+        if (string.IsNullOrWhiteSpace(key)) return Result<InvoiceImageDocument>.Failure("قراءة الصور تحتاج مفتاح OpenAI API. افتح إعدادات النظام ← قراءة الفواتير، وأدخل المفتاح واحفظه.");
         var requestBody = new
         {
             model = _options.Model(), temperature = 0, max_completion_tokens = 12000,

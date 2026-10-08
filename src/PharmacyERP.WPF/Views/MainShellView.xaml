@@ -944,11 +944,11 @@
 
                             <RadioButton Style="{StaticResource NavItemStyle}"
                                          GroupName="MainNav"
-                                         Content="إعدادات الصيدلية والفاتورة"
-                                         ToolTip="إعدادات الصيدلية والفاتورة"
+                                         Content="إعدادات النظام"
+                                         ToolTip="إعدادات الصيدلية والوصل وقراءة الفواتير"
                                          Tag="{StaticResource Icon.Reports}"
                                          Command="{Binding NavigateToReceiptSettingsCommand}"
-                                         Visibility="{Binding CanConfigureReceipts, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                                         Visibility="{Binding CanConfigureSettings, Converter={StaticResource BoolToVisibilityConverter}}"/>
 
                             <RadioButton Style="{StaticResource NavItemStyle}"
                                          GroupName="MainNav"

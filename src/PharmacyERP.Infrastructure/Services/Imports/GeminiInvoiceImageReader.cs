@@ -26,7 +26,7 @@ public sealed class GeminiInvoiceImageReader : IInvoiceImageReader
         if (error is not null) return Result<InvoiceImageDocument>.Failure(error);
         var key = _options.ApiKey();
         if (string.IsNullOrWhiteSpace(key))
-            return Result<InvoiceImageDocument>.Failure("قراءة الصور عبر Gemini تحتاج مفتاح Google AI Studio. أضف GEMINI_API_KEY إلى متغيرات Windows ثم أعد تشغيل التطبيق.");
+            return Result<InvoiceImageDocument>.Failure("قراءة الصور عبر Gemini تحتاج مفتاح Google AI Studio. افتح إعدادات النظام ← قراءة الفواتير، وأدخل المفتاح واحفظه.");
         var model = _options.Model();
         if (!Regex.IsMatch(model, @"\Agemini-[a-zA-Z0-9._-]+\z"))
             return Result<InvoiceImageDocument>.Failure("اسم نموذج Gemini غير صالح؛ راجع PHARMACYERP_GEMINI_MODEL.");

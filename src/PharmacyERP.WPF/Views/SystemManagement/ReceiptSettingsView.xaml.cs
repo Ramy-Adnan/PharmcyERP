@@ -17,10 +17,11 @@ public partial class ReceiptSettingsView : UserControl
     private readonly DispatcherTimer _previewTimer = new() { Interval = TimeSpan.FromMilliseconds(150) };
     private bool _initialized;
 
-    public ReceiptSettingsView(ReceiptSettingsViewModel viewModel, IDialogService dialogs)
+    public ReceiptSettingsView(ReceiptSettingsViewModel viewModel, IDialogService dialogs, InvoiceAiSettingsView aiSettings)
     {
         InitializeComponent(); DataContext = _viewModel = viewModel;
         _dialogs = dialogs;
+        AiSettingsHost.Content = aiSettings;
         _previewTimer.Tick += (_, _) => { _previewTimer.Stop(); UpdatePreview(); };
         Loaded += (_, _) =>
         {

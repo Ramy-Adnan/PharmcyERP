@@ -41,7 +41,7 @@ public class InvoiceImageReaderTests
     }
     [Fact]
     public async Task MissingKey_DoesNotSendTheImage()
-    {var handler=new Handler();var result=await Reader(handler,null).ReadAsync(Image());result.Succeeded.Should().BeFalse();result.Errors.Single().Should().Contain("PHARMACYERP_VISION_API_KEY");handler.Calls.Should().Be(0);}
+    {var handler=new Handler();var result=await Reader(handler,null).ReadAsync(Image());result.Succeeded.Should().BeFalse();result.Errors.Single().Should().Contain("إعدادات النظام");handler.Calls.Should().Be(0);}
     [Theory]
     [InlineData(401)][InlineData(429)][InlineData(500)]
     public async Task ServiceErrorsAreClear_WithoutReturningTheSecret(int status)

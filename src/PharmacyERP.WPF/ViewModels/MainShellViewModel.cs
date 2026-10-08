@@ -83,7 +83,7 @@ public class MainShellViewModel : ViewModelBase
         NavigateToLicenseCommand = new RelayCommand(() => CurrentView = _serviceProvider.GetService(typeof(LicenseView)));
         NavigateToBackupCommand = new RelayCommand(() => CurrentView = _serviceProvider.GetService(typeof(BackupView)));
         NavigateToReceiptSettingsCommand = new RelayCommand(
-            () => CurrentView = _serviceProvider.GetService(typeof(ReceiptSettingsView)), () => CanConfigureReceipts);
+            () => CurrentView = _serviceProvider.GetService(typeof(ReceiptSettingsView)), () => CanConfigureSettings);
         CheckForUpdatesCommand = new RelayCommand(CheckForUpdates);
     }
 
@@ -142,6 +142,7 @@ public class MainShellViewModel : ViewModelBase
     public bool CanManageBackup => _sessionService.CurrentSession?.Permissions.Contains("System.ManageBackup") ?? false;
     public bool CanManageLicense => _sessionService.CurrentSession?.Permissions.Contains("System.ManageLicense") ?? false;
     public bool CanConfigureReceipts => CanUsePos || CanManageBranches;
+    public bool CanConfigureSettings => CanConfigureReceipts || CanManagePurchaseInvoices;
 
     public object? CurrentView { get => _currentView; set => SetProperty(ref _currentView, value); }
 
