@@ -11,6 +11,7 @@
     <CheckBox Content="باي هاند — زيادة 20% (الباقي 25%)" IsChecked="{Binding IsByHand}" IsEnabled="{Binding CanEdit}" VerticalAlignment="Center" Margin="14"/></WrapPanel>
    <WrapPanel IsEnabled="{Binding CanEdit}"><TextBlock Text="وحدة مخزون غير موجودة؟" VerticalAlignment="Center"/><TextBox x:Name="NewUnitName" Width="130"/><Button Content="إضافة الوحدة" Click="AddBaseUnit" IsEnabled="{Binding CanManageUnits}"/></WrapPanel>
    <TextBlock Text="{Binding PhotoInformation}" TextWrapping="Wrap"/>
+   <Expander Header="عرض النص الذي قرأه OCR" Visibility="{Binding HasRecognizedText, Converter={StaticResource BoolToVisibilityConverter}}"><TextBox Text="{Binding RecognizedText, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" AcceptsReturn="True" MaxHeight="180" VerticalScrollBarVisibility="Auto"/></Expander>
    <TextBlock Text="{Binding Message}" TextWrapping="Wrap" Foreground="#9A4C16"/>
    <WrapPanel IsEnabled="{Binding CanEdit}">
     <TextBlock Text="رقم الفاتورة" VerticalAlignment="Center"/><TextBox Width="145" Text="{Binding InvoiceNumber, UpdateSourceTrigger=PropertyChanged}"/>
@@ -20,6 +21,7 @@
    </WrapPanel>
   </StackPanel>
   <WrapPanel DockPanel.Dock="Bottom"><Button Content="حفظ المراجعة ومتابعة الاستلام" Click="SaveReviewed" IsEnabled="{Binding CanSave}" Background="#146B7A" Foreground="White"/>
+   <Button Content="إضافة سطر للمراجعة" Click="AddManualLine" IsEnabled="{Binding CanSave}"/><Button Content="حذف السطر المحدد" Click="RemoveLine" IsEnabled="{Binding CanSave}"/>
    <Button Content="إغلاق" Click="CloseDialog" IsEnabled="{Binding CanEdit}"/><TextBlock Text="الحفظ ينشئ مسودة؛ اعتمادها من الخطوة التالية يضيف المخزون." VerticalAlignment="Center"/></WrapPanel>
   <ScrollViewer DockPanel.Dock="Bottom" MaxHeight="280" VerticalScrollBarVisibility="Auto">
    <StackPanel DataContext="{Binding SelectedItem, ElementName=Rows}" IsEnabled="{Binding DataContext.CanEdit, RelativeSource={RelativeSource AncestorType=Window}}">

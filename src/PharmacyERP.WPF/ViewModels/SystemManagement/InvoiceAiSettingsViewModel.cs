@@ -4,22 +4,27 @@ using PharmacyERP.WPF.MVVM;
 
 namespace PharmacyERP.WPF.ViewModels.SystemManagement;
 
+public sealed record InvoiceAiProviderOption(string Id, string Name);
+
 public sealed class InvoiceAiSettingsViewModel : ViewModelBase
 {
     private readonly IInvoiceAiSettingsStore _store;
     private readonly IInvoiceAiConnectionTester _tester;
     private readonly ICurrentUserService _user;
     private InvoiceAiSettings? _saved;
-    private string _provider = "Gemini", _model = "gemini-2.5-flash", _newApiKey = string.Empty, _status = string.Empty;
+    private string _provider = "LocalOCR", _model = "tesseract-ara-eng", _newApiKey = string.Empty, _status = string.Empty;
     private bool _busy;
     public InvoiceAiSettingsViewModel(IInvoiceAiSettingsStore store, IInvoiceAiConnectionTester tester, ICurrentUserService user)
     {
         _store = store; _tester = tester; _user = user;
         SaveCommand = new RelayCommand(Save, () => CanEdit);
         TestCommand = new AsyncRelayCommand(TestAsync, () => CanEdit);
-        RemoveKeyCommand = new RelayCommand(RemoveKey, () => CanEdit && (HasSavedKey || NewApiKey.Length > 0));
+        RemoveKeyCommand = new RelayCommand(RemoveKey, () => CanEdit && !IsLocalOcr && (HasSavedKey || NewApiKey.Length > 0));
     }
-    public IReadOnlyList<string> Providers { get; } = new[] { "Gemini", "OpenAI" };
+    public IReadOnlyList<InvoiceAiProviderOption> Providers { get; } = new[] { new InvoiceAiProviderOption("LocalOCR", "OCR محلي — مجاني بدون إنترنت"), new("Gemini", "Gemini"), new("OpenAI", "OpenAI") };
+    public bool IsLocalOcr => Provider == "LocalOCR";
+    public bool UsesApi => !IsLocalOcr;
+    public string TestButtonText => IsLocalOcr ? "اختبار OCR المحلي" : "اختبار الاتصال";
     public bool CanManage => _user.HasPermission("Branches.Manage") || _user.HasPermission("Purchasing.ManageInvoices");
     public bool CanEdit => CanManage && !IsBusy;
     public bool IsBusy { get => _busy; private set { if (SetProperty(ref _busy, value)) { OnPropertyChanged(nameof(CanEdit)); System.Windows.Input.CommandManager.InvalidateRequerySuggested(); } } }
@@ -29,10 +34,11 @@ public sealed class InvoiceAiSettingsViewModel : ViewModelBase
         set
         {
             if (!SetProperty(ref _provider, value)) return;
-            Model = value == "OpenAI" ? "gpt-4.1-mini" : "gemini-2.5-flash";
+            Model = value == "LocalOCR" ? "tesseract-ara-eng" : value == "OpenAI" ? "gpt-4.1-mini" : "gemini-2.5-flash";
+            OnPropertyChanged(nameof(IsLocalOcr)); OnPropertyChanged(nameof(UsesApi)); OnPropertyChanged(nameof(TestButtonText));
             NewApiKey = string.Empty; ClearPasswordRequested?.Invoke(this, EventArgs.Empty);
             OnPropertyChanged(nameof(HasSavedKey)); OnPropertyChanged(nameof(KeyStatus));
-            StatusMessage = "أدخل مفتاح الخدمة المختارة ثم اختبر الاتصال واحفظ الإعدادات.";
+            StatusMessage = IsLocalOcr ? "OCR يعمل محلياً دون مفتاح أو رصيد. اختبر المكونات ثم احفظ." : "أدخل مفتاح الخدمة المختارة ثم اختبر الاتصال واحفظ الإعدادات.";
         }
     }
     public string Model { get => _model; set => SetProperty(ref _model, value); }
@@ -55,16 +61,16 @@ public sealed class InvoiceAiSettingsViewModel : ViewModelBase
         {
             _saved = _store.Load();
             if (_saved is not null) { _provider = _saved.Provider; _model = _saved.Model; }
-            StatusMessage = _saved is null ? "أضف مفتاحك مرة واحدة داخل التطبيق لتفعيل قراءة الصور." : "الإعدادات المحفوظة تُستخدم مباشرة عند تحليل الفاتورة.";
+            StatusMessage = _saved is null ? "اختر OCR المحلي المجاني، أو أضف مفتاح خدمة سحابية." : "الإعدادات المحفوظة تُستخدم مباشرة عند تحليل الفاتورة.";
         }
-        catch (Exception) { StatusMessage = "تعذر تحميل الإعدادات المحفوظة؛ أدخل المفتاح واحفظه من جديد."; }
+        catch (Exception) { StatusMessage = "تعذر تحميل الإعدادات المحفوظة؛ اختر الخدمة واحفظ إعداداتها من جديد."; }
         NewApiKey = string.Empty; OnPropertyChanged(string.Empty);
     }
 
     private InvoiceAiSettings Draft() => new()
     {
         Provider = Provider, Model = Model.Trim(),
-        ApiKey = string.IsNullOrWhiteSpace(NewApiKey) ? (HasSavedKey ? _saved!.ApiKey : string.Empty) : NewApiKey.Trim()
+        ApiKey = IsLocalOcr ? string.Empty : string.IsNullOrWhiteSpace(NewApiKey) ? (HasSavedKey ? _saved!.ApiKey : string.Empty) : NewApiKey.Trim()
     };
     public void Save()
     {
@@ -72,7 +78,7 @@ public sealed class InvoiceAiSettingsViewModel : ViewModelBase
         try
         {
             var settings = Draft();
-            if (string.IsNullOrWhiteSpace(settings.ApiKey)) { StatusMessage = "أدخل مفتاح الخدمة قبل الحفظ."; SaveCompleted?.Invoke(this, new(false, StatusMessage)); return; }
+            if (!IsLocalOcr && string.IsNullOrWhiteSpace(settings.ApiKey)) { StatusMessage = "أدخل مفتاح الخدمة قبل الحفظ."; SaveCompleted?.Invoke(this, new(false, StatusMessage)); return; }
             _store.Save(settings); _saved = settings;
             Saved("تم حفظ إعدادات قراءة الصور بنجاح. ستُطبق على التحليل القادم مباشرة.");
         }
@@ -80,7 +86,7 @@ public sealed class InvoiceAiSettingsViewModel : ViewModelBase
     }
     public void RemoveKey()
     {
-        if (!CanEdit) return;
+        if (!CanEdit || IsLocalOcr) return;
         try
         {
             var settings = new InvoiceAiSettings { Provider = Provider, Model = Model.Trim() };
@@ -99,13 +105,13 @@ public sealed class InvoiceAiSettingsViewModel : ViewModelBase
     {
         if (!CanEdit) return;
         var draft = Draft();
-        if (string.IsNullOrWhiteSpace(draft.ApiKey)) { StatusMessage = "أدخل مفتاح الخدمة أولاً."; return; }
-        IsBusy = true; StatusMessage = "جارٍ التحقق من المفتاح وتوفر النموذج...";
+        if (!IsLocalOcr && string.IsNullOrWhiteSpace(draft.ApiKey)) { StatusMessage = "أدخل مفتاح الخدمة أولاً."; return; }
+        IsBusy = true; StatusMessage = IsLocalOcr ? "جارٍ اختبار محرك OCR وملفات اللغة..." : "جارٍ التحقق من المفتاح وتوفر النموذج...";
         try
         {
             var result = await _tester.TestAsync(draft);
             StatusMessage = result.Succeeded
-                ? "نجح الاتصال وتحقق النموذج. الاختبار لا يرسل فاتورة؛ حدود الاستخدام قد تؤثر على التحليل لاحقاً. اضغط حفظ لتطبيق التغييرات."
+                ? IsLocalOcr ? "محرك OCR المحلي وملفات العربية والإنجليزية جاهزة. اضغط حفظ ثم جرّب صورة واضحة؛ راجع النتائج قبل الاستلام." : "نجح الاتصال وتحقق النموذج. الاختبار لا يرسل فاتورة؛ حدود الاستخدام قد تؤثر على التحليل لاحقاً. اضغط حفظ لتطبيق التغييرات."
                 : result.Errors.FirstOrDefault() ?? "تعذر اختبار الاتصال.";
         }
         catch (Exception) { StatusMessage = "تعذر اختبار الاتصال؛ راجع الإنترنت وإعدادات الخدمة."; }

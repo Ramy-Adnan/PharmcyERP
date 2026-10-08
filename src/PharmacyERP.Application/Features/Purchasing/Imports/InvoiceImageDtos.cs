@@ -8,6 +8,7 @@ public sealed record InvoiceImageInput(string FileName, string MimeType, byte[] 
 public interface IInvoiceImageReader
 {
     string ProviderName => "خدمة قراءة الصور";
+    bool ProcessesLocally => false;
     Task<Result<InvoiceImageDocument>> ReadAsync(InvoiceImageInput image, CancellationToken cancellationToken = default);
 }
 public sealed class InvoiceImageDocument
@@ -21,6 +22,7 @@ public sealed class InvoiceImageDocument
     [JsonPropertyName("lines")] public List<InvoiceImageLine> Lines { get; set; } = new();
     [JsonIgnore] public string SourceHash { get; set; } = string.Empty;
     [JsonIgnore] public string SourceFileName { get; set; } = string.Empty;
+    [JsonIgnore] public string? RawOcrText { get; set; }
 }
 public sealed class InvoiceImageLine
 {

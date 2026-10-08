@@ -53,4 +53,8 @@
     <Compile Include="../../src/PharmacyERP.WPF/ViewModels/Purchasing/SupplierEditViewModel.cs" Link="Purchasing/SupplierEditViewModel.cs" />
     <Compile Include="../../src/PharmacyERP.WPF/ViewModels/Purchasing/GoodsReceiptEditViewModel.cs" Link="Pricing/GoodsReceiptEditViewModel.cs" />
   </ItemGroup>
+
+  <ItemGroup>
+    <None Update="Fixtures/local-ocr-invoice.png" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

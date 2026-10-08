@@ -17,7 +17,7 @@ public sealed class InvoiceImageImportViewModel : ViewModelBase
     private Guid _requestId;
     private InvoiceImageDocument? _document;
     private CancellationTokenSource? _reading;
-    public InvoiceImageImportViewModel(IInvoiceImageReader reader, IPurchaseImageImportService import, IInventoryService inventory, PharmacyERP.Application.Common.Interfaces.ICurrentUserService? user = null) { _reader = reader; _import = import; _inventory = inventory; _user = user; Message = $"اختر صورة فاتورة واحدة واضحة. تُرسل الصورة إلى {reader.ProviderName} للتحليل، ثم تراجع النتائج قبل الاستلام."; }
+    public InvoiceImageImportViewModel(IInvoiceImageReader reader, IPurchaseImageImportService import, IInventoryService inventory, PharmacyERP.Application.Common.Interfaces.ICurrentUserService? user = null) { _reader = reader; _import = import; _inventory = inventory; _user = user; Message = reader.ProcessesLocally ? "اختر صورة فاتورة واحدة واضحة. OCR يقرأ الصورة على جهازك دون إنترنت أو رصيد. راجع النتائج قبل الاستلام." : $"اختر صورة فاتورة واحدة واضحة. تُرسل الصورة إلى {reader.ProviderName} للتحليل، ثم تراجع النتائج قبل الاستلام."; }
     public async Task InitializeAsync(int supplierId, int branchId, int warehouseId)
     {
         _supplierId = supplierId; _branchId = branchId; _warehouseId = warehouseId;
@@ -35,6 +35,8 @@ public sealed class InvoiceImageImportViewModel : ViewModelBase
     public bool CanSave => !IsBusy && _document is not null;
     private string _message = string.Empty;
     public string Message { get => _message; set => SetProperty(ref _message, value); }
+    public string RecognizedText => _document?.RawOcrText ?? string.Empty;
+    public bool HasRecognizedText => !string.IsNullOrWhiteSpace(RecognizedText);
     public string PhotoInformation => _document is null ? "" : $"{_document.SourceFileName} · المورد المقروء: {_document.SupplierName} · العملة: {_document.Currency} · {_document.Notes}";
     public int? SavedReceiptId { get; private set; }
     private string _invoiceNumber = "";
@@ -72,12 +74,24 @@ public sealed class InvoiceImageImportViewModel : ViewModelBase
                 if (baseName is not null && selectedBase == baseName) row.BaseUnitsPerReceiveUnit = line.DeclaredUnitCount;
                 row.PropertyChanged += (_, _) => OnPropertyChanged(nameof(ComputedTotal)); Lines.Add(row);
             }
-            OnPropertyChanged(nameof(PhotoInformation)); OnPropertyChanged(nameof(ComputedTotal));
-            Message = "راجع كل سطر وحدّد وحدة المخزون وعدد الأجزاء والدفعة والصلاحية، ثم ضع علامة «راجعت». لا تعني 20 Tab عشرين شريطاً. البونص يزيد المخزون فقط. المطابقة المحتملة تحتاج اختياراً صريحاً. المورد المستخدم هو الذي اخترته في مسار المشتريات.";
+            OnPropertyChanged(nameof(PhotoInformation)); OnPropertyChanged(nameof(ComputedTotal)); OnPropertyChanged(nameof(RecognizedText)); OnPropertyChanged(nameof(HasRecognizedText));
+            Message = doc.Lines.Count == 0 ? "قرأ OCR النص دون تحديد جدول المنتجات. اعرض النص المقروء والصورة، ثم أضف أسطر المراجعة يدوياً. لم يُضف مخزون." : "راجع كل سطر وحدّد وحدة المخزون وعدد الأجزاء والدفعة والصلاحية، ثم ضع علامة «راجعت». لا تعني 20 Tab عشرين شريطاً. البونص يزيد المخزون فقط. المطابقة المحتملة تحتاج اختياراً صريحاً. المورد المستخدم هو الذي اخترته في مسار المشتريات.";
         }
         catch (OperationCanceledException) { Message = "أُلغيت القراءة. لم يُضف مخزون."; }
         catch (Exception) { Message = "تعذرت قراءة الصورة أو المطابقة؛ لم يُعتمد استلام. حاول مجدداً."; }
         finally { _reading.Dispose(); _reading = null; IsBusy = false; }
+    }
+    public void AddManualLine()
+    {
+        if (IsBusy || _document is null) return;
+        var row = new InvoiceImageReviewRow { SourceName = "سطر مراجعة يدوي", MatchHint = "اختر صنفاً موجوداً أو أكمل بطاقة جديدة من الصورة", Items = Items, Units = Units, Categories = Categories, PurchaseType = PurchaseType };
+        row.PropertyChanged += (_, _) => OnPropertyChanged(nameof(ComputedTotal)); Lines.Add(row);
+        OnPropertyChanged(nameof(ComputedTotal));
+    }
+    public void RemoveReviewLine(InvoiceImageReviewRow row)
+    {
+        if (IsBusy) return;
+        Lines.Remove(row); OnPropertyChanged(nameof(ComputedTotal));
     }
     public async Task AddBaseUnitAsync(string name)
     {

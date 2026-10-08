@@ -51,6 +51,14 @@ public partial class InvoiceImageImportDialog : Window
         catch (NotSupportedException) { _vm.Message = "معاينة هذه الصورة غير مدعومة في Windows؛ استخدم JPG أو PNG أو راجع الملف الأصلي."; }
         catch (Exception) { _vm.Message = "تعذر عرض المعاينة؛ راجع الصورة الأصلية."; }
     }
+    private void AddManualLine(object sender, RoutedEventArgs e)
+    {
+        _vm.AddManualLine(); if (_vm.Lines.Count > 0) Rows.SelectedIndex = _vm.Lines.Count - 1;
+    }
+    private void RemoveLine(object sender, RoutedEventArgs e)
+    {
+        if (Rows.SelectedItem is InvoiceImageReviewRow row) _vm.RemoveReviewLine(row);
+    }
     private void CancelRead(object sender, RoutedEventArgs e) => _vm.CancelReading();
     private void CloseDialog(object sender, RoutedEventArgs e) { if (!_vm.IsBusy) DialogResult = false; }
     private async void SaveReviewed(object sender, RoutedEventArgs e)

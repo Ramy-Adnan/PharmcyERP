@@ -9,11 +9,13 @@ namespace PharmacyERP.Infrastructure.Services.Imports;
 public sealed class InvoiceAiConnectionTester : IInvoiceAiConnectionTester, IDisposable
 {
     private readonly HttpClient _http;
-    public InvoiceAiConnectionTester(HttpClient http) => _http = http;
+    private readonly ILocalInvoiceOcr _localOcr;
+    public InvoiceAiConnectionTester(HttpClient http, ILocalInvoiceOcr? localOcr = null) { _http = http; _localOcr = localOcr ?? new TesseractInvoiceOcr(); }
     public async Task<Result> TestAsync(InvoiceAiSettings settings, CancellationToken cancellationToken = default)
     {
         try { EncryptedInvoiceAiSettingsStore.Validate(settings); }
         catch (InvalidOperationException ex) { return Result.Failure(ex.Message); }
+        if (settings.Provider == "LocalOCR") return await _localOcr.CheckAsync(cancellationToken);
         if (string.IsNullOrWhiteSpace(settings.ApiKey)) return Result.Failure("أدخل مفتاح الخدمة أولاً.");
         var gemini = settings.Provider == "Gemini";
         using var request = new HttpRequestMessage(HttpMethod.Get, gemini
