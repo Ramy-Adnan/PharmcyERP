@@ -7,6 +7,7 @@ namespace PharmacyERP.Application.Features.Purchasing.Imports;
 public sealed record InvoiceImageInput(string FileName, string MimeType, byte[] Content);
 public interface IInvoiceImageReader
 {
+    string ProviderName => "خدمة قراءة الصور";
     Task<Result<InvoiceImageDocument>> ReadAsync(InvoiceImageInput image, CancellationToken cancellationToken = default);
 }
 public sealed class InvoiceImageDocument

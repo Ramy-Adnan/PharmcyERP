@@ -17,7 +17,7 @@ public sealed class InvoiceImageImportViewModel : ViewModelBase
     private Guid _requestId;
     private InvoiceImageDocument? _document;
     private CancellationTokenSource? _reading;
-    public InvoiceImageImportViewModel(IInvoiceImageReader reader, IPurchaseImageImportService import, IInventoryService inventory, PharmacyERP.Application.Common.Interfaces.ICurrentUserService? user = null) { _reader = reader; _import = import; _inventory = inventory; _user = user; }
+    public InvoiceImageImportViewModel(IInvoiceImageReader reader, IPurchaseImageImportService import, IInventoryService inventory, PharmacyERP.Application.Common.Interfaces.ICurrentUserService? user = null) { _reader = reader; _import = import; _inventory = inventory; _user = user; Message = $"اختر صورة فاتورة واحدة واضحة. تُرسل الصورة إلى {reader.ProviderName} للتحليل، ثم تراجع النتائج قبل الاستلام."; }
     public async Task InitializeAsync(int supplierId, int branchId, int warehouseId)
     {
         _supplierId = supplierId; _branchId = branchId; _warehouseId = warehouseId;
@@ -33,7 +33,7 @@ public sealed class InvoiceImageImportViewModel : ViewModelBase
     public bool IsBusy { get => _isBusy; private set { if (SetProperty(ref _isBusy, value)) { OnPropertyChanged(nameof(CanEdit)); OnPropertyChanged(nameof(CanSave)); } } }
     public bool CanEdit => !IsBusy;
     public bool CanSave => !IsBusy && _document is not null;
-    private string _message = "اختر صورة فاتورة واحدة واضحة. تُرسل الصورة إلى OpenAI للتحليل، ثم تراجع النتائج قبل الاستلام. تحتاج خدمة API مفعّلة.";
+    private string _message = string.Empty;
     public string Message { get => _message; set => SetProperty(ref _message, value); }
     public string PhotoInformation => _document is null ? "" : $"{_document.SourceFileName} · المورد المقروء: {_document.SupplierName} · العملة: {_document.Currency} · {_document.Notes}";
     public int? SavedReceiptId { get; private set; }
