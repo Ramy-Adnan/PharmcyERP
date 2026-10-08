@@ -25,10 +25,10 @@ public class SuppliersViewModel : ViewModelBase
 
         Suppliers = new ObservableCollection<SupplierDto>();
 
-        RefreshCommand = new AsyncRelayCommand(LoadSuppliersAsync);
-        AddSupplierCommand = new AsyncRelayCommand(AddSupplierAsync, () => CanManage);
-        EditSupplierCommand = new AsyncRelayCommand(EditSupplierAsync, () => CanManage && SelectedSupplier is not null);
-        ToggleStatusCommand = new AsyncRelayCommand(ToggleStatusAsync, () => CanManage && SelectedSupplier is not null);
+        RefreshCommand = new AsyncRelayCommand(LoadSuppliersAsync, () => !IsBusy);
+        AddSupplierCommand = new AsyncRelayCommand(AddSupplierAsync, () => !IsBusy && CanManage);
+        EditSupplierCommand = new AsyncRelayCommand(EditSupplierAsync, () => !IsBusy && CanManage && SelectedSupplier is not null);
+        ToggleStatusCommand = new AsyncRelayCommand(ToggleStatusAsync, () => !IsBusy && CanManage && SelectedSupplier is not null);
     }
 
     public bool CanManage => _currentUserService.HasPermission("Purchasing.ManageSuppliers");
@@ -45,7 +45,11 @@ public class SuppliersViewModel : ViewModelBase
         }
     }
 
-    public bool IsBusy { get => _isBusy; set => SetProperty(ref _isBusy, value); }
+    public bool IsBusy
+    {
+        get => _isBusy;
+        set { if (SetProperty(ref _isBusy, value)) System.Windows.Input.CommandManager.InvalidateRequerySuggested(); }
+    }
 
     public AsyncRelayCommand RefreshCommand { get; }
     public AsyncRelayCommand AddSupplierCommand { get; }
@@ -56,6 +60,7 @@ public class SuppliersViewModel : ViewModelBase
 
     private async Task LoadSuppliersAsync()
     {
+        if (IsBusy) return;
         IsBusy = true;
         try
         {

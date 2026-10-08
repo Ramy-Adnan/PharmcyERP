@@ -27,6 +27,7 @@
     <Compile Include="../../src/PharmacyERP.WPF/MVVM/AsyncRelayCommand.cs" Link="POS/AsyncRelayCommand.cs" />
     <Compile Include="../../src/PharmacyERP.WPF/ViewModels/Sales/POSLineRow.cs" Link="POS/POSLineRow.cs" />
     <Compile Include="../../src/PharmacyERP.WPF/ViewModels/Sales/POSViewModel.cs" Link="POS/POSViewModel.cs" />
+    <Compile Include="../../src/PharmacyERP.WPF/Services/ViewDataScope.cs" Link="Purchasing/ViewDataScope.cs" />
     <Compile Include="../../src/PharmacyERP.WPF/Services/IReceiptPrinter.cs" Link="POS/IReceiptPrinter.cs" />
     <Compile Include="../../src/PharmacyERP.WPF/Services/ReceiptSettings.cs" Link="Receipts/ReceiptSettings.cs" />
     <Compile Include="../../src/PharmacyERP.WPF/Services/ReceiptSettingsStore.cs" Link="Receipts/ReceiptSettingsStore.cs" />

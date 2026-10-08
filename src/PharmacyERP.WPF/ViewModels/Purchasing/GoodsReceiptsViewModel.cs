@@ -26,11 +26,11 @@ public class GoodsReceiptsViewModel : ViewModelBase
 
         Notes = new ObservableCollection<GoodsReceiptNoteDto>();
 
-        RefreshCommand = new AsyncRelayCommand(LoadNotesAsync);
-        AddNoteCommand = new AsyncRelayCommand(AddNoteAsync, () => CanReceive);
-        EditNoteCommand = new AsyncRelayCommand(EditNoteAsync, () => CanReceive && SelectedNote is not null && SelectedNote.Status == GoodsReceiptStatus.Draft);
-        PostNoteCommand = new AsyncRelayCommand(PostNoteAsync, () => CanReceive && SelectedNote is not null && SelectedNote.Status == GoodsReceiptStatus.Draft);
-        DeleteNoteCommand = new AsyncRelayCommand(DeleteNoteAsync, () => CanReceive && SelectedNote is not null && SelectedNote.Status == GoodsReceiptStatus.Draft);
+        RefreshCommand = new AsyncRelayCommand(LoadNotesAsync, () => !IsBusy);
+        AddNoteCommand = new AsyncRelayCommand(AddNoteAsync, () => !IsBusy && CanReceive);
+        EditNoteCommand = new AsyncRelayCommand(EditNoteAsync, () => !IsBusy && CanReceive && SelectedNote is not null && SelectedNote.Status == GoodsReceiptStatus.Draft);
+        PostNoteCommand = new AsyncRelayCommand(PostNoteAsync, () => !IsBusy && CanReceive && SelectedNote is not null && SelectedNote.Status == GoodsReceiptStatus.Draft);
+        DeleteNoteCommand = new AsyncRelayCommand(DeleteNoteAsync, () => !IsBusy && CanReceive && SelectedNote is not null && SelectedNote.Status == GoodsReceiptStatus.Draft);
     }
 
     public bool CanReceive => _currentUserService.HasPermission("Purchasing.ReceiveGoods");
@@ -47,7 +47,11 @@ public class GoodsReceiptsViewModel : ViewModelBase
         }
     }
 
-    public bool IsBusy { get => _isBusy; set => SetProperty(ref _isBusy, value); }
+    public bool IsBusy
+    {
+        get => _isBusy;
+        set { if (SetProperty(ref _isBusy, value)) System.Windows.Input.CommandManager.InvalidateRequerySuggested(); }
+    }
 
     public AsyncRelayCommand RefreshCommand { get; }
     public AsyncRelayCommand AddNoteCommand { get; }
@@ -59,6 +63,7 @@ public class GoodsReceiptsViewModel : ViewModelBase
 
     private async Task LoadNotesAsync()
     {
+        if (IsBusy) return;
         IsBusy = true;
         try
         {

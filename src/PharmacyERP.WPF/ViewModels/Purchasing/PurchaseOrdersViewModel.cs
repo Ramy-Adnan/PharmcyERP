@@ -26,12 +26,12 @@ public class PurchaseOrdersViewModel : ViewModelBase
 
         Orders = new ObservableCollection<PurchaseOrderDto>();
 
-        RefreshCommand = new AsyncRelayCommand(LoadOrdersAsync);
-        AddOrderCommand = new AsyncRelayCommand(AddOrderAsync, () => CanManage);
-        EditOrderCommand = new AsyncRelayCommand(EditOrderAsync, () => CanManage && SelectedOrder is not null && SelectedOrder.Status == PurchaseOrderStatus.Draft);
-        SubmitOrderCommand = new AsyncRelayCommand(SubmitOrderAsync, () => CanManage && SelectedOrder is not null && SelectedOrder.Status == PurchaseOrderStatus.Draft);
-        CancelOrderCommand = new AsyncRelayCommand(CancelOrderAsync, () => CanManage && SelectedOrder is not null && SelectedOrder.Status is PurchaseOrderStatus.Draft or PurchaseOrderStatus.Submitted or PurchaseOrderStatus.PartiallyReceived);
-        DeleteOrderCommand = new AsyncRelayCommand(DeleteOrderAsync, () => CanManage && SelectedOrder is not null && SelectedOrder.Status == PurchaseOrderStatus.Draft);
+        RefreshCommand = new AsyncRelayCommand(LoadOrdersAsync, () => !IsBusy);
+        AddOrderCommand = new AsyncRelayCommand(AddOrderAsync, () => !IsBusy && CanManage);
+        EditOrderCommand = new AsyncRelayCommand(EditOrderAsync, () => !IsBusy && CanManage && SelectedOrder is not null && SelectedOrder.Status == PurchaseOrderStatus.Draft);
+        SubmitOrderCommand = new AsyncRelayCommand(SubmitOrderAsync, () => !IsBusy && CanManage && SelectedOrder is not null && SelectedOrder.Status == PurchaseOrderStatus.Draft);
+        CancelOrderCommand = new AsyncRelayCommand(CancelOrderAsync, () => !IsBusy && CanManage && SelectedOrder is not null && SelectedOrder.Status is PurchaseOrderStatus.Draft or PurchaseOrderStatus.Submitted or PurchaseOrderStatus.PartiallyReceived);
+        DeleteOrderCommand = new AsyncRelayCommand(DeleteOrderAsync, () => !IsBusy && CanManage && SelectedOrder is not null && SelectedOrder.Status == PurchaseOrderStatus.Draft);
     }
 
     public bool CanManage => _currentUserService.HasPermission("Purchasing.ManageOrders");
@@ -48,7 +48,11 @@ public class PurchaseOrdersViewModel : ViewModelBase
         }
     }
 
-    public bool IsBusy { get => _isBusy; set => SetProperty(ref _isBusy, value); }
+    public bool IsBusy
+    {
+        get => _isBusy;
+        set { if (SetProperty(ref _isBusy, value)) System.Windows.Input.CommandManager.InvalidateRequerySuggested(); }
+    }
 
     public AsyncRelayCommand RefreshCommand { get; }
     public AsyncRelayCommand AddOrderCommand { get; }
@@ -61,6 +65,7 @@ public class PurchaseOrdersViewModel : ViewModelBase
 
     private async Task LoadOrdersAsync()
     {
+        if (IsBusy) return;
         IsBusy = true;
         try
         {

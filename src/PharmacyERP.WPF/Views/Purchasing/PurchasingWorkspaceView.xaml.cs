@@ -10,19 +10,48 @@ using PharmacyERP.WPF.Services;
 
 namespace PharmacyERP.WPF.Views.Purchasing;
 
-public partial class PurchasingWorkspaceView : UserControl
+public partial class PurchasingWorkspaceView : UserControl, IDisposable
 {
     private readonly IDialogService _dialogs;
-    public PurchasingWorkspaceView(PurchasingWorkspaceViewModel viewModel, IServiceProvider services)
+    private readonly List<ViewDataScope> _dataScopes = new();
+
+    public PurchasingWorkspaceView(IServiceScopeFactory scopeFactory)
     {
-        InitializeComponent(); DataContext = viewModel;
-        _dialogs = services.GetRequiredService<IDialogService>();
-        // Resolve only the history pages the user's permissions allow.
-        if (viewModel.CanManageSuppliers) SuppliersHistory.Content = services.GetRequiredService<SuppliersView>();
-        if (viewModel.CanManageOrders) OrdersHistory.Content = services.GetRequiredService<PurchaseOrdersView>();
-        if (viewModel.CanReceiveGoods) ReceiptsHistory.Content = services.GetRequiredService<GoodsReceiptsView>();
-        if (viewModel.CanManageInvoices) InvoicesHistory.Content = services.GetRequiredService<PurchaseInvoicesView>();
-        Loaded += async (_, _) => await viewModel.InitializeAsync();
+        try
+        {
+            // WPF raises Loaded for embedded history pages as well as the wizard.
+            // Give each page its own context instead of resolving all of them from
+            // the application's long-lived scope.
+            var workspaceServices = CreateDataScope(scopeFactory);
+            var viewModel = workspaceServices.GetRequiredService<PurchasingWorkspaceViewModel>();
+            InitializeComponent(); DataContext = viewModel;
+            _dialogs = workspaceServices.GetRequiredService<IDialogService>();
+            if (viewModel.CanManageSuppliers) SuppliersHistory.Content = CreateDataScope(scopeFactory).GetRequiredService<SuppliersView>();
+            if (viewModel.CanManageOrders) OrdersHistory.Content = CreateDataScope(scopeFactory).GetRequiredService<PurchaseOrdersView>();
+            if (viewModel.CanReceiveGoods) ReceiptsHistory.Content = CreateDataScope(scopeFactory).GetRequiredService<GoodsReceiptsView>();
+            if (viewModel.CanManageInvoices) InvoicesHistory.Content = CreateDataScope(scopeFactory).GetRequiredService<PurchaseInvoicesView>();
+            Loaded += async (_, _) => await viewModel.InitializeAsync();
+        }
+        catch
+        {
+            Dispose();
+            throw;
+        }
+    }
+
+    private IServiceProvider CreateDataScope(IServiceScopeFactory factory)
+    {
+        var scope = new ViewDataScope(factory);
+        _dataScopes.Add(scope);
+        return scope.Services;
+    }
+
+    // DI disposes the view with the owning application scope. Do not dispose on
+    // Unloaded: tab changes can unload a page while its async query is running.
+    public void Dispose()
+    {
+        foreach (var scope in _dataScopes.AsEnumerable().Reverse()) scope.Dispose();
+        _dataScopes.Clear();
     }
 
     private async void ImportPhotoClicked(object sender, RoutedEventArgs e)

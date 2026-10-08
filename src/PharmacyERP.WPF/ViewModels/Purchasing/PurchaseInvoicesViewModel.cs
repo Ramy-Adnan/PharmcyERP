@@ -26,12 +26,12 @@ public class PurchaseInvoicesViewModel : ViewModelBase
 
         Invoices = new ObservableCollection<PurchaseInvoiceDto>();
 
-        RefreshCommand = new AsyncRelayCommand(LoadInvoicesAsync);
-        AddInvoiceCommand = new AsyncRelayCommand(AddInvoiceAsync, () => CanManage);
+        RefreshCommand = new AsyncRelayCommand(LoadInvoicesAsync, () => !IsBusy);
+        AddInvoiceCommand = new AsyncRelayCommand(AddInvoiceAsync, () => !IsBusy && CanManage);
         RecordPaymentCommand = new AsyncRelayCommand(RecordPaymentAsync,
-            () => CanManage && SelectedInvoice is not null && SelectedInvoice.Status is PurchaseInvoiceStatus.Unpaid or PurchaseInvoiceStatus.PartiallyPaid);
+            () => !IsBusy && CanManage && SelectedInvoice is not null && SelectedInvoice.Status is PurchaseInvoiceStatus.Unpaid or PurchaseInvoiceStatus.PartiallyPaid);
         CancelInvoiceCommand = new AsyncRelayCommand(CancelInvoiceAsync,
-            () => CanManage && SelectedInvoice is not null && SelectedInvoice.Status is PurchaseInvoiceStatus.Unpaid or PurchaseInvoiceStatus.PartiallyPaid);
+            () => !IsBusy && CanManage && SelectedInvoice is not null && SelectedInvoice.Status is PurchaseInvoiceStatus.Unpaid or PurchaseInvoiceStatus.PartiallyPaid);
     }
 
     public bool CanManage => _currentUserService.HasPermission("Purchasing.ManageInvoices");
@@ -48,7 +48,11 @@ public class PurchaseInvoicesViewModel : ViewModelBase
         }
     }
 
-    public bool IsBusy { get => _isBusy; set => SetProperty(ref _isBusy, value); }
+    public bool IsBusy
+    {
+        get => _isBusy;
+        set { if (SetProperty(ref _isBusy, value)) System.Windows.Input.CommandManager.InvalidateRequerySuggested(); }
+    }
 
     public AsyncRelayCommand RefreshCommand { get; }
     public AsyncRelayCommand AddInvoiceCommand { get; }
@@ -59,6 +63,7 @@ public class PurchaseInvoicesViewModel : ViewModelBase
 
     private async Task LoadInvoicesAsync()
     {
+        if (IsBusy) return;
         IsBusy = true;
         try
         {

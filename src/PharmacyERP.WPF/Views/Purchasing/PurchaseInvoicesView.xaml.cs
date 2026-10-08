@@ -1,3 +1,4 @@
+using System.Windows;
 using System.Windows.Controls;
 using PharmacyERP.WPF.ViewModels.Purchasing;
 
@@ -9,6 +10,14 @@ public partial class PurchaseInvoicesView : UserControl
     {
         InitializeComponent();
         DataContext = viewModel;
-        Loaded += async (_, _) => await viewModel.InitializeAsync();
+        Loaded += async (_, _) =>
+        {
+            try { await viewModel.InitializeAsync(); }
+            catch (Exception ex)
+            {
+                if (IsLoaded) MessageBox.Show("تعذر تحميل السجلات. راجع الاتصال ثم اضغط تحديث. " + ex.Message,
+                    "تحميل المشتريات", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        };
     }
 }
