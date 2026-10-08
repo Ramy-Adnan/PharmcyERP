@@ -8,6 +8,7 @@ using PharmacyERP.Application.Features.Inventory.DTOs;
 using PharmacyERP.Application.Features.Purchasing;
 using PharmacyERP.Application.Features.Purchasing.DTOs;
 using PharmacyERP.Domain.Entities;
+using PharmacyERP.Domain.Common;
 using PharmacyERP.Domain.Enums;
 
 namespace PharmacyERP.Infrastructure.Services;
@@ -184,6 +185,7 @@ public class PurchasingService : IPurchasingService
                 ItemId = i.ItemId,
                 QuantityOrdered = i.QuantityOrdered,
                 UnitCost = i.UnitCost,
+                SalePrice = i.SalePrice,
                 TaxRatePercent = i.TaxRatePercent
             }).ToList()
         };
@@ -223,6 +225,7 @@ public class PurchasingService : IPurchasingService
                 ItemId = line.ItemId,
                 QuantityOrdered = line.QuantityOrdered,
                 UnitCost = line.UnitCost,
+                SalePrice = line.SalePrice ?? SalePricePolicy.FromPurchasePrice(line.UnitCost),
                 TaxRatePercent = line.TaxRatePercent
             });
         }
@@ -266,6 +269,7 @@ public class PurchasingService : IPurchasingService
                 ItemId = line.ItemId,
                 QuantityOrdered = line.QuantityOrdered,
                 UnitCost = line.UnitCost,
+                SalePrice = line.SalePrice ?? SalePricePolicy.FromPurchasePrice(line.UnitCost),
                 TaxRatePercent = line.TaxRatePercent
             });
         }
@@ -406,7 +410,7 @@ public class PurchasingService : IPurchasingService
                 ExpiryDate = line.ExpiryDate,
                 QuantityReceived = line.QuantityReceived,
                 UnitCost = line.UnitCost,
-                SalePrice = line.SalePrice
+                SalePrice = line.SalePrice ?? SalePricePolicy.FromPurchasePrice(line.UnitCost)
             });
         }
 
@@ -448,7 +452,7 @@ public class PurchasingService : IPurchasingService
                 ExpiryDate = line.ExpiryDate,
                 QuantityReceived = line.QuantityReceived,
                 UnitCost = line.UnitCost,
-                SalePrice = line.SalePrice
+                SalePrice = line.SalePrice ?? SalePricePolicy.FromPurchasePrice(line.UnitCost)
             });
         }
 
@@ -774,6 +778,7 @@ public class PurchasingService : IPurchasingService
         if (!dto.Lines.Any()) return "يجب إضافة صنف واحد على الأقل.";
         if (dto.Lines.Any(l => l.QuantityOrdered <= 0)) return "الكمية المطلوبة يجب أن تكون أكبر من صفر لكل صنف.";
         if (dto.Lines.Any(l => l.UnitCost < 0)) return "سعر الشراء لا يمكن أن يكون سالباً.";
+        if (dto.Lines.Any(l => l.SalePrice < 0)) return "سعر البيع لا يمكن أن يكون سالباً.";
 
         var supplierExists = await _context.Suppliers.AnyAsync(s => s.Id == dto.SupplierId, cancellationToken);
         if (!supplierExists) return "المورد المحدد غير موجود.";
@@ -809,6 +814,7 @@ public class PurchasingService : IPurchasingService
         QuantityReceived = i.QuantityReceived,
         QuantityOutstanding = i.QuantityOutstanding,
         UnitCost = i.UnitCost,
+        SalePrice = i.SalePrice ?? SalePricePolicy.FromPurchasePrice(i.UnitCost),
         TaxRatePercent = i.TaxRatePercent,
         LineTotal = i.LineTotal
     };

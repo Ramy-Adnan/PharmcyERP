@@ -92,7 +92,14 @@
                         </DataGridTemplateColumn>
                         <DataGridTextColumn Header="الكمية" Binding="{Binding QuantityReceived, UpdateSourceTrigger=PropertyChanged}" Width="80"/>
                         <DataGridTextColumn Header="سعر الشراء" Binding="{Binding UnitCost, UpdateSourceTrigger=PropertyChanged}" Width="90"/>
-                        <DataGridTextColumn Header="سعر البيع" Binding="{Binding SalePrice, UpdateSourceTrigger=PropertyChanged}" Width="90"/>
+                        <DataGridTextColumn Header="سعر البيع (+3%)" Binding="{Binding SalePrice, UpdateSourceTrigger=PropertyChanged}" Width="90"/>
+                        <DataGridTemplateColumn Header="إعادة" Width="55">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <Button Content="+3%" Command="{Binding CalculateSalePriceCommand}" ToolTip="إعادة سعر البيع إلى الشراء +3%" Padding="3,2"/>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
                         <DataGridTextColumn Header="الإجمالي" Binding="{Binding LineTotal, StringFormat=N2}" Width="100" IsReadOnly="True"/>
                     </DataGrid.Columns>
                 </DataGrid>

@@ -19,7 +19,7 @@ public class ItemUpsertDto
     public bool RequiresPrescription { get; set; }
     public bool IsControlledSubstance { get; set; }
 
-    public decimal DefaultSalePrice { get; set; }
+    public decimal? DefaultSalePrice { get; set; }
     public decimal DefaultPurchasePrice { get; set; }
     public decimal TaxRatePercent { get; set; }
 

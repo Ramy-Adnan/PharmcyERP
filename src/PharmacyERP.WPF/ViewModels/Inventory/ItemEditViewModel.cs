@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using PharmacyERP.Application.Features.Inventory;
 using PharmacyERP.Application.Features.Inventory.DTOs;
 using PharmacyERP.Domain.Enums;
+using PharmacyERP.Domain.Common;
 using PharmacyERP.WPF.MVVM;
 
 namespace PharmacyERP.WPF.ViewModels.Inventory;
@@ -49,6 +50,7 @@ public class ItemEditViewModel : ViewModelBase
         Forms = new ObservableCollection<ItemForm>(Enum.GetValues<ItemForm>());
 
         SaveCommand = new AsyncRelayCommand(SaveAsync, () => !IsBusy);
+        CalculateSalePriceCommand = new RelayCommand(() => DefaultSalePrice = SalePricePolicy.FromPurchasePrice(DefaultPurchasePrice));
     }
 
     public bool IsEditMode => _id.HasValue;
@@ -71,7 +73,15 @@ public class ItemEditViewModel : ViewModelBase
     public bool RequiresPrescription { get => _requiresPrescription; set => SetProperty(ref _requiresPrescription, value); }
     public bool IsControlledSubstance { get => _isControlledSubstance; set => SetProperty(ref _isControlledSubstance, value); }
     public decimal DefaultSalePrice { get => _defaultSalePrice; set => SetProperty(ref _defaultSalePrice, value); }
-    public decimal DefaultPurchasePrice { get => _defaultPurchasePrice; set => SetProperty(ref _defaultPurchasePrice, value); }
+    public decimal DefaultPurchasePrice
+    {
+        get => _defaultPurchasePrice;
+        set
+        {
+            if (SetProperty(ref _defaultPurchasePrice, value))
+                DefaultSalePrice = SalePricePolicy.FromPurchasePrice(value);
+        }
+    }
     public decimal TaxRatePercent { get => _taxRatePercent; set => SetProperty(ref _taxRatePercent, value); }
     public int ReorderPoint { get => _reorderPoint; set => SetProperty(ref _reorderPoint, value); }
     public int MinStockLevel { get => _minStockLevel; set => SetProperty(ref _minStockLevel, value); }
@@ -82,12 +92,15 @@ public class ItemEditViewModel : ViewModelBase
     public bool IsBusy { get => _isBusy; set => SetProperty(ref _isBusy, value); }
 
     public AsyncRelayCommand SaveCommand { get; }
+    public RelayCommand CalculateSalePriceCommand { get; }
     public bool SavedSuccessfully { get; private set; }
     public event Action? RequestClose;
 
     public async Task LoadForCreateAsync()
     {
         _id = null;
+        DefaultPurchasePrice = 0;
+        DefaultSalePrice = 0;
         IsActive = true;
         await LoadLookupsAsync();
     }
@@ -111,8 +124,8 @@ public class ItemEditViewModel : ViewModelBase
         ManufacturerId = dto.ManufacturerId;
         RequiresPrescription = dto.RequiresPrescription;
         IsControlledSubstance = dto.IsControlledSubstance;
-        DefaultSalePrice = dto.DefaultSalePrice;
         DefaultPurchasePrice = dto.DefaultPurchasePrice;
+        DefaultSalePrice = dto.DefaultSalePrice ?? SalePricePolicy.FromPurchasePrice(dto.DefaultPurchasePrice);
         TaxRatePercent = dto.TaxRatePercent;
         ReorderPoint = dto.ReorderPoint;
         MinStockLevel = dto.MinStockLevel;
@@ -142,7 +155,7 @@ public class ItemEditViewModel : ViewModelBase
         if (UnitOfMeasureId == 0 && Units.Count > 0) UnitOfMeasureId = Units.First().Id!.Value;
     }
 
-    private async Task SaveAsync()
+    public async Task SaveAsync()
     {
         ErrorMessage = string.Empty;
         IsBusy = true;

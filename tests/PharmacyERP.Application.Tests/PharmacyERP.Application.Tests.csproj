@@ -35,5 +35,12 @@
     <Compile Include="../../src/PharmacyERP.WPF/Services/SessionService.cs" Link="Receipts/SessionService.cs" />
     <Compile Include="../../src/PharmacyERP.WPF/ViewModels/SystemManagement/ReceiptSettingsViewModel.cs" Link="Receipts/ReceiptSettingsViewModel.cs" />
     <Compile Include="../../src/PharmacyERP.WPF/ViewModels/PharmacyBrandingViewModel.cs" Link="Receipts/PharmacyBrandingViewModel.cs" />
+    <Compile Include="../../src/PharmacyERP.WPF/ViewModels/Inventory/ItemEditViewModel.cs" Link="Pricing/ItemEditViewModel.cs" />
+    <Compile Include="../../src/PharmacyERP.WPF/ViewModels/Inventory/ReceiveBatchViewModel.cs" Link="Pricing/ReceiveBatchViewModel.cs" />
+    <Compile Include="../../src/PharmacyERP.WPF/ViewModels/Purchasing/PurchasePriceRowBase.cs" Link="Pricing/PurchasePriceRowBase.cs" />
+    <Compile Include="../../src/PharmacyERP.WPF/ViewModels/Purchasing/POLineRow.cs" Link="Pricing/POLineRow.cs" />
+    <Compile Include="../../src/PharmacyERP.WPF/ViewModels/Purchasing/GRLineRow.cs" Link="Pricing/GRLineRow.cs" />
+    <Compile Include="../../src/PharmacyERP.WPF/ViewModels/Purchasing/PurchaseOrderEditViewModel.cs" Link="Pricing/PurchaseOrderEditViewModel.cs" />
+    <Compile Include="../../src/PharmacyERP.WPF/ViewModels/Purchasing/GoodsReceiptEditViewModel.cs" Link="Pricing/GoodsReceiptEditViewModel.cs" />
   </ItemGroup>
 </Project>

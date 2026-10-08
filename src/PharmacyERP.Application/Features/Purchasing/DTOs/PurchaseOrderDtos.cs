@@ -30,6 +30,7 @@ public class PurchaseOrderLineDto
     public int QuantityReceived { get; set; }
     public int QuantityOutstanding { get; set; }
     public decimal UnitCost { get; set; }
+    public decimal SalePrice { get; set; }
     public decimal TaxRatePercent { get; set; }
     public decimal LineTotal { get; set; }
 }
@@ -52,5 +53,6 @@ public class PurchaseOrderLineUpsertDto
     public int ItemId { get; set; }
     public int QuantityOrdered { get; set; }
     public decimal UnitCost { get; set; }
+    public decimal? SalePrice { get; set; }
     public decimal TaxRatePercent { get; set; }
 }

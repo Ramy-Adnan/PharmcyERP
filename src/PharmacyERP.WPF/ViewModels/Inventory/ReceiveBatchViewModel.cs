@@ -4,6 +4,7 @@ using PharmacyERP.Application.Features.Branches;
 using PharmacyERP.Application.Features.Branches.DTOs;
 using PharmacyERP.Application.Features.Inventory;
 using PharmacyERP.Application.Features.Inventory.DTOs;
+using PharmacyERP.Domain.Common;
 using PharmacyERP.WPF.MVVM;
 
 namespace PharmacyERP.WPF.ViewModels.Inventory;
@@ -35,6 +36,7 @@ public class ReceiveBatchViewModel : ViewModelBase
 
         Warehouses = new ObservableCollection<WarehouseDto>();
         SaveCommand = new AsyncRelayCommand(SaveAsync, () => !IsBusy);
+        CalculateSalePriceCommand = new RelayCommand(() => SalePriceOverride = SalePricePolicy.FromPurchasePrice(PurchasePrice));
     }
 
     public ObservableCollection<WarehouseDto> Warehouses { get; }
@@ -44,7 +46,15 @@ public class ReceiveBatchViewModel : ViewModelBase
     public DateTime? ManufactureDate { get => _manufactureDate; set => SetProperty(ref _manufactureDate, value); }
     public DateTime ExpiryDate { get => _expiryDate; set => SetProperty(ref _expiryDate, value); }
     public int Quantity { get => _quantity; set => SetProperty(ref _quantity, value); }
-    public decimal PurchasePrice { get => _purchasePrice; set => SetProperty(ref _purchasePrice, value); }
+    public decimal PurchasePrice
+    {
+        get => _purchasePrice;
+        set
+        {
+            if (SetProperty(ref _purchasePrice, value))
+                SalePriceOverride = SalePricePolicy.FromPurchasePrice(value);
+        }
+    }
     public decimal? SalePriceOverride { get => _salePriceOverride; set => SetProperty(ref _salePriceOverride, value); }
     public string? SupplierReference { get => _supplierReference; set => SetProperty(ref _supplierReference, value); }
 
@@ -52,12 +62,16 @@ public class ReceiveBatchViewModel : ViewModelBase
     public bool IsBusy { get => _isBusy; set => SetProperty(ref _isBusy, value); }
 
     public AsyncRelayCommand SaveCommand { get; }
+    public RelayCommand CalculateSalePriceCommand { get; }
     public bool SavedSuccessfully { get; private set; }
     public event Action? RequestClose;
 
     public async Task InitializeAsync(int itemId, int defaultBranchId)
     {
         _itemId = itemId;
+        var item = await _inventoryService.GetItemForEditAsync(itemId);
+        PurchasePrice = item?.DefaultPurchasePrice ?? 0;
+        SalePriceOverride = SalePricePolicy.FromPurchasePrice(PurchasePrice);
 
         var warehouses = await _branchService.GetWarehousesAsync(defaultBranchId);
         Warehouses.Clear();
@@ -66,7 +80,7 @@ public class ReceiveBatchViewModel : ViewModelBase
         WarehouseId = Warehouses.FirstOrDefault(w => w.IsDefault)?.Id ?? Warehouses.FirstOrDefault()?.Id ?? 0;
     }
 
-    private async Task SaveAsync()
+    public async Task SaveAsync()
     {
         ErrorMessage = string.Empty;
         IsBusy = true;

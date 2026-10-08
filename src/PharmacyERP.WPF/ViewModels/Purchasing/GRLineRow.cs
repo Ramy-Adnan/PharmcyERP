@@ -3,7 +3,7 @@ using PharmacyERP.WPF.MVVM;
 namespace PharmacyERP.WPF.ViewModels.Purchasing;
 
 /// <summary>A single editable line in the Goods Receipt editor grid.</summary>
-public class GRLineRow : ViewModelBase
+public class GRLineRow : PurchasePriceRowBase
 {
     private int _itemId;
     private string _itemCode = string.Empty;
@@ -12,8 +12,6 @@ public class GRLineRow : ViewModelBase
     private DateTime? _manufactureDate;
     private DateTime _expiryDate = DateTime.Today.AddYears(1);
     private int _quantityReceived = 1;
-    private decimal _unitCost;
-    private decimal _salePrice;
 
     public int? Id { get; set; }
     public int? PurchaseOrderItemId { get; set; }
@@ -31,13 +29,5 @@ public class GRLineRow : ViewModelBase
         set { if (SetProperty(ref _quantityReceived, value)) OnPropertyChanged(nameof(LineTotal)); }
     }
 
-    public decimal UnitCost
-    {
-        get => _unitCost;
-        set { if (SetProperty(ref _unitCost, value)) OnPropertyChanged(nameof(LineTotal)); }
-    }
-
-    public decimal SalePrice { get => _salePrice; set => SetProperty(ref _salePrice, value); }
-
-    public decimal LineTotal => Math.Round(UnitCost * QuantityReceived, 2);
+    public override decimal LineTotal => Math.Round(UnitCost * QuantityReceived, 2);
 }

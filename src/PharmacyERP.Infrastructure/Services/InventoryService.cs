@@ -4,6 +4,7 @@ using PharmacyERP.Application.Common.Models;
 using PharmacyERP.Application.Features.Inventory;
 using PharmacyERP.Application.Features.Inventory.DTOs;
 using PharmacyERP.Domain.Entities;
+using PharmacyERP.Domain.Common;
 using PharmacyERP.Domain.Enums;
 
 namespace PharmacyERP.Infrastructure.Services;
@@ -254,7 +255,7 @@ public class InventoryService : IInventoryService
             ManufacturerId = dto.ManufacturerId,
             RequiresPrescription = dto.RequiresPrescription,
             IsControlledSubstance = dto.IsControlledSubstance,
-            DefaultSalePrice = dto.DefaultSalePrice,
+            DefaultSalePrice = dto.DefaultSalePrice ?? SalePricePolicy.FromPurchasePrice(dto.DefaultPurchasePrice),
             DefaultPurchasePrice = dto.DefaultPurchasePrice,
             TaxRatePercent = dto.TaxRatePercent,
             ReorderPoint = dto.ReorderPoint,
@@ -290,7 +291,7 @@ public class InventoryService : IInventoryService
         item.ManufacturerId = dto.ManufacturerId;
         item.RequiresPrescription = dto.RequiresPrescription;
         item.IsControlledSubstance = dto.IsControlledSubstance;
-        item.DefaultSalePrice = dto.DefaultSalePrice;
+        item.DefaultSalePrice = dto.DefaultSalePrice ?? SalePricePolicy.FromPurchasePrice(dto.DefaultPurchasePrice);
         item.DefaultPurchasePrice = dto.DefaultPurchasePrice;
         item.TaxRatePercent = dto.TaxRatePercent;
         item.ReorderPoint = dto.ReorderPoint;
@@ -360,6 +361,8 @@ public class InventoryService : IInventoryService
     public async Task<Result<BatchDto>> ReceiveBatchAsync(ReceiveBatchDto dto, int? performedByUserId, CancellationToken cancellationToken = default)
     {
         if (dto.Quantity <= 0) return Result<BatchDto>.Failure("الكمية المستلمة يجب أن تكون أكبر من صفر.");
+        if (dto.PurchasePrice < 0 || dto.SalePriceOverride < 0)
+            return Result<BatchDto>.Failure("سعر الشراء والبيع لا يمكن أن يكونا سالبين.");
         if (string.IsNullOrWhiteSpace(dto.BatchNumber)) return Result<BatchDto>.Failure("رقم الدفعة (Batch Number) مطلوب.");
         if (dto.ExpiryDate.Date <= _dateTime.UtcNow.Date) return Result<BatchDto>.Failure("تاريخ الانتهاء يجب أن يكون في المستقبل.");
 
@@ -378,7 +381,8 @@ public class InventoryService : IInventoryService
             ExpiryDate = dto.ExpiryDate,
             QuantityOnHand = dto.Quantity,
             PurchasePrice = dto.PurchasePrice,
-            SalePriceOverride = dto.SalePriceOverride,
+            SalePriceOverride = dto.SalePriceOverride ?? SalePricePolicy.FromPurchasePrice(dto.PurchasePrice),
+            HasConfiguredSalePrice = true,
             ReceivedAtUtc = _dateTime.UtcNow,
             SupplierReference = dto.SupplierReference
         };
@@ -515,7 +519,7 @@ public class InventoryService : IInventoryService
 
         var candidateBatches = await _context.Batches
             .Where(b => b.ItemId == itemId && b.WarehouseId == warehouseId && b.QuantityOnHand > 0 && b.ExpiryDate >= _dateTime.UtcNow.Date)
-            .OrderBy(b => b.ExpiryDate)
+            .OrderBy(b => b.ExpiryDate).ThenBy(b => b.ReceivedAtUtc).ThenBy(b => b.Id)
             .ToListAsync(cancellationToken);
 
         var totalAvailable = candidateBatches.Sum(b => b.QuantityOnHand);

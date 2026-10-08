@@ -226,6 +226,9 @@ namespace PharmacyERP.Infrastructure.Migrations
                     b.Property<DateTime>("ExpiryDate")
                         .HasColumnType("datetime2");
 
+                    b.Property<bool>("HasConfiguredSalePrice")
+                        .HasColumnType("bit");
+
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
@@ -2260,6 +2263,9 @@ namespace PharmacyERP.Infrastructure.Migrations
 
                     b.Property<int>("QuantityReceived")
                         .HasColumnType("int");
+
+                    b.Property<decimal?>("SalePrice")
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<decimal>("TaxRatePercent")
                         .HasColumnType("decimal(5,2)");

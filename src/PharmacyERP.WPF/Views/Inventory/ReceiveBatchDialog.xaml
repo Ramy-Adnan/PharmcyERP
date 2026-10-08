@@ -32,8 +32,10 @@
                 <TextBlock Text="سعر الشراء (للوحدة)" Margin="0,0,0,4"/>
                 <TextBox Text="{Binding PurchasePrice, UpdateSourceTrigger=PropertyChanged}" Padding="6" Margin="0,0,0,12"/>
 
-                <TextBlock Text="سعر بيع خاص بهذه الدفعة (اختياري)" Margin="0,0,0,4"/>
+                <TextBlock Text="سعر البيع لهذه الدفعة (الشراء + 3%)" Margin="0,0,0,4"/>
                 <TextBox Text="{Binding SalePriceOverride, UpdateSourceTrigger=PropertyChanged}" Padding="6" Margin="0,0,0,12"/>
+                <TextBlock Text="يمكن تعديل البيع يدوياً؛ تغيير الشراء يعيد حساب زيادة 3%." TextWrapping="Wrap" Foreground="#64748B" FontSize="11" Margin="0,0,0,6"/>
+                <Button Content="إعادة حساب +3%" Command="{Binding CalculateSalePriceCommand}" Padding="8,4" Margin="0,0,0,12"/>
 
                 <TextBlock Text="مرجع المورد / رقم الفاتورة (اختياري)" Margin="0,0,0,4"/>
                 <TextBox Text="{Binding SupplierReference, UpdateSourceTrigger=PropertyChanged}" Padding="6" Margin="0,0,0,12"/>

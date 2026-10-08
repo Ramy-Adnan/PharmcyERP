@@ -11,6 +11,7 @@ public class PurchaseOrderItemConfiguration : IEntityTypeConfiguration<PurchaseO
         builder.ToTable("PurchaseOrderItems");
 
         builder.Property(i => i.UnitCost).HasColumnType("decimal(18,2)");
+        builder.Property(i => i.SalePrice).HasColumnType("decimal(18,2)");
         builder.Property(i => i.TaxRatePercent).HasColumnType("decimal(5,2)");
         builder.Ignore(i => i.QuantityOutstanding);
         builder.Ignore(i => i.LineTotal);

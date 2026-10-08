@@ -91,12 +91,13 @@
                     </Grid.ColumnDefinitions>
 
                     <StackPanel Grid.Column="0">
-                        <TextBlock Text="سعر البيع الافتراضي" Margin="0,0,0,4"/>
-                        <TextBox Text="{Binding DefaultSalePrice, UpdateSourceTrigger=PropertyChanged}" Padding="6" Margin="0,0,0,12"/>
-                    </StackPanel>
-                    <StackPanel Grid.Column="2">
                         <TextBlock Text="سعر الشراء الافتراضي" Margin="0,0,0,4"/>
                         <TextBox Text="{Binding DefaultPurchasePrice, UpdateSourceTrigger=PropertyChanged}" Padding="6" Margin="0,0,0,12"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="2">
+                        <TextBlock Text="سعر البيع (الشراء + 3%)" Margin="0,0,0,4"/>
+                        <TextBox Text="{Binding DefaultSalePrice, UpdateSourceTrigger=PropertyChanged}" Padding="6" Margin="0,0,0,12"/>
+                        <Button Content="إعادة حساب +3%" Command="{Binding CalculateSalePriceCommand}" Padding="8,4" Margin="0,0,0,10"/>
                     </StackPanel>
                     <StackPanel Grid.Column="4">
                         <TextBlock Text="نسبة الضريبة %" Margin="0,0,0,4"/>

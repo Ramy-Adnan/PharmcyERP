@@ -13,6 +13,7 @@ public class PurchaseOrderItem : BaseEntity
     public int QuantityOrdered { get; set; }
     public int QuantityReceived { get; set; }
     public decimal UnitCost { get; set; }
+    public decimal? SalePrice { get; set; }
     public decimal TaxRatePercent { get; set; }
 
     public int QuantityOutstanding => Math.Max(0, QuantityOrdered - QuantityReceived);

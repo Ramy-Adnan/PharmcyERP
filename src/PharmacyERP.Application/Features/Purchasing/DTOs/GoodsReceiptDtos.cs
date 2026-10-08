@@ -58,5 +58,5 @@ public class GoodsReceiptLineUpsertDto
     public DateTime ExpiryDate { get; set; }
     public int QuantityReceived { get; set; }
     public decimal UnitCost { get; set; }
-    public decimal SalePrice { get; set; }
+    public decimal? SalePrice { get; set; }
 }

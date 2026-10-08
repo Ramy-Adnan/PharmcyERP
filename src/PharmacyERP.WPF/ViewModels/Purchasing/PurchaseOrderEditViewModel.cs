@@ -6,6 +6,7 @@ using PharmacyERP.Application.Features.Inventory.DTOs;
 using PharmacyERP.Application.Features.Purchasing;
 using PharmacyERP.Application.Features.Purchasing.DTOs;
 using PharmacyERP.WPF.MVVM;
+using PharmacyERP.Domain.Common;
 
 namespace PharmacyERP.WPF.ViewModels.Purchasing;
 
@@ -128,6 +129,7 @@ public class PurchaseOrderEditViewModel : ViewModelBase
                 ItemName = item?.Name ?? string.Empty,
                 QuantityOrdered = line.QuantityOrdered,
                 UnitCost = line.UnitCost,
+                SalePrice = line.SalePrice ?? SalePricePolicy.FromPurchasePrice(line.UnitCost),
                 TaxRatePercent = line.TaxRatePercent
             });
         }
@@ -179,7 +181,7 @@ public class PurchaseOrderEditViewModel : ViewModelBase
         if (line.TaxRatePercent == 0) line.TaxRatePercent = item.TaxRatePercent;
     }
 
-    private async Task SaveAsync()
+    public async Task SaveAsync()
     {
         ErrorMessage = string.Empty;
 
@@ -207,6 +209,7 @@ public class PurchaseOrderEditViewModel : ViewModelBase
                     ItemId = l.ItemId,
                     QuantityOrdered = l.QuantityOrdered,
                     UnitCost = l.UnitCost,
+                    SalePrice = l.SalePrice,
                     TaxRatePercent = l.TaxRatePercent
                 }).ToList()
             };

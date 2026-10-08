@@ -26,6 +26,8 @@ public class Batch : AuditableEntity
 
     /// <summary>Overrides Item.DefaultSalePrice for units sold from this specific batch, if set.</summary>
     public decimal? SalePriceOverride { get; set; }
+    /// <summary>Distinguishes a configured zero price from the zero left by older receiving forms.</summary>
+    public bool HasConfiguredSalePrice { get; set; }
 
     public DateTime ReceivedAtUtc { get; set; }
     public string? SupplierReference { get; set; }

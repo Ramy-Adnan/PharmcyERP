@@ -7,6 +7,7 @@ using PharmacyERP.Application.Features.Purchasing;
 using PharmacyERP.Application.Features.Purchasing.DTOs;
 using PharmacyERP.Domain.Enums;
 using PharmacyERP.WPF.MVVM;
+using PharmacyERP.Domain.Common;
 
 namespace PharmacyERP.WPF.ViewModels.Purchasing;
 
@@ -157,7 +158,7 @@ public class GoodsReceiptEditViewModel : ViewModelBase
                 ExpiryDate = line.ExpiryDate,
                 QuantityReceived = line.QuantityReceived,
                 UnitCost = line.UnitCost,
-                SalePrice = line.SalePrice
+                SalePrice = line.SalePrice ?? SalePricePolicy.FromPurchasePrice(line.UnitCost)
             });
         }
 
@@ -209,7 +210,7 @@ public class GoodsReceiptEditViewModel : ViewModelBase
     }
 
     /// <summary>Pulls the selected PO's branch/warehouse and pre-fills one grid row per outstanding line.</summary>
-    private async Task LoadFromPurchaseOrderAsync()
+    public async Task LoadFromPurchaseOrderAsync()
     {
         if (!PurchaseOrderId.HasValue) return;
 
@@ -234,6 +235,7 @@ public class GoodsReceiptEditViewModel : ViewModelBase
                 ItemName = line.ItemName,
                 QuantityReceived = line.QuantityOutstanding,
                 UnitCost = line.UnitCost,
+                SalePrice = line.SalePrice,
                 ExpiryDate = DateTime.Today.AddYears(1)
             });
         }
@@ -249,10 +251,9 @@ public class GoodsReceiptEditViewModel : ViewModelBase
         line.ItemCode = item.Code;
         line.ItemName = item.Name;
         if (line.UnitCost == 0) line.UnitCost = item.DefaultPurchasePrice;
-        if (line.SalePrice == 0) line.SalePrice = item.DefaultSalePrice;
     }
 
-    private async Task SaveAsync()
+    public async Task SaveAsync()
     {
         ErrorMessage = string.Empty;
 

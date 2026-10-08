@@ -147,17 +147,21 @@ public class SalesService : ISalesService
             .ThenByDescending(i => i.Code == searchText).ThenBy(i => i.Name)
             .Include(i => i.UnitOfMeasure).Take(30).ToListAsync(cancellationToken);
         var ids = items.Select(i => i.Id).ToList();
-        var stock = await _context.Batches.AsNoTracking()
-            .Where(b => ids.Contains(b.ItemId) && b.WarehouseId == warehouseId && b.ExpiryDate >= today)
-            .GroupBy(b => b.ItemId)
-            .Select(g => new { Id = g.Key, Quantity = g.Sum(b => b.QuantityOnHand) })
-            .ToDictionaryAsync(g => g.Id, g => g.Quantity, cancellationToken);
+        var batches = await _context.Batches.AsNoTracking()
+            .Where(b => ids.Contains(b.ItemId) && b.WarehouseId == warehouseId && b.ExpiryDate >= today && b.QuantityOnHand > 0)
+            .OrderBy(b => b.ExpiryDate).ThenBy(b => b.ReceivedAtUtc).ThenBy(b => b.Id)
+            .Select(b => new { b.ItemId, b.QuantityOnHand,
+                SalePriceOverride = b.HasConfiguredSalePrice || b.SalePriceOverride > 0 ? b.SalePriceOverride : null })
+            .ToListAsync(cancellationToken);
+        var stock = batches.GroupBy(b => b.ItemId).ToDictionary(g => g.Key,
+            g => new { Quantity = g.Sum(b => b.QuantityOnHand), SalePrice = g.First().SalePriceOverride });
         return items.Select(item => new SaleItemLookupDto
         {
             ItemId = item.Id, Code = item.Code, Barcode = item.Barcode, Name = item.Name,
-            UnitOfMeasureName = item.UnitOfMeasure.Name, DefaultSalePrice = item.DefaultSalePrice,
+            UnitOfMeasureName = item.UnitOfMeasure.Name,
+            DefaultSalePrice = stock.GetValueOrDefault(item.Id)?.SalePrice ?? item.DefaultSalePrice,
             TaxRatePercent = item.TaxRatePercent, RequiresPrescription = item.RequiresPrescription,
-            AvailableQuantity = stock.GetValueOrDefault(item.Id)
+            AvailableQuantity = stock.GetValueOrDefault(item.Id)?.Quantity ?? 0
         }).ToList();
     }
 
