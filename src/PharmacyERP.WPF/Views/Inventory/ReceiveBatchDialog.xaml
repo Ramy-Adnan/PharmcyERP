@@ -27,6 +27,10 @@
                 <DatePicker SelectedDate="{Binding ExpiryDate}" Padding="6" Margin="0,0,0,12"/>
 
                 <TextBlock Text="الكمية المستلمة" Margin="0,0,0,4"/>
+                <TextBlock Text="وحدة الاستلام"/>
+                <ComboBox ItemsSource="{Binding PurchaseUnits}" DisplayMemberPath="DisplayName" SelectedItem="{Binding SelectedPurchaseUnit, UpdateSourceTrigger=PropertyChanged}" Padding="6" Margin="0,4,0,8"/>
+                <TextBlock Text="بونص مجاني (بنفس وحدة الاستلام)"/>
+                <TextBox Text="{Binding BonusQuantity, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}" Padding="6" Margin="0,4,0,8"/>
                 <TextBlock Text="{Binding PackagingDescription}" TextWrapping="Wrap" Foreground="#0F766E" Margin="0,0,0,8"/>
                 <TextBox Text="{Binding Quantity, UpdateSourceTrigger=PropertyChanged}" Padding="6" Margin="0,0,0,12"/>
 

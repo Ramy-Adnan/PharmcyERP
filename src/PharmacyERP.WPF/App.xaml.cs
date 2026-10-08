@@ -130,6 +130,8 @@ public partial class App : System.Windows.Application
 
                     services.AddTransient<PurchasingWorkspaceViewModel>();
                     services.AddTransient<PurchasingWorkspaceView>();
+                    services.AddTransient<InvoiceImageImportViewModel>();
+                    services.AddTransient<InvoiceImageImportDialog>();
 
                     // Purchasing module (Suppliers, Purchase Orders, Goods Receipts, Purchase Invoices)
                     services.AddTransient<SuppliersViewModel>();

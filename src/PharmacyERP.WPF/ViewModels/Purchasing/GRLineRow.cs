@@ -16,7 +16,8 @@ public class GRLineRow : PurchasePriceRowBase
     public int? Id { get; set; }
     public int? PurchaseOrderItemId { get; set; }
 
-    public string PurchaseUnitDescription { get; set; } = string.Empty;
+    private int _bonusQuantity;
+    public int BonusQuantity { get => _bonusQuantity; set => SetProperty(ref _bonusQuantity, value); }
     public int ItemId { get => _itemId; set => SetProperty(ref _itemId, value); }
     public string ItemCode { get => _itemCode; set => SetProperty(ref _itemCode, value); }
     public string ItemName { get => _itemName; set => SetProperty(ref _itemName, value); }

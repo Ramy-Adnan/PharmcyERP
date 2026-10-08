@@ -11,6 +11,7 @@ public class GoodsReceiptItem : BaseEntity
     public int? PurchaseOrderItemId { get; set; }
     public PurchaseOrderItem? PurchaseOrderItem { get; set; }
 
+    public int? ItemSaleUnitId { get; set; }
     public int ItemId { get; set; }
     public Item Item { get; set; } = null!;
 
@@ -18,6 +19,7 @@ public class GoodsReceiptItem : BaseEntity
     public DateTime? ManufactureDate { get; set; }
     public DateTime ExpiryDate { get; set; }
 
+    public int BonusQuantity { get; set; }
     public int QuantityReceived { get; set; }
     public decimal UnitCost { get; set; }
     public decimal SalePrice { get; set; }

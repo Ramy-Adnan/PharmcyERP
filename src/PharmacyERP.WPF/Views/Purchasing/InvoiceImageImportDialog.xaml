@@ -1,0 +1,67 @@
+<Window x:Class="PharmacyERP.WPF.Views.Purchasing.InvoiceImageImportDialog"
+ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ Title="استلام فاتورة من صورة" Width="1280" Height="850" MinWidth="1000" MinHeight="680" WindowStartupLocation="CenterOwner" FlowDirection="RightToLeft" Background="#F3F6FA">
+ <Window.Resources><Style TargetType="TextBox"><Setter Property="Margin" Value="4"/><Setter Property="Padding" Value="6"/></Style>
+ <Style TargetType="TextBlock"><Setter Property="Margin" Value="4"/></Style><Style TargetType="ComboBox"><Setter Property="Margin" Value="4"/><Setter Property="Padding" Value="5"/></Style>
+ <Style TargetType="Button"><Setter Property="Margin" Value="4"/><Setter Property="Padding" Value="14,8"/></Style></Window.Resources>
+ <DockPanel Margin="14">
+  <StackPanel DockPanel.Dock="Top">
+   <TextBlock Text="قراءة فاتورة المذخر ومراجعة الاستلام" FontSize="24" FontWeight="Bold" Foreground="#145D79"/>
+   <WrapPanel><Button Content="اختيار صورة وتحليلها" Click="ChoosePhoto" IsEnabled="{Binding CanEdit}"/><Button Content="عرض الصورة الأصلية" Click="PreviewPhoto" IsEnabled="{Binding CanSave}"/><Button Content="إلغاء القراءة" Click="CancelRead" IsEnabled="{Binding IsBusy}"/>
+    <CheckBox Content="باي هاند — زيادة 20% (الباقي 25%)" IsChecked="{Binding IsByHand}" IsEnabled="{Binding CanEdit}" VerticalAlignment="Center" Margin="14"/></WrapPanel>
+   <WrapPanel IsEnabled="{Binding CanEdit}"><TextBlock Text="وحدة مخزون غير موجودة؟" VerticalAlignment="Center"/><TextBox x:Name="NewUnitName" Width="130"/><Button Content="إضافة الوحدة" Click="AddBaseUnit" IsEnabled="{Binding CanManageUnits}"/></WrapPanel>
+   <TextBlock Text="{Binding PhotoInformation}" TextWrapping="Wrap"/>
+   <TextBlock Text="{Binding Message}" TextWrapping="Wrap" Foreground="#9A4C16"/>
+   <WrapPanel IsEnabled="{Binding CanEdit}">
+    <TextBlock Text="رقم الفاتورة" VerticalAlignment="Center"/><TextBox Width="145" Text="{Binding InvoiceNumber, UpdateSourceTrigger=PropertyChanged}"/>
+    <TextBlock Text="التاريخ" VerticalAlignment="Center"/><DatePicker Width="145" SelectedDate="{Binding InvoiceDate}"/>
+    <TextBlock Text="إجمالي الفاتورة" VerticalAlignment="Center"/><TextBox Width="145" Text="{Binding InvoiceTotal, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}"/>
+    <TextBlock Text="{Binding ComputedTotal, StringFormat=مجموع الأسطر: {0:N2}}" VerticalAlignment="Center" FontWeight="Bold"/>
+   </WrapPanel>
+  </StackPanel>
+  <WrapPanel DockPanel.Dock="Bottom"><Button Content="حفظ المراجعة ومتابعة الاستلام" Click="SaveReviewed" IsEnabled="{Binding CanSave}" Background="#146B7A" Foreground="White"/>
+   <Button Content="إغلاق" Click="CloseDialog" IsEnabled="{Binding CanEdit}"/><TextBlock Text="الحفظ ينشئ مسودة؛ اعتمادها من الخطوة التالية يضيف المخزون." VerticalAlignment="Center"/></WrapPanel>
+  <ScrollViewer DockPanel.Dock="Bottom" MaxHeight="280" VerticalScrollBarVisibility="Auto">
+   <StackPanel DataContext="{Binding SelectedItem, ElementName=Rows}" IsEnabled="{Binding DataContext.CanEdit, RelativeSource={RelativeSource AncestorType=Window}}">
+    <TextBlock Text="تفاصيل السطر المحدد — وحدة المخزون هي أصغر جزء تريد بيعه" FontWeight="Bold"/>
+    <TextBlock Text="{Binding CandidateHint}" TextWrapping="Wrap"/><TextBlock Text="{Binding ReadingNotes}" TextWrapping="Wrap"/>
+    <WrapPanel>
+     <CheckBox Content="بطاقة علاج جديدة" IsChecked="{Binding IsNew}" VerticalAlignment="Center" Margin="6"/>
+     <TextBlock Text="أو اختر بطاقة موجودة" VerticalAlignment="Center"/>
+     <ComboBox Width="260" ItemsSource="{Binding Items}" DisplayMemberPath="DisplayName" SelectedValuePath="Id" SelectedValue="{Binding ExistingItemId}" IsTextSearchEnabled="True"/>
+     <TextBlock Text="اسم البطاقة" VerticalAlignment="Center"/><TextBox Width="240" Text="{Binding ItemName, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding IsNew}"/>
+    </WrapPanel>
+    <WrapPanel>
+     <TextBlock Text="وحدة المخزون" VerticalAlignment="Center"/><ComboBox Width="120" ItemsSource="{Binding Units}" DisplayMemberPath="Name" SelectedValuePath="Id" SelectedValue="{Binding BaseUnitOfMeasureId}" IsEnabled="{Binding IsNew}"/>
+     <TextBlock Text="التصنيف" VerticalAlignment="Center"/><ComboBox Width="145" ItemsSource="{Binding Categories}" DisplayMemberPath="Name" SelectedValuePath="Id" SelectedValue="{Binding CategoryId}" IsEnabled="{Binding IsNew}"/>
+     <TextBlock Text="وحدة الاستلام" VerticalAlignment="Center"/><TextBox Width="100" Text="{Binding ReceiveUnitName, UpdateSourceTrigger=PropertyChanged}"/>
+     <TextBlock Text="عدد أجزاء المخزون داخلها" VerticalAlignment="Center"/><TextBox Width="80" Text="{Binding BaseUnitsPerReceiveUnit, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}"/>
+     <TextBlock Text="{Binding BasePurchasePrice, StringFormat=شراء الجزء: {0:N4}}" VerticalAlignment="Center"/><TextBlock Text="{Binding BaseSalePrice, StringFormat=بيع الجزء: {0:N2}}" VerticalAlignment="Center"/>
+    </WrapPanel>
+    <WrapPanel>
+     <TextBlock Text="الباركود (اختياري)" VerticalAlignment="Center"/><TextBox Width="145" Text="{Binding Barcode, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding IsNew}"/>
+     <TextBlock Text="التركيز (اختياري)" VerticalAlignment="Center"/><TextBox Width="100" Text="{Binding Strength, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding IsNew}"/>
+     <TextBlock Text="الشكل الدوائي" VerticalAlignment="Center"/><ComboBox Width="110" ItemsSource="{Binding Forms}" SelectedItem="{Binding Form}" IsEnabled="{Binding IsNew}"/>
+     <CheckBox Content="يتطلب وصفة" IsChecked="{Binding RequiresPrescription}" IsEnabled="{Binding IsNew}" VerticalAlignment="Center" Margin="8"/>
+     <CheckBox Content="دواء خاضع للرقابة" IsChecked="{Binding IsControlledSubstance}" IsEnabled="{Binding IsNew}" VerticalAlignment="Center" Margin="8"/>
+    </WrapPanel>
+    <TextBlock Text="إذا لم توجد وحدة المخزون المطلوبة أضفها بالزر أعلاه أو من الأصناف ← التصنيفات والوحدات. الوحدات الإضافية (شريط/باكيت...) تُعرّف في بطاقة الصنف بعدد أجزاء واضح." TextWrapping="Wrap"/>
+   </StackPanel>
+  </ScrollViewer>
+  <DataGrid x:Name="Rows" ItemsSource="{Binding Lines}" AutoGenerateColumns="False" CanUserAddRows="False" SelectionMode="Single" IsEnabled="{Binding CanEdit}" RowHeight="40">
+   <DataGrid.Columns>
+    <DataGridTextColumn Header="العلاج المقروء" Binding="{Binding SourceName}" IsReadOnly="True" Width="2*"/>
+    <DataGridTextColumn Header="المطابقة" Binding="{Binding MatchHint}" IsReadOnly="True" Width="1.4*"/>
+    <DataGridTextColumn Header="العدد" Binding="{Binding Quantity, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}" Width="60"/>
+    <DataGridTextColumn Header="البونص" Binding="{Binding BonusQuantity, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}" Width="65"/>
+    <DataGridTextColumn Header="شراء الوحدة" Binding="{Binding UnitCost, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}" Width="95"/>
+    <DataGridTextColumn Header="بيع الوحدة" Binding="{Binding SalePrice, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}" Width="95"/>
+    <DataGridTextColumn Header="رقم الدفعة" Binding="{Binding BatchNumber, UpdateSourceTrigger=PropertyChanged}" Width="100"/>
+    <DataGridTemplateColumn Header="الصلاحية" Width="130"><DataGridTemplateColumn.CellTemplate><DataTemplate><DatePicker SelectedDate="{Binding ExpiryDate, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}"/></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+    <DataGridTextColumn Header="المطبوع" Binding="{Binding PrintedLineTotal, StringFormat=N2}" IsReadOnly="True" Width="95"/>
+    <DataGridTextColumn Header="المجموع" Binding="{Binding LineTotal, StringFormat=N2}" IsReadOnly="True" Width="100"/>
+    <DataGridCheckBoxColumn Header="راجعت" Binding="{Binding Reviewed, UpdateSourceTrigger=PropertyChanged}" Width="65"/>
+   </DataGrid.Columns>
+  </DataGrid>
+ </DockPanel>
+</Window>

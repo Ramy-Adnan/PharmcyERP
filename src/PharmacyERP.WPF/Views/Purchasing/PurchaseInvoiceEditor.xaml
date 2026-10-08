@@ -104,9 +104,12 @@
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellEditingTemplate>
                         </DataGridTemplateColumn>
-                        <DataGridTextColumn Header="تعبئة وحدة الشراء" Binding="{Binding PurchaseUnitDescription}" Width="135" IsReadOnly="True"/>
+                        <DataGridTemplateColumn Header="وحدة الشراء" Width="170"><DataGridTemplateColumn.CellTemplate><DataTemplate>
+                            <ComboBox ItemsSource="{Binding PurchaseUnits}" DisplayMemberPath="DisplayName" SelectedItem="{Binding SelectedPurchaseUnit, UpdateSourceTrigger=PropertyChanged}" Padding="4"/>
+                        </DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+                        <DataGridTextColumn Header="بونص" Binding="{Binding BonusQuantity, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}" Width="60"/>
                         <DataGridTextColumn Header="الكمية" Binding="{Binding Quantity, UpdateSourceTrigger=PropertyChanged}" Width="80"/>
-                        <DataGridTextColumn Header="شراء العبوة" Binding="{Binding UnitCost, UpdateSourceTrigger=PropertyChanged}" Width="95"/>
+                        <DataGridTextColumn Header="شراء الوحدة" Binding="{Binding UnitCost, UpdateSourceTrigger=PropertyChanged}" Width="95"/>
                         <DataGridTextColumn Header="الضريبة %" Binding="{Binding TaxRatePercent, UpdateSourceTrigger=PropertyChanged}" Width="85"/>
                         <DataGridTextColumn Header="خصم السطر" Binding="{Binding DiscountAmount, UpdateSourceTrigger=PropertyChanged}" Width="90"/>
                         <DataGridTextColumn Header="الإجمالي" Binding="{Binding LineTotal, StringFormat=N2}" Width="100" IsReadOnly="True"/>

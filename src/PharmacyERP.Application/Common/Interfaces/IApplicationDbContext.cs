@@ -25,6 +25,7 @@ public interface IApplicationDbContext
     DbSet<ItemCategory> ItemCategories { get; }
     DbSet<UnitOfMeasure> UnitsOfMeasure { get; }
     DbSet<Manufacturer> Manufacturers { get; }
+    DbSet<ItemSaleUnit> ItemSaleUnits { get; }
     DbSet<Item> Items { get; }
     DbSet<Batch> Batches { get; }
     DbSet<StockTransaction> StockTransactions { get; }

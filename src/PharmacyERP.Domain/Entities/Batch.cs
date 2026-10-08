@@ -14,6 +14,7 @@ public class Batch : AuditableEntity
 {
     public PurchasePricingType PurchaseType { get; set; }
 
+    public int? ItemSaleUnitId { get; set; }
     public int ItemId { get; set; }
     public Item Item { get; set; } = null!;
 
@@ -25,6 +26,7 @@ public class Batch : AuditableEntity
     public DateTime ExpiryDate { get; set; }
 
     public int QuantityOnHand { get; set; }
+    public int? ReceivedUnitFactor { get; set; }
     public decimal? PackageSalePrice { get; set; }
     public decimal PurchasePrice { get; set; }
 

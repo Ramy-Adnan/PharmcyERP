@@ -8,6 +8,7 @@ public class BatchConfiguration : IEntityTypeConfiguration<Batch>
 {
     public void Configure(EntityTypeBuilder<Batch> builder)
     {
+        builder.HasOne<ItemSaleUnit>().WithMany().HasForeignKey(x => x.ItemSaleUnitId).OnDelete(DeleteBehavior.Restrict);
         builder.ToTable("Batches");
 
         builder.Property(b => b.BatchNumber).IsRequired().HasMaxLength(60);

@@ -76,10 +76,12 @@
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellEditingTemplate>
                         </DataGridTemplateColumn>
-                        <DataGridTextColumn Header="تعبئة وحدة الشراء" Binding="{Binding PurchaseUnitDescription}" Width="135" IsReadOnly="True"/>
+                        <DataGridTemplateColumn Header="وحدة الشراء" Width="170"><DataGridTemplateColumn.CellTemplate><DataTemplate>
+                            <ComboBox ItemsSource="{Binding PurchaseUnits}" DisplayMemberPath="DisplayName" SelectedItem="{Binding SelectedPurchaseUnit, UpdateSourceTrigger=PropertyChanged}" Padding="4"/>
+                        </DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
                         <DataGridTextColumn Header="الكمية" Binding="{Binding QuantityOrdered, UpdateSourceTrigger=PropertyChanged}" Width="90"/>
-                        <DataGridTextColumn Header="شراء العبوة" Binding="{Binding UnitCost, UpdateSourceTrigger=PropertyChanged}" Width="100"/>
-                        <DataGridTextColumn Header="بيع العبوة" Binding="{Binding SalePrice, UpdateSourceTrigger=PropertyChanged}" Width="110"/>
+                        <DataGridTextColumn Header="شراء الوحدة" Binding="{Binding UnitCost, UpdateSourceTrigger=PropertyChanged}" Width="100"/>
+                        <DataGridTextColumn Header="بيع الوحدة" Binding="{Binding SalePrice, UpdateSourceTrigger=PropertyChanged}" Width="110"/>
                         <DataGridTemplateColumn Header="إعادة" Width="55">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>

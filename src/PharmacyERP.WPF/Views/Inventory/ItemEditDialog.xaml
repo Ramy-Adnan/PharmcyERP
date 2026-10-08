@@ -84,7 +84,18 @@
                         <TextBlock Text="مثال: الوحدة شريط، العبوة علبة، العدد 5. أسعار الشراء والبيع أدناه للعلبة. المخزون وحدود الطلب بالأشرطة. العدد 1 يبقي الصنف بوحدة واحدة." TextWrapping="Wrap" Foreground="#475569"/>
                     </StackPanel>
                 </Border>
-                <TextBlock Text="الشركة المصنّعة" Margin="0,0,0,4"/>
+                <TextBlock Text="وحدات إضافية: شريط / باكيت / عبوة بأي عدد" FontWeight="Bold" Margin="0,0,0,6"/>
+                <TextBlock Text="مثال: المخزون حبة، الشريط 10 حبات، العلبة 20 حبة. أضف علبة 30 عند اختلاف التعبئة؛ الشركة اختيارية." TextWrapping="Wrap" Foreground="#475569" Margin="0,0,0,6"/>
+                <DataGrid ItemsSource="{Binding SaleUnits}" AutoGenerateColumns="False" CanUserAddRows="False" CanUserDeleteRows="False" MaxHeight="180">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="الوحدة" Binding="{Binding Name, UpdateSourceTrigger=PropertyChanged}" Width="*"/>
+                        <DataGridTextColumn Header="عدد الأجزاء" Binding="{Binding BaseUnitCount, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}" Width="80"/>
+                        <DataGridTextColumn Header="باركود اختياري" Binding="{Binding Barcode, UpdateSourceTrigger=PropertyChanged}" Width="120"/>
+                        <DataGridCheckBoxColumn Header="نشطة" Binding="{Binding IsActive, UpdateSourceTrigger=PropertyChanged}" Width="50"/>
+                    </DataGrid.Columns>
+                </DataGrid>
+                <Button Content="إضافة وحدة بيع / شراء" Command="{Binding AddSaleUnitCommand}" Padding="8,5" Margin="0,6,0,12"/>
+                <TextBlock Text="الشركة المصنّعة (اختياري)" Margin="0,0,0,4"/>
                 <ComboBox ItemsSource="{Binding Manufacturers}" DisplayMemberPath="Name" SelectedValuePath="Id"
                           SelectedValue="{Binding ManufacturerId}" Padding="6" Margin="0,0,0,12"/>
 

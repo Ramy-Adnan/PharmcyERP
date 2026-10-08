@@ -193,7 +193,7 @@ public class POSViewModel : ViewModelBase
         {
             ErrorMessage = string.Empty; SuccessMessage = string.Empty;
             var results = await _salesService.SearchSaleItemsAsync(text, WarehouseId);
-            var exact = results.Where(r => (string.Equals(r.Barcode, text, StringComparison.OrdinalIgnoreCase) || string.Equals(r.BaseUnitBarcode, text, StringComparison.OrdinalIgnoreCase))).ToList();
+            var exact = results.Where(r => (string.Equals(r.Barcode, text, StringComparison.OrdinalIgnoreCase) || string.Equals(r.BaseUnitBarcode, text, StringComparison.OrdinalIgnoreCase) || r.SaleUnits.Any(u => string.Equals(u.Barcode, text, StringComparison.OrdinalIgnoreCase)))).ToList();
             if (exact.Count == 0 && !barcodeOnly) exact = results.Where(r => string.Equals(r.Code, text, StringComparison.OrdinalIgnoreCase)).ToList();
             SearchResults.Clear();
             if (exact.Count == 1) AddItem(exact[0], text);
@@ -211,11 +211,12 @@ public class POSViewModel : ViewModelBase
     private void AddItem(SaleItemLookupDto item, string? scannedBarcode = null)
     {
         var scanBase = !string.IsNullOrWhiteSpace(scannedBarcode) && string.Equals(item.BaseUnitBarcode, scannedBarcode, StringComparison.OrdinalIgnoreCase);
-        var line = scanBase
-            ? CartLines.FirstOrDefault(l => l.ItemId == item.ItemId && !l.SellAsPackage)
+        var scannedUnit = item.SaleUnits.FirstOrDefault(u => !string.IsNullOrWhiteSpace(scannedBarcode) && string.Equals(u.Barcode, scannedBarcode, StringComparison.OrdinalIgnoreCase));
+        var line = scannedUnit is not null ? CartLines.FirstOrDefault(l => l.ItemId == item.ItemId && l.ItemSaleUnitId == scannedUnit.Id) : scanBase
+            ? CartLines.FirstOrDefault(l => l.ItemId == item.ItemId && !l.SellAsPackage && l.ItemSaleUnitId is null)
             : SelectedCartLine is { } selected && CartLines.Contains(selected) && selected.ItemId == item.ItemId
                 ? selected : CartLines.LastOrDefault(l => l.ItemId == item.ItemId);
-        var factor = scanBase ? 1 : line?.UnitsPerSale ?? (item.AvailableQuantity >= item.UnitsPerPackage ? item.UnitsPerPackage : 1);
+        var factor = scannedUnit?.BaseUnitCount ?? (scanBase ? 1 : line?.UnitsPerSale ?? (item.AvailableQuantity >= item.UnitsPerPackage ? item.UnitsPerPackage : 1));
         if (ReservedStock(item.ItemId) + factor > item.AvailableQuantity)
         { ErrorMessage = $"المتوفر من {item.DisplayName}: {item.StockDisplay}. اختر الوحدة الصغيرة عند عدم توفر عبوة كاملة."; return; }
         foreach (var existing in CartLines.Where(l => l.ItemId == item.ItemId)) existing.AvailableBaseQuantity = item.AvailableQuantity;
@@ -227,13 +228,14 @@ public class POSViewModel : ViewModelBase
         {
             var units = new List<SaleUnitOption> { new(false, item.UnitOfMeasureName, 1) };
             if (item.UnitsPerPackage > 1) units.Add(new(true, item.PackageUnitName, item.UnitsPerPackage));
+            units.AddRange(item.SaleUnits.Select(u => new SaleUnitOption(false, u.Name, u.BaseUnitCount, u.Id, u.Barcode, u.SalePrice)));
             line = new POSLineRow { ItemId = item.ItemId, Code = item.Code, Name = item.DisplayName,
                 UnitOfMeasureName = item.UnitOfMeasureName, TaxRatePercent = item.TaxRatePercent,
                 AvailableBaseQuantity = item.AvailableQuantity, RequiresPrescription = item.RequiresPrescription,
                 UnitsPerPackage = item.UnitsPerPackage, BaseSalePrice = item.DefaultSalePrice,
                 PackageSalePrice = item.UnitsPerPackage > 1 ? item.PackageSalePrice : item.DefaultSalePrice,
                 SaleUnits = units, Quantity = 1 };
-            line.SelectedSaleUnit = factor == 1 ? units.First() : units.Last();
+            line.SelectedSaleUnit = scannedUnit is not null ? units.First(u => u.ItemSaleUnitId == scannedUnit.Id) : factor == 1 ? units.First() : units.First(u => u.IsPackage);
             CartLines.Add(line);
         }
         SelectedCartLine = line;
@@ -246,10 +248,11 @@ public class POSViewModel : ViewModelBase
     private void AddOtherUnit()
     {
         if (SelectedCartLine is not { } source || source.SaleUnits.Count < 2) return;
-        var otherUnit = source.SaleUnits.First(u => u.IsPackage != source.SellAsPackage);
+        var selectedIndex = source.SaleUnits.ToList().IndexOf(source.SelectedSaleUnit!);
+        var otherUnit = source.SaleUnits[(selectedIndex + 1) % source.SaleUnits.Count];
         if (ReservedStock(source.ItemId) + otherUnit.Factor > source.AvailableBaseQuantity)
         { ErrorMessage = "المخزون المتبقي لا يكفي للوحدة الأخرى."; return; }
-        var existing = CartLines.FirstOrDefault(l => l.ItemId == source.ItemId && l.SellAsPackage == otherUnit.IsPackage);
+        var existing = CartLines.FirstOrDefault(l => l.ItemId == source.ItemId && l.SellAsPackage == otherUnit.IsPackage && l.ItemSaleUnitId == otherUnit.ItemSaleUnitId);
         if (existing is not null) { existing.Quantity++; SelectedCartLine = existing; ScanFocusRequested?.Invoke(); return; }
         var row = new POSLineRow
         {
@@ -278,7 +281,7 @@ public class POSViewModel : ViewModelBase
         if (CartLines.Any(l => l.Quantity <= 0 || l.Quantity > l.AvailableQuantity || l.UnitPrice < 0 || l.DiscountAmount < 0 || l.DiscountAmount > l.UnitPrice * l.Quantity)
             || DiscountAmount < 0 || DiscountAmount + CartLines.Sum(l => l.DiscountAmount) > SubTotal)
         { ErrorMessage = "راجع الكميات والأسعار والخصومات."; return; }
-        if (CartLines.GroupBy(l => new { l.ItemId, l.SellAsPackage }).Any(g => g.Count() > 1))
+        if (CartLines.GroupBy(l => new { l.ItemId, l.SellAsPackage, l.ItemSaleUnitId }).Any(g => g.Count() > 1))
         { ErrorMessage = "يوجد سطران لنفس الصنف والوحدة؛ اجمع الكمية في سطر واحد."; return; }
         if (CartLines.GroupBy(l => l.ItemId).Any(g => g.Sum(l => (long)l.Quantity * l.UnitsPerSale) > g.Min(l => l.AvailableBaseQuantity)))
         { ErrorMessage = "إجمالي العلب والوحدات الصغيرة يتجاوز المخزون المتوفر."; return; }
@@ -292,7 +295,7 @@ public class POSViewModel : ViewModelBase
             RequestId = _checkoutRequestId, BranchId = _currentUserService.CurrentBranchId ?? 0, WarehouseId = WarehouseId,
             CustomerId = SelectedCustomer?.Id, PrescriptionId = SelectedPrescription?.Id, DiscountAmount = DiscountAmount,
             PaymentMethod = PaymentMethod, AmountTendered = IsCredit ? AmountTendered : TotalAmount,
-            Lines = CartLines.Select(l => new SaleLineInputDto { ItemId = l.ItemId, SellAsPackage = l.SellAsPackage, Quantity = l.Quantity, UnitPrice = l.UnitPrice,
+            Lines = CartLines.Select(l => new SaleLineInputDto { ItemId = l.ItemId, SellAsPackage = l.SellAsPackage, ItemSaleUnitId = l.ItemSaleUnitId, Quantity = l.Quantity, UnitPrice = l.UnitPrice,
                 TaxRatePercent = l.TaxRatePercent, DiscountAmount = l.DiscountAmount }).ToList()
         };
         IsBusy = true;

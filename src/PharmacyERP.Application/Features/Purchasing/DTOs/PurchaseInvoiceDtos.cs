@@ -27,9 +27,11 @@ public class PurchaseInvoiceDto
 
 public class PurchaseInvoiceLineDto
 {
+    public int? ItemSaleUnitId { get; set; }
     public int Id { get; set; }
     public string ItemCode { get; set; } = string.Empty;
     public string ItemName { get; set; } = string.Empty;
+    public int BonusQuantity { get; set; }
     public int Quantity { get; set; }
     public decimal UnitCost { get; set; }
     public decimal TaxRatePercent { get; set; }
@@ -52,7 +54,9 @@ public class PurchaseInvoiceUpsertDto
 
 public class PurchaseInvoiceLineUpsertDto
 {
+    public int? ItemSaleUnitId { get; set; }
     public int ItemId { get; set; }
+    public int BonusQuantity { get; set; }
     public int Quantity { get; set; }
     public decimal UnitCost { get; set; }
     public decimal TaxRatePercent { get; set; }

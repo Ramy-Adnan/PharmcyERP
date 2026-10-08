@@ -23,6 +23,7 @@ public class PurchaseOrderDto
 public class PurchaseOrderLineDto
 {
     public int Id { get; set; }
+    public int? ItemSaleUnitId { get; set; }
     public int ItemId { get; set; }
     public string ItemCode { get; set; } = string.Empty;
     public string ItemName { get; set; } = string.Empty;
@@ -52,6 +53,7 @@ public class PurchaseOrderUpsertDto
 public class PurchaseOrderLineUpsertDto
 {
     public int? Id { get; set; }
+    public int? ItemSaleUnitId { get; set; }
     public int ItemId { get; set; }
     public int QuantityOrdered { get; set; }
     public decimal UnitCost { get; set; }

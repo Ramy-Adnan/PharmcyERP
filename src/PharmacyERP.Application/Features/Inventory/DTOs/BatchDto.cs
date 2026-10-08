@@ -6,6 +6,7 @@ public class BatchDto
 {
     public PurchasePricingType PurchaseType { get; set; }
     public int Id { get; set; }
+    public int? ItemSaleUnitId { get; set; }
     public int ItemId { get; set; }
     public string ItemName { get; set; } = string.Empty;
     public string UnitOfMeasureName { get; set; } = string.Empty;
@@ -29,7 +30,9 @@ public class BatchDto
 
 public class ReceiveBatchDto
 {
+    public int BonusQuantity { get; set; }
     public PurchasePricingType PurchaseType { get; set; }
+    public int? ItemSaleUnitId { get; set; }
     public int ItemId { get; set; }
     public int WarehouseId { get; set; }
     public string BatchNumber { get; set; } = string.Empty;

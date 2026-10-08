@@ -8,6 +8,7 @@ public class PurchaseOrderItemConfiguration : IEntityTypeConfiguration<PurchaseO
 {
     public void Configure(EntityTypeBuilder<PurchaseOrderItem> builder)
     {
+        builder.HasOne<ItemSaleUnit>().WithMany().HasForeignKey(x => x.ItemSaleUnitId).OnDelete(DeleteBehavior.Restrict);
         builder.ToTable("PurchaseOrderItems");
 
         builder.Property(i => i.UnitCost).HasColumnType("decimal(18,2)");

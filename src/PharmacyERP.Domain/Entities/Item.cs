@@ -51,6 +51,7 @@ public class Item : AuditableEntity
 
     public bool IsActive { get; set; } = true;
 
+    public ICollection<ItemSaleUnit> SaleUnits { get; set; } = new List<ItemSaleUnit>();
     public ICollection<Batch> Batches { get; set; } = new List<Batch>();
     public ICollection<StockTransaction> StockTransactions { get; set; } = new List<StockTransaction>();
 }

@@ -46,6 +46,8 @@ public class ItemEditViewModel : PurchasePricingViewModel
     {
         _inventoryService = inventoryService;
 
+        SaleUnits = new ObservableCollection<ItemSaleUnitDto>();
+        AddSaleUnitCommand = new RelayCommand(() => SaleUnits.Add(new ItemSaleUnitDto()));
         Categories = new ObservableCollection<LookupOption>();
         Units = new ObservableCollection<LookupOption>();
         Manufacturers = new ObservableCollection<LookupOption>();
@@ -60,6 +62,8 @@ public class ItemEditViewModel : PurchasePricingViewModel
     public bool IsEditMode => _id.HasValue;
     public string DialogTitle => IsEditMode ? "تعديل بطاقة الصنف" : "إضافة صنف جديد";
 
+    public ObservableCollection<ItemSaleUnitDto> SaleUnits { get; }
+    public RelayCommand AddSaleUnitCommand { get; }
     public ObservableCollection<LookupOption> Categories { get; }
     public ObservableCollection<LookupOption> Units { get; }
     public ObservableCollection<LookupOption> Manufacturers { get; }
@@ -126,6 +130,7 @@ public class ItemEditViewModel : PurchasePricingViewModel
         Barcode = dto.Barcode;
         BaseUnitBarcode = dto.BaseUnitBarcode;
         UnitsPerPackage = dto.UnitsPerPackage;
+        SaleUnits.Clear(); foreach (var unit in dto.SaleUnits) SaleUnits.Add(unit);
         PackageUnitName = dto.PackageUnitName;
         Name = dto.Name;
         GenericName = dto.GenericName;
@@ -181,6 +186,7 @@ public class ItemEditViewModel : PurchasePricingViewModel
                 Barcode = Barcode,
                 BaseUnitBarcode = BaseUnitBarcode,
                 UnitsPerPackage = UnitsPerPackage,
+                SaleUnits = SaleUnits.ToList(),
                 PackageUnitName = PackageUnitName,
                 Name = Name,
                 GenericName = GenericName,

@@ -15,6 +15,7 @@ public class SalesInvoiceItem : BaseEntity
     public int SalesInvoiceId { get; set; }
     public SalesInvoice SalesInvoice { get; set; } = null!;
 
+    public int? ItemSaleUnitId { get; set; }
     public int ItemId { get; set; }
     public Item Item { get; set; } = null!;
 

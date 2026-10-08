@@ -8,6 +8,7 @@ public class GoodsReceiptItemConfiguration : IEntityTypeConfiguration<GoodsRecei
 {
     public void Configure(EntityTypeBuilder<GoodsReceiptItem> builder)
     {
+        builder.HasOne<ItemSaleUnit>().WithMany().HasForeignKey(x => x.ItemSaleUnitId).OnDelete(DeleteBehavior.Restrict);
         builder.ToTable("GoodsReceiptItems");
 
         builder.Property(i => i.BatchNumber).IsRequired().HasMaxLength(50);

@@ -46,6 +46,7 @@
                         <StackPanel Visibility="{Binding IsGoodsStep, Converter={StaticResource BoolToVisibilityConverter}}" IsEnabled="{Binding CanInteract}">
                             <Button Content="علاج غير مسجل؟ أضف بطاقة علاج" Click="AddItemClicked" Style="{StaticResource Action}"
                                     HorizontalAlignment="Right" Margin="0,8,0,0" Visibility="{Binding CanManageItems, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                            <Button Content="استيراد فاتورة من صورة" Click="ImportPhotoClicked" Style="{StaticResource Action}" HorizontalAlignment="Right" Margin="0,8,0,0"/>
                         </StackPanel>
                     </StackPanel>
                     <Border Grid.Row="2" Background="White" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="12" Padding="16" IsEnabled="{Binding CanInteract}">

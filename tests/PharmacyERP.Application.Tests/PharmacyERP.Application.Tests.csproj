@@ -38,6 +38,9 @@
     <Compile Include="../../src/PharmacyERP.WPF/ViewModels/Inventory/ItemEditViewModel.cs" Link="Pricing/ItemEditViewModel.cs" />
     <Compile Include="../../src/PharmacyERP.WPF/ViewModels/Inventory/ReceiveBatchViewModel.cs" Link="Pricing/ReceiveBatchViewModel.cs" />
     <Compile Include="../../src/PharmacyERP.WPF/ViewModels/PurchasePricingViewModel.cs" Link="Pricing/PurchasePricingViewModel.cs" />
+    <Compile Include="../../src/PharmacyERP.WPF/ViewModels/Purchasing/InvoiceImageReviewRow.cs" Link="Imports/InvoiceImageReviewRow.cs" />
+    <Compile Include="../../src/PharmacyERP.WPF/ViewModels/Purchasing/InvoiceImageImportViewModel.cs" Link="Imports/InvoiceImageImportViewModel.cs" />
+    <Compile Include="../../src/PharmacyERP.WPF/ViewModels/Purchasing/PurchaseUnitRowBase.cs" Link="Pricing/PurchaseUnitRowBase.cs" />
     <Compile Include="../../src/PharmacyERP.WPF/ViewModels/Purchasing/PurchasePriceRowBase.cs" Link="Pricing/PurchasePriceRowBase.cs" />
     <Compile Include="../../src/PharmacyERP.WPF/ViewModels/Purchasing/POLineRow.cs" Link="Pricing/POLineRow.cs" />
     <Compile Include="../../src/PharmacyERP.WPF/ViewModels/Purchasing/GRLineRow.cs" Link="Pricing/GRLineRow.cs" />

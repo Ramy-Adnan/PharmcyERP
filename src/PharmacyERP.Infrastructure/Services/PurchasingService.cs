@@ -185,6 +185,7 @@ public class PurchasingService : IPurchasingService
             {
                 Id = i.Id,
                 ItemId = i.ItemId,
+                ItemSaleUnitId = i.ItemSaleUnitId,
                 QuantityOrdered = i.QuantityOrdered,
                 UnitCost = i.UnitCost,
                 SalePrice = i.SalePrice,
@@ -227,6 +228,7 @@ public class PurchasingService : IPurchasingService
             order.Items.Add(new PurchaseOrderItem
             {
                 ItemId = line.ItemId,
+                ItemSaleUnitId = line.ItemSaleUnitId,
                 QuantityOrdered = line.QuantityOrdered,
                 UnitCost = line.UnitCost,
                 SalePrice = line.SalePrice ?? SalePricePolicy.FromPurchasePrice(line.UnitCost, dto.PurchaseType),
@@ -272,6 +274,7 @@ public class PurchasingService : IPurchasingService
             order.Items.Add(new PurchaseOrderItem
             {
                 ItemId = line.ItemId,
+                ItemSaleUnitId = line.ItemSaleUnitId,
                 QuantityOrdered = line.QuantityOrdered,
                 UnitCost = line.UnitCost,
                 SalePrice = line.SalePrice ?? SalePricePolicy.FromPurchasePrice(line.UnitCost, dto.PurchaseType),
@@ -367,10 +370,12 @@ public class PurchasingService : IPurchasingService
                 Id = i.Id,
                 PurchaseOrderItemId = i.PurchaseOrderItemId,
                 ItemId = i.ItemId,
+                ItemSaleUnitId = i.ItemSaleUnitId,
                 BatchNumber = i.BatchNumber,
                 ManufactureDate = i.ManufactureDate,
                 ExpiryDate = i.ExpiryDate,
                 QuantityReceived = i.QuantityReceived,
+                BonusQuantity = i.BonusQuantity,
                 UnitCost = i.UnitCost,
                 SalePrice = i.SalePrice
             }).ToList()
@@ -413,10 +418,12 @@ public class PurchasingService : IPurchasingService
             {
                 PurchaseOrderItemId = line.PurchaseOrderItemId,
                 ItemId = line.ItemId,
+                ItemSaleUnitId = line.ItemSaleUnitId,
                 BatchNumber = line.BatchNumber,
                 ManufactureDate = line.ManufactureDate,
                 ExpiryDate = line.ExpiryDate,
                 QuantityReceived = line.QuantityReceived,
+                BonusQuantity = line.BonusQuantity,
                 UnitCost = line.UnitCost,
                 SalePrice = line.SalePrice ?? SalePricePolicy.FromPurchasePrice(line.UnitCost, dto.PurchaseType)
             });
@@ -456,10 +463,12 @@ public class PurchasingService : IPurchasingService
             {
                 PurchaseOrderItemId = line.PurchaseOrderItemId,
                 ItemId = line.ItemId,
+                ItemSaleUnitId = line.ItemSaleUnitId,
                 BatchNumber = line.BatchNumber,
                 ManufactureDate = line.ManufactureDate,
                 ExpiryDate = line.ExpiryDate,
                 QuantityReceived = line.QuantityReceived,
+                BonusQuantity = line.BonusQuantity,
                 UnitCost = line.UnitCost,
                 SalePrice = line.SalePrice ?? SalePricePolicy.FromPurchasePrice(line.UnitCost, dto.PurchaseType)
             });
@@ -494,11 +503,13 @@ public class PurchasingService : IPurchasingService
             var receiveResult = await _inventoryService.ReceiveBatchAsync(new ReceiveBatchDto
             {
                 ItemId = line.ItemId,
+                ItemSaleUnitId = line.ItemSaleUnitId,
                 WarehouseId = note.WarehouseId,
                 BatchNumber = line.BatchNumber,
                 ManufactureDate = line.ManufactureDate,
                 ExpiryDate = line.ExpiryDate,
                 Quantity = line.QuantityReceived,
+                BonusQuantity = line.BonusQuantity,
                 PurchaseType = note.PurchaseType,
                 PurchasePrice = line.UnitCost,
                 SalePriceOverride = line.SalePrice,
@@ -512,7 +523,11 @@ public class PurchasingService : IPurchasingService
             {
                 var poItem = await _context.PurchaseOrderItems.FirstOrDefaultAsync(i => i.Id == line.PurchaseOrderItemId.Value, cancellationToken);
                 if (poItem is not null)
+                {
+                    if (poItem.ItemId != line.ItemId || poItem.ItemSaleUnitId != line.ItemSaleUnitId)
+                        return Result.Failure("وحدة الاستلام يجب أن تطابق وحدة سطر أمر الشراء.");
                     poItem.QuantityReceived += line.QuantityReceived;
+                }
             }
         }
 
@@ -557,9 +572,16 @@ public class PurchasingService : IPurchasingService
         foreach (var line in dto.Lines)
         {
             if (string.IsNullOrWhiteSpace(line.BatchNumber)) return "رقم الدفعة مطلوب لكل صنف.";
-            if (line.QuantityReceived <= 0) return "الكمية المستلمة يجب أن تكون أكبر من صفر لكل صنف.";
+            if (line.QuantityReceived < 0 || line.BonusQuantity < 0 || (long)line.QuantityReceived + line.BonusQuantity <= 0) return "الكمية المستلمة يجب أن تكون أكبر من صفر لكل صنف.";
             if (line.ExpiryDate.Date <= dto.ReceiptDate.Date) return $"تاريخ انتهاء الصلاحية للدفعة '{line.BatchNumber}' يجب أن يكون بعد تاريخ الاستلام.";
             if (line.UnitCost < 0 || line.SalePrice < 0) return "الأسعار لا يمكن أن تكون سالبة.";
+        }
+
+        foreach (var line in dto.Lines)
+        {
+            if (!await _context.Items.AnyAsync(i => i.Id == line.ItemId && i.IsActive, cancellationToken)) return "أحد الأصناف غير موجود أو غير نشط.";
+            if (line.ItemSaleUnitId.HasValue && !await _context.ItemSaleUnits.AnyAsync(u => u.Id == line.ItemSaleUnitId && u.ItemId == line.ItemId && u.IsActive, cancellationToken))
+                return "وحدة الشراء لا تعود للصنف أو غير نشطة.";
         }
 
         var supplierExists = await _context.Suppliers.AnyAsync(s => s.Id == dto.SupplierId, cancellationToken);
@@ -588,12 +610,14 @@ public class PurchasingService : IPurchasingService
     {
         Id = i.Id,
         ItemId = i.ItemId,
+        ItemSaleUnitId = i.ItemSaleUnitId,
         ItemCode = i.Item.Code,
         ItemName = i.Item.Name,
         BatchNumber = i.BatchNumber,
         ManufactureDate = i.ManufactureDate,
         ExpiryDate = i.ExpiryDate,
         QuantityReceived = i.QuantityReceived,
+        BonusQuantity = i.BonusQuantity,
         UnitCost = i.UnitCost,
         SalePrice = i.SalePrice,
         LineTotal = i.UnitCost * i.QuantityReceived
@@ -667,7 +691,9 @@ public class PurchasingService : IPurchasingService
             invoice.Items.Add(new PurchaseInvoiceItem
             {
                 ItemId = line.ItemId,
+                ItemSaleUnitId = line.ItemSaleUnitId,
                 Quantity = line.Quantity,
+                BonusQuantity = line.BonusQuantity,
                 UnitCost = line.UnitCost,
                 TaxRatePercent = line.TaxRatePercent,
                 DiscountAmount = line.DiscountAmount,
@@ -750,11 +776,13 @@ public class PurchasingService : IPurchasingService
             PurchaseType = note.PurchaseType,
             GoodsReceiptNoteId = note.Id,
             BranchId = note.BranchId,
-            InvoiceDate = DateTime.Today,
+            InvoiceDate = note.ReceiptDate,
             Lines = note.Items.Select(i => new PurchaseInvoiceLineUpsertDto
             {
                 ItemId = i.ItemId,
+                ItemSaleUnitId = i.ItemSaleUnitId,
                 Quantity = i.QuantityReceived,
+                BonusQuantity = i.BonusQuantity,
                 UnitCost = i.UnitCost,
                 TaxRatePercent = 0,
                 DiscountAmount = 0
@@ -768,7 +796,7 @@ public class PurchasingService : IPurchasingService
         if (dto.SupplierId <= 0) return "الرجاء اختيار المورد.";
         if (dto.BranchId <= 0) return "الرجاء اختيار الفرع.";
         if (!dto.Lines.Any()) return "يجب إضافة صنف واحد على الأقل.";
-        if (dto.Lines.Any(l => l.Quantity <= 0)) return "الكمية يجب أن تكون أكبر من صفر لكل صنف.";
+        if (dto.Lines.Any(l => l.Quantity < 0 || l.BonusQuantity < 0 || (long)l.Quantity + l.BonusQuantity <= 0)) return "الكمية يجب أن تكون أكبر من صفر لكل صنف.";
         if (dto.Lines.Any(l => l.UnitCost < 0)) return "سعر الشراء لا يمكن أن يكون سالباً.";
         if (dto.DiscountAmount < 0) return "قيمة الخصم لا يمكن أن تكون سالبة.";
         if (dto.Lines.Any(l => l.TaxRatePercent < 0 || l.TaxRatePercent > 100)) return "نسبة الضريبة يجب أن تكون بين 0 و100.";
@@ -776,6 +804,13 @@ public class PurchasingService : IPurchasingService
             return "خصم السطر يجب ألا يتجاوز قيمة السطر أو يكون سالباً.";
         if (dto.DiscountAmount > dto.Lines.Sum(l => Math.Round(l.UnitCost * l.Quantity * (1 + l.TaxRatePercent / 100m) - l.DiscountAmount, 2, MidpointRounding.AwayFromZero)))
             return "خصم الفاتورة أكبر من قيمتها.";
+
+        foreach (var line in dto.Lines)
+        {
+            if (!await _context.Items.AnyAsync(i => i.Id == line.ItemId && i.IsActive, cancellationToken)) return "أحد الأصناف غير موجود أو غير نشط.";
+            if (line.ItemSaleUnitId.HasValue && !await _context.ItemSaleUnits.AnyAsync(u => u.Id == line.ItemSaleUnitId && u.ItemId == line.ItemId && u.IsActive, cancellationToken))
+                return "وحدة الشراء لا تعود للصنف أو غير نشطة.";
+        }
 
         var supplierExists = await _context.Suppliers.AnyAsync(s => s.Id == dto.SupplierId, cancellationToken);
         if (!supplierExists) return "المورد المحدد غير موجود.";
@@ -812,6 +847,8 @@ public class PurchasingService : IPurchasingService
         ItemCode = i.Item.Code,
         ItemName = i.Item.Name,
         Quantity = i.Quantity,
+        BonusQuantity = i.BonusQuantity,
+        ItemSaleUnitId = i.ItemSaleUnitId,
         UnitCost = i.UnitCost,
         TaxRatePercent = i.TaxRatePercent,
         DiscountAmount = i.DiscountAmount,
@@ -828,6 +865,13 @@ public class PurchasingService : IPurchasingService
         if (dto.Lines.Any(l => l.QuantityOrdered <= 0)) return "الكمية المطلوبة يجب أن تكون أكبر من صفر لكل صنف.";
         if (dto.Lines.Any(l => l.UnitCost < 0)) return "سعر الشراء لا يمكن أن يكون سالباً.";
         if (dto.Lines.Any(l => l.SalePrice < 0)) return "سعر البيع لا يمكن أن يكون سالباً.";
+
+        foreach (var line in dto.Lines)
+        {
+            if (!await _context.Items.AnyAsync(i => i.Id == line.ItemId && i.IsActive, cancellationToken)) return "أحد الأصناف غير موجود أو غير نشط.";
+            if (line.ItemSaleUnitId.HasValue && !await _context.ItemSaleUnits.AnyAsync(u => u.Id == line.ItemSaleUnitId && u.ItemId == line.ItemId && u.IsActive, cancellationToken))
+                return "وحدة الشراء لا تعود للصنف أو غير نشطة.";
+        }
 
         var supplierExists = await _context.Suppliers.AnyAsync(s => s.Id == dto.SupplierId, cancellationToken);
         if (!supplierExists) return "المورد المحدد غير موجود.";
@@ -857,6 +901,7 @@ public class PurchasingService : IPurchasingService
     {
         Id = i.Id,
         ItemId = i.ItemId,
+        ItemSaleUnitId = i.ItemSaleUnitId,
         ItemCode = i.Item.Code,
         ItemName = i.Item.Name,
         UnitOfMeasureName = i.Item.UnitOfMeasure.Name,

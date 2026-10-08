@@ -3,7 +3,7 @@ using PharmacyERP.WPF.MVVM;
 namespace PharmacyERP.WPF.ViewModels.Purchasing;
 
 /// <summary>A single editable line in the Purchase Invoice editor grid.</summary>
-public class PILineRow : ViewModelBase
+public class PILineRow : PurchaseUnitRowBase
 {
     private int _itemId;
     private string _itemCode = string.Empty;
@@ -13,7 +13,8 @@ public class PILineRow : ViewModelBase
     private decimal _taxRatePercent;
     private decimal _discountAmount;
 
-    public string PurchaseUnitDescription { get; set; } = string.Empty;
+    private int _bonusQuantity;
+    public int BonusQuantity { get => _bonusQuantity; set => SetProperty(ref _bonusQuantity, value); }
     public int ItemId { get => _itemId; set => SetProperty(ref _itemId, value); }
     public string ItemCode { get => _itemCode; set => SetProperty(ref _itemCode, value); }
     public string ItemName { get => _itemName; set => SetProperty(ref _itemName, value); }
@@ -24,7 +25,7 @@ public class PILineRow : ViewModelBase
         set { if (SetProperty(ref _quantity, value)) OnPropertyChanged(nameof(LineTotal)); }
     }
 
-    public decimal UnitCost
+    public override decimal UnitCost
     {
         get => _unitCost;
         set { if (SetProperty(ref _unitCost, value)) OnPropertyChanged(nameof(LineTotal)); }

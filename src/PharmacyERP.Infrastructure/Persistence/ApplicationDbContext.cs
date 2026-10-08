@@ -36,10 +36,13 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
     public DbSet<ItemCategory> ItemCategories => Set<ItemCategory>();
     public DbSet<UnitOfMeasure> UnitsOfMeasure => Set<UnitOfMeasure>();
     public DbSet<Manufacturer> Manufacturers => Set<Manufacturer>();
+    public DbSet<ItemSaleUnit> ItemSaleUnits => Set<ItemSaleUnit>();
     public DbSet<Item> Items => Set<Item>();
     public DbSet<Batch> Batches => Set<Batch>();
     public DbSet<StockTransaction> StockTransactions => Set<StockTransaction>();
 
+    public DbSet<SupplierItemAlias> SupplierItemAliases => Set<SupplierItemAlias>();
+    public DbSet<PurchaseImageImport> PurchaseImageImports => Set<PurchaseImageImport>();
     public DbSet<Supplier> Suppliers => Set<Supplier>();
     public DbSet<PurchaseOrder> PurchaseOrders => Set<PurchaseOrder>();
     public DbSet<PurchaseOrderItem> PurchaseOrderItems => Set<PurchaseOrderItem>();

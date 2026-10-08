@@ -56,6 +56,9 @@ public static class DependencyInjection
         services.AddScoped<IRoleService, RoleService>();
         services.AddScoped<IInventoryService, InventoryService>();
         services.AddScoped<IPurchasingService, PurchasingService>();
+        services.AddScoped<PharmacyERP.Application.Features.Purchasing.Imports.IPurchaseImageImportService, PharmacyERP.Infrastructure.Services.Imports.PurchaseImageImportService>();
+        services.AddSingleton(new PharmacyERP.Infrastructure.Services.Imports.InvoiceVisionOptions());
+        services.AddSingleton<PharmacyERP.Application.Features.Purchasing.Imports.IInvoiceImageReader>(sp => new PharmacyERP.Infrastructure.Services.Imports.OpenAiInvoiceImageReader(new HttpClient { Timeout = TimeSpan.FromSeconds(90) }, sp.GetRequiredService<PharmacyERP.Infrastructure.Services.Imports.InvoiceVisionOptions>()));
         services.AddScoped<ISalesService, SalesService>();
         services.AddScoped<IPrescriptionService, PrescriptionService>();
         services.AddScoped<IInsuranceService, InsuranceService>();

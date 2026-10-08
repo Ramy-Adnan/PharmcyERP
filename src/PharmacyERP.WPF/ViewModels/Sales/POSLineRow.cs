@@ -18,13 +18,15 @@ public class POSLineRow : ViewModelBase
         set
         {
             if (value is null || !SaleUnits.Contains(value) || !SetProperty(ref _selectedSaleUnit, value)) return;
-            UnitPrice = value.IsPackage ? PackageSalePrice : BaseSalePrice;
+            UnitPrice = value.Price ?? (value.IsPackage ? PackageSalePrice : Math.Round(BaseSalePrice * value.Factor, 2, MidpointRounding.AwayFromZero));
             OnPropertyChanged(nameof(UnitsPerSale));
             OnPropertyChanged(nameof(AvailableQuantity));
             OnPropertyChanged(nameof(SelectedUnitName));
             OnPropertyChanged(nameof(SellAsPackage));
+            OnPropertyChanged(nameof(ItemSaleUnitId));
         }
     }
+    public int? ItemSaleUnitId => SelectedSaleUnit?.ItemSaleUnitId;
     public int UnitsPerSale => SelectedSaleUnit?.Factor ?? 1;
     public bool SellAsPackage => SelectedSaleUnit?.IsPackage ?? false;
     public string SelectedUnitName => SelectedSaleUnit?.Name ?? UnitOfMeasureName;
@@ -62,4 +64,4 @@ public class POSLineRow : ViewModelBase
     public decimal LineTotal => Math.Round(UnitPrice * Quantity * (1 + TaxRatePercent / 100m) - DiscountAmount, 2);
 }
 
-public sealed record SaleUnitOption(bool IsPackage, string Name, int Factor);
+public sealed record SaleUnitOption(bool IsPackage, string Name, int Factor, int? ItemSaleUnitId = null, string? Barcode = null, decimal? Price = null);

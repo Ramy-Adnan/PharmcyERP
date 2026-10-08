@@ -235,6 +235,9 @@ namespace PharmacyERP.Infrastructure.Migrations
                     b.Property<int>("ItemId")
                         .HasColumnType("int");
 
+                    b.Property<int?>("ItemSaleUnitId")
+                        .HasColumnType("int");
+
                     b.Property<DateTime?>("ManufactureDate")
                         .HasColumnType("datetime2");
 
@@ -259,6 +262,9 @@ namespace PharmacyERP.Infrastructure.Migrations
                     b.Property<DateTime>("ReceivedAtUtc")
                         .HasColumnType("datetime2");
 
+                    b.Property<int?>("ReceivedUnitFactor")
+                        .HasColumnType("int");
+
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
                         .ValueGeneratedOnAddOrUpdate()
@@ -277,6 +283,8 @@ namespace PharmacyERP.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("ExpiryDate");
+
+                    b.HasIndex("ItemSaleUnitId");
 
                     b.HasIndex("WarehouseId");
 
@@ -925,6 +933,9 @@ namespace PharmacyERP.Infrastructure.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
+                    b.Property<int>("BonusQuantity")
+                        .HasColumnType("int");
+
                     b.Property<DateTime>("ExpiryDate")
                         .HasColumnType("datetime2");
 
@@ -932,6 +943,9 @@ namespace PharmacyERP.Infrastructure.Migrations
                         .HasColumnType("int");
 
                     b.Property<int>("ItemId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("ItemSaleUnitId")
                         .HasColumnType("int");
 
                     b.Property<DateTime?>("ManufactureDate")
@@ -954,6 +968,8 @@ namespace PharmacyERP.Infrastructure.Migrations
                     b.HasIndex("GoodsReceiptNoteId");
 
                     b.HasIndex("ItemId");
+
+                    b.HasIndex("ItemSaleUnitId");
 
                     b.HasIndex("PurchaseOrderItemId");
 
@@ -1428,6 +1444,42 @@ namespace PharmacyERP.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("ItemCategories", (string)null);
+                });
+
+            modelBuilder.Entity("PharmacyERP.Domain.Entities.ItemSaleUnit", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Barcode")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<int>("BaseUnitCount")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("ItemId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Barcode");
+
+                    b.HasIndex("ItemId", "Name")
+                        .IsUnique();
+
+                    b.ToTable("ItemSaleUnits", (string)null);
                 });
 
             modelBuilder.Entity("PharmacyERP.Domain.Entities.JournalEntry", b =>
@@ -2071,6 +2123,63 @@ namespace PharmacyERP.Infrastructure.Migrations
                     b.ToTable("PrescriptionItems", (string)null);
                 });
 
+            modelBuilder.Entity("PharmacyERP.Domain.Entities.PurchaseImageImport", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("GoodsReceiptNoteId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("ImportedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("ImportedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("ParsedTotal")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<Guid>("RequestId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("ReviewedTotal")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("SourceHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<int>("SupplierId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("SupplierInvoiceKey")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GoodsReceiptNoteId");
+
+                    b.HasIndex("ImportedByUserId");
+
+                    b.HasIndex("RequestId")
+                        .IsUnique();
+
+                    b.HasIndex("SourceHash")
+                        .IsUnique();
+
+                    b.HasIndex("SupplierId", "SupplierInvoiceKey")
+                        .IsUnique();
+
+                    b.ToTable("PurchaseImageImports", (string)null);
+                });
+
             modelBuilder.Entity("PharmacyERP.Domain.Entities.PurchaseInvoice", b =>
                 {
                     b.Property<int>("Id")
@@ -2172,10 +2281,16 @@ namespace PharmacyERP.Infrastructure.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<int>("BonusQuantity")
+                        .HasColumnType("int");
+
                     b.Property<decimal>("DiscountAmount")
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<int>("ItemId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("ItemSaleUnitId")
                         .HasColumnType("int");
 
                     b.Property<decimal>("LineTotal")
@@ -2196,6 +2311,8 @@ namespace PharmacyERP.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("ItemId");
+
+                    b.HasIndex("ItemSaleUnitId");
 
                     b.HasIndex("PurchaseInvoiceId");
 
@@ -2291,6 +2408,9 @@ namespace PharmacyERP.Infrastructure.Migrations
                     b.Property<int>("ItemId")
                         .HasColumnType("int");
 
+                    b.Property<int?>("ItemSaleUnitId")
+                        .HasColumnType("int");
+
                     b.Property<int>("PurchaseOrderId")
                         .HasColumnType("int");
 
@@ -2312,6 +2432,8 @@ namespace PharmacyERP.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("ItemId");
+
+                    b.HasIndex("ItemSaleUnitId");
 
                     b.HasIndex("PurchaseOrderId");
 
@@ -2611,6 +2733,9 @@ namespace PharmacyERP.Infrastructure.Migrations
                     b.Property<int>("ItemId")
                         .HasColumnType("int");
 
+                    b.Property<int?>("ItemSaleUnitId")
+                        .HasColumnType("int");
+
                     b.Property<decimal>("LineTotal")
                         .HasColumnType("decimal(18,2)");
 
@@ -2642,6 +2767,8 @@ namespace PharmacyERP.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("ItemId");
+
+                    b.HasIndex("ItemSaleUnitId");
 
                     b.HasIndex("SalesInvoiceId");
 
@@ -2980,6 +3107,40 @@ namespace PharmacyERP.Infrastructure.Migrations
                     b.ToTable("Suppliers", (string)null);
                 });
 
+            modelBuilder.Entity("PharmacyERP.Domain.Entities.SupplierItemAlias", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("ItemId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("NormalizedName")
+                        .IsRequired()
+                        .HasMaxLength(400)
+                        .HasColumnType("nvarchar(400)");
+
+                    b.Property<string>("SourceName")
+                        .IsRequired()
+                        .HasMaxLength(250)
+                        .HasColumnType("nvarchar(250)");
+
+                    b.Property<int>("SupplierId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ItemId");
+
+                    b.HasIndex("SupplierId", "NormalizedName")
+                        .IsUnique();
+
+                    b.ToTable("SupplierItemAliases", (string)null);
+                });
+
             modelBuilder.Entity("PharmacyERP.Domain.Entities.UnitOfMeasure", b =>
                 {
                     b.Property<int>("Id")
@@ -3239,6 +3400,11 @@ namespace PharmacyERP.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("PharmacyERP.Domain.Entities.ItemSaleUnit", null)
+                        .WithMany()
+                        .HasForeignKey("ItemSaleUnitId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("PharmacyERP.Domain.Entities.Warehouse", "Warehouse")
                         .WithMany()
                         .HasForeignKey("WarehouseId")
@@ -3395,6 +3561,11 @@ namespace PharmacyERP.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("PharmacyERP.Domain.Entities.ItemSaleUnit", null)
+                        .WithMany()
+                        .HasForeignKey("ItemSaleUnitId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("PharmacyERP.Domain.Entities.PurchaseOrderItem", "PurchaseOrderItem")
                         .WithMany()
                         .HasForeignKey("PurchaseOrderItemId")
@@ -3503,6 +3674,17 @@ namespace PharmacyERP.Infrastructure.Migrations
                     b.Navigation("Manufacturer");
 
                     b.Navigation("UnitOfMeasure");
+                });
+
+            modelBuilder.Entity("PharmacyERP.Domain.Entities.ItemSaleUnit", b =>
+                {
+                    b.HasOne("PharmacyERP.Domain.Entities.Item", "Item")
+                        .WithMany("SaleUnits")
+                        .HasForeignKey("ItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Item");
                 });
 
             modelBuilder.Entity("PharmacyERP.Domain.Entities.JournalEntry", b =>
@@ -3668,6 +3850,26 @@ namespace PharmacyERP.Infrastructure.Migrations
                     b.Navigation("Prescription");
                 });
 
+            modelBuilder.Entity("PharmacyERP.Domain.Entities.PurchaseImageImport", b =>
+                {
+                    b.HasOne("PharmacyERP.Domain.Entities.GoodsReceiptNote", null)
+                        .WithMany()
+                        .HasForeignKey("GoodsReceiptNoteId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("PharmacyERP.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("ImportedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("PharmacyERP.Domain.Entities.Supplier", null)
+                        .WithMany()
+                        .HasForeignKey("SupplierId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("PharmacyERP.Domain.Entities.PurchaseInvoice", b =>
                 {
                     b.HasOne("PharmacyERP.Domain.Entities.Branch", "Branch")
@@ -3701,6 +3903,11 @@ namespace PharmacyERP.Infrastructure.Migrations
                         .HasForeignKey("ItemId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("PharmacyERP.Domain.Entities.ItemSaleUnit", null)
+                        .WithMany()
+                        .HasForeignKey("ItemSaleUnitId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("PharmacyERP.Domain.Entities.PurchaseInvoice", "PurchaseInvoice")
                         .WithMany("Items")
@@ -3747,6 +3954,11 @@ namespace PharmacyERP.Infrastructure.Migrations
                         .HasForeignKey("ItemId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("PharmacyERP.Domain.Entities.ItemSaleUnit", null)
+                        .WithMany()
+                        .HasForeignKey("ItemSaleUnitId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("PharmacyERP.Domain.Entities.PurchaseOrder", "PurchaseOrder")
                         .WithMany("Items")
@@ -3860,6 +4072,11 @@ namespace PharmacyERP.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("PharmacyERP.Domain.Entities.ItemSaleUnit", null)
+                        .WithMany()
+                        .HasForeignKey("ItemSaleUnitId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("PharmacyERP.Domain.Entities.SalesInvoice", "SalesInvoice")
                         .WithMany("Items")
                         .HasForeignKey("SalesInvoiceId")
@@ -3971,6 +4188,21 @@ namespace PharmacyERP.Infrastructure.Migrations
                     b.Navigation("Warehouse");
                 });
 
+            modelBuilder.Entity("PharmacyERP.Domain.Entities.SupplierItemAlias", b =>
+                {
+                    b.HasOne("PharmacyERP.Domain.Entities.Item", null)
+                        .WithMany()
+                        .HasForeignKey("ItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("PharmacyERP.Domain.Entities.Supplier", null)
+                        .WithMany()
+                        .HasForeignKey("SupplierId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("PharmacyERP.Domain.Entities.User", b =>
                 {
                     b.HasOne("PharmacyERP.Domain.Entities.Branch", "DefaultBranch")
@@ -4075,6 +4307,8 @@ namespace PharmacyERP.Infrastructure.Migrations
             modelBuilder.Entity("PharmacyERP.Domain.Entities.Item", b =>
                 {
                     b.Navigation("Batches");
+
+                    b.Navigation("SaleUnits");
 
                     b.Navigation("StockTransactions");
                 });

@@ -167,10 +167,13 @@ public class PurchaseInvoiceEditViewModel : PurchasePricingViewModel
             var item = AvailableItems.FirstOrDefault(i => i.Id == line.ItemId);
             Lines.Add(new PILineRow
             {
+                PurchaseUnits = item?.PurchaseUnits ?? Array.Empty<PharmacyERP.Application.Features.Inventory.DTOs.PurchaseUnitOption>(),
+                ItemSaleUnitId = line.ItemSaleUnitId,
                 ItemId = line.ItemId,
                 ItemCode = item?.Code ?? string.Empty,
                 ItemName = item?.DisplayName ?? string.Empty,
                 PurchaseUnitDescription = item?.PackagingDescription ?? string.Empty,
+                BonusQuantity = line.BonusQuantity,
                 Quantity = line.Quantity,
                 UnitCost = line.UnitCost,
                 TaxRatePercent = line.TaxRatePercent,
@@ -203,6 +206,11 @@ public class PurchaseInvoiceEditViewModel : PurchasePricingViewModel
         var item = AvailableItems.FirstOrDefault(i => i.Id == itemId);
         if (item is null) return;
 
+        // SelectionChanged also fires when a saved row is displayed. Preserve its chosen unit and price.
+        if (line.ItemCode == item.Code) return;
+        line.UnitCost = 0;
+        line.PurchaseUnits = item.PurchaseUnits;
+        line.ItemSaleUnitId = null;
         line.ItemId = item.Id;
         line.ItemCode = item.Code;
         line.ItemName = item.DisplayName;
@@ -221,7 +229,7 @@ public class PurchaseInvoiceEditViewModel : PurchasePricingViewModel
         if (BranchId <= 0) { ErrorMessage = "الرجاء اختيار الفرع."; return; }
         if (!Lines.Any()) { ErrorMessage = "يجب إضافة صنف واحد على الأقل."; return; }
         if (Lines.Any(l => l.ItemId <= 0)) { ErrorMessage = "الرجاء اختيار الصنف لكل سطر."; return; }
-        if (Lines.Any(l => l.Quantity <= 0)) { ErrorMessage = "الكمية يجب أن تكون أكبر من صفر لكل سطر."; return; }
+        if (Lines.Any(l => l.Quantity < 0 || l.BonusQuantity < 0 || (long)l.Quantity + l.BonusQuantity <= 0)) { ErrorMessage = "الكمية يجب أن تكون أكبر من صفر لكل سطر."; return; }
 
         IsBusy = true;
         try
@@ -238,7 +246,9 @@ public class PurchaseInvoiceEditViewModel : PurchasePricingViewModel
                 Notes = Notes,
                 Lines = Lines.Select(l => new PurchaseInvoiceLineUpsertDto
                 {
+                    ItemSaleUnitId = l.ItemSaleUnitId,
                     ItemId = l.ItemId,
+                    BonusQuantity = l.BonusQuantity,
                     Quantity = l.Quantity,
                     UnitCost = l.UnitCost,
                     TaxRatePercent = l.TaxRatePercent,

@@ -168,6 +168,7 @@ public class InventoryService : IInventoryService
             .Include(i => i.Category)
             .Include(i => i.UnitOfMeasure)
             .Include(i => i.Manufacturer)
+            .Include(i => i.SaleUnits)
             .Include(i => i.Batches)
             .AsQueryable();
 
@@ -191,12 +192,15 @@ public class InventoryService : IInventoryService
             Code = i.Code,
             Barcode = i.Barcode?.Trim(),
             BaseUnitBarcode = i.BaseUnitBarcode?.Trim(),
+            SaleUnits = i.SaleUnits.Select(MapSaleUnit).ToList(),
             UnitsPerPackage = i.UnitsPerPackage,
             PackageUnitName = i.PackageUnitName.Trim(),
             Name = i.Name,
             GenericName = i.GenericName,
             Strength = i.Strength,
             Form = i.Form,
+            CategoryId = i.CategoryId,
+            UnitOfMeasureId = i.UnitOfMeasureId,
             CategoryName = i.Category.Name,
             UnitOfMeasureName = i.UnitOfMeasure.Name,
             ManufacturerName = i.Manufacturer?.Name,
@@ -216,7 +220,7 @@ public class InventoryService : IInventoryService
 
     public async Task<ItemUpsertDto?> GetItemForEditAsync(int id, CancellationToken cancellationToken = default)
     {
-        var item = await _context.Items.FirstOrDefaultAsync(i => i.Id == id, cancellationToken);
+        var item = await _context.Items.Include(i => i.SaleUnits).FirstOrDefaultAsync(i => i.Id == id, cancellationToken);
         if (item is null) return null;
 
         return new ItemUpsertDto
@@ -225,6 +229,7 @@ public class InventoryService : IInventoryService
             Code = item.Code,
             Barcode = item.Barcode?.Trim(),
             BaseUnitBarcode = item.BaseUnitBarcode?.Trim(),
+            SaleUnits = item.SaleUnits.Select(MapSaleUnit).ToList(),
             UnitsPerPackage = item.UnitsPerPackage,
             PackageUnitName = item.PackageUnitName.Trim(),
             Name = item.Name,
@@ -257,6 +262,7 @@ public class InventoryService : IInventoryService
             Code = dto.Code.Trim().ToUpperInvariant(),
             Barcode = dto.Barcode?.Trim(),
             BaseUnitBarcode = dto.BaseUnitBarcode?.Trim(),
+            SaleUnits = dto.SaleUnits.Select(u => new ItemSaleUnit { Name = u.Name.Trim(), BaseUnitCount = u.BaseUnitCount, Barcode = NormalizeBarcode(u.Barcode), IsActive = u.IsActive }).ToList(),
             UnitsPerPackage = dto.UnitsPerPackage,
             PackageUnitName = dto.PackageUnitName.Trim(),
             Name = dto.Name.Trim(),
@@ -288,7 +294,7 @@ public class InventoryService : IInventoryService
     {
         if (dto.Id is null) return Result<ItemDto>.Failure("معرّف الصنف مطلوب.");
 
-        var item = await _context.Items.FirstOrDefaultAsync(i => i.Id == dto.Id, cancellationToken);
+        var item = await _context.Items.Include(i => i.SaleUnits).FirstOrDefaultAsync(i => i.Id == dto.Id, cancellationToken);
         if (item is null) return Result<ItemDto>.Failure("الصنف غير موجود.");
 
         var validation = await ValidateItemAsync(dto, cancellationToken);
@@ -306,6 +312,28 @@ public class InventoryService : IInventoryService
             if (used) return Result<ItemDto>.Failure("لا يمكن تغيير وحدات صنف له حركات سابقة. أنشئ بطاقة جديدة بتعبئة صحيحة، وسوِّ رصيد البطاقة القديمة بوحدتها الأصلية.");
         }
 
+        // Omission never deletes existing unit definitions. Retire units explicitly.
+        foreach (var definition in dto.SaleUnits)
+        {
+            var existing = definition.Id.HasValue ? item.SaleUnits.FirstOrDefault(u => u.Id == definition.Id) : null;
+            if (definition.Id.HasValue && existing is null) return Result<ItemDto>.Failure("وحدة البيع لا تعود لهذا الصنف.");
+            if (existing is not null && (existing.BaseUnitCount != definition.BaseUnitCount || existing.Name != definition.Name.Trim()))
+            {
+                var used = await _context.Batches.AnyAsync(b => b.ItemSaleUnitId == existing.Id, cancellationToken)
+                    || await _context.SalesInvoiceItems.IgnoreQueryFilters().AnyAsync(l => l.ItemSaleUnitId == existing.Id, cancellationToken)
+                    || await _context.GoodsReceiptItems.IgnoreQueryFilters().AnyAsync(l => l.ItemSaleUnitId == existing.Id, cancellationToken)
+                    || await _context.PurchaseOrderItems.IgnoreQueryFilters().AnyAsync(l => l.ItemSaleUnitId == existing.Id, cancellationToken)
+                    || await _context.PurchaseInvoiceItems.IgnoreQueryFilters().AnyAsync(l => l.ItemSaleUnitId == existing.Id, cancellationToken);
+                if (used) return Result<ItemDto>.Failure("وحدة البيع مستخدمة؛ أضف وحدة جديدة للتعبئة المختلفة بدلاً من تغيير الحركات السابقة.");
+            }
+        }
+        foreach (var definition in dto.SaleUnits)
+        {
+            var existing = definition.Id.HasValue ? item.SaleUnits.First(u => u.Id == definition.Id) : new ItemSaleUnit();
+            if (!definition.Id.HasValue) item.SaleUnits.Add(existing);
+            existing.Name = definition.Name.Trim(); existing.BaseUnitCount = definition.BaseUnitCount;
+            existing.Barcode = NormalizeBarcode(definition.Barcode); existing.IsActive = definition.IsActive;
+        }
         item.Code = dto.Code.Trim().ToUpperInvariant();
         item.Barcode = dto.Barcode?.Trim();
         item.BaseUnitBarcode = dto.BaseUnitBarcode?.Trim();
@@ -362,6 +390,33 @@ public class InventoryService : IInventoryService
             if (await _context.Items.AnyAsync(i => i.Id != dto.Id && (i.Barcode == barcode || i.BaseUnitBarcode == barcode), cancellationToken))
                 return "الباركود مستخدم لصنف آخر؛ لكل شركة/عبوة باركود مستقل.";
 
+        if (dto.SaleUnits.Any(u => string.IsNullOrWhiteSpace(u.Name) || u.Name.Length > 50 || u.BaseUnitCount < 1 || u.BaseUnitCount > 100000 || u.Barcode?.Trim().Length > 50))
+            return "راجع اسم وحدة البيع وعدد أجزاءها (1 إلى 100000) والباركود.";
+        if (dto.SaleUnits.GroupBy(u => u.Name.Trim(), StringComparer.OrdinalIgnoreCase).Any(g => g.Count() > 1)
+            || dto.SaleUnits.Where(u => u.Id.HasValue).GroupBy(u => u.Id).Any(g => g.Count() > 1)) return "وحدة البيع مكررة.";
+        if (dto.Id.HasValue)
+        {
+            var submittedUnitIds = dto.SaleUnits.Where(u => u.Id.HasValue).Select(u => u.Id!.Value).ToList();
+            var retainedNames = await _context.ItemSaleUnits.Where(u => u.ItemId == dto.Id && !submittedUnitIds.Contains(u.Id)).Select(u => u.Name).ToListAsync(cancellationToken);
+            if (dto.SaleUnits.Any(u => retainedNames.Contains(u.Name.Trim(), StringComparer.OrdinalIgnoreCase))) return "اسم وحدة البيع مستخدم سابقاً؛ عدّلها بمعرّفها أو اختر اسماً مختلفاً.";
+        }
+        var proposedBarcodes = new[] { dto.Barcode, dto.BaseUnitBarcode }.Concat(dto.SaleUnits.Select(u => u.Barcode))
+            .Select(NormalizeBarcode).Where(b => b is not null).ToList();
+        if (dto.Id.HasValue)
+        {
+            var submittedIds = dto.SaleUnits.Where(u => u.Id.HasValue).Select(u => u.Id!.Value).ToList();
+            proposedBarcodes.AddRange(await _context.ItemSaleUnits.Where(u => u.ItemId == dto.Id && !submittedIds.Contains(u.Id) && u.Barcode != null).Select(u => u.Barcode!).ToListAsync(cancellationToken));
+        }
+        if (proposedBarcodes.Distinct(StringComparer.OrdinalIgnoreCase).Count() != proposedBarcodes.Count) return "باركود الوحدات مكرر.";
+        foreach (var definition in dto.SaleUnits)
+        {
+            if (!string.IsNullOrWhiteSpace(definition.Barcode) && await _context.Items.AnyAsync(i => i.Id != dto.Id && (i.Barcode == definition.Barcode.Trim() || i.BaseUnitBarcode == definition.Barcode.Trim()), cancellationToken))
+                return "الباركود مستخدم لصنف آخر.";
+            if (await _context.ItemSaleUnits.AnyAsync(u => u.ItemId == dto.Id && u.Name == definition.Name.Trim() && u.Id != definition.Id, cancellationToken)) return "اسم وحدة البيع مستخدم؛ اخترها من الوحدات الموجودة.";
+        }
+        foreach (var barcode in proposedBarcodes)
+            if (await _context.ItemSaleUnits.AnyAsync(u => u.Barcode == barcode && u.ItemId != dto.Id, cancellationToken)) return "الباركود مستخدم لوحدة صنف آخر.";
+
         var codeTaken = await _context.Items.AnyAsync(i => i.Code == dto.Code.Trim().ToUpper() && i.Id != dto.Id, cancellationToken);
         if (codeTaken) return "رمز الصنف مستخدم مسبقاً.";
 
@@ -401,7 +456,7 @@ public class InventoryService : IInventoryService
     public async Task<Result<BatchDto>> ReceiveBatchAsync(ReceiveBatchDto dto, int? performedByUserId, CancellationToken cancellationToken = default)
     {
         if (!Enum.IsDefined(dto.PurchaseType)) return Result<BatchDto>.Failure("نوع الشراء غير صالح.");
-        if (dto.Quantity <= 0) return Result<BatchDto>.Failure("الكمية المستلمة يجب أن تكون أكبر من صفر.");
+        if (dto.Quantity < 0 || dto.BonusQuantity < 0 || (long)dto.Quantity + dto.BonusQuantity <= 0) return Result<BatchDto>.Failure("الكمية المستلمة يجب أن تكون أكبر من صفر.");
         if (dto.PurchasePrice < 0 || dto.SalePriceOverride < 0)
             return Result<BatchDto>.Failure("سعر الشراء والبيع لا يمكن أن يكونا سالبين.");
         if (string.IsNullOrWhiteSpace(dto.BatchNumber)) return Result<BatchDto>.Failure("رقم الدفعة (Batch Number) مطلوب.");
@@ -409,8 +464,12 @@ public class InventoryService : IInventoryService
 
         var item = await _context.Items.FirstOrDefaultAsync(i => i.Id == dto.ItemId, cancellationToken);
         if (item is null || !item.IsActive) return Result<BatchDto>.Failure("الصنف غير موجود أو غير نشط.");
-        if (dto.Quantity > int.MaxValue / item.UnitsPerPackage) return Result<BatchDto>.Failure("الكمية كبيرة جداً.");
-        var stockQuantity = dto.Quantity * item.UnitsPerPackage;
+        var unit = dto.ItemSaleUnitId.HasValue ? await _context.ItemSaleUnits.FirstOrDefaultAsync(u => u.Id == dto.ItemSaleUnitId && u.ItemId == item.Id && u.IsActive, cancellationToken) : null;
+        if (dto.ItemSaleUnitId.HasValue && unit is null) return Result<BatchDto>.Failure("وحدة الاستلام غير موجودة لهذا الصنف أو غير نشطة.");
+        var factor = unit?.BaseUnitCount ?? item.UnitsPerPackage;
+        var received = (long)dto.Quantity + dto.BonusQuantity;
+        if (received > int.MaxValue / factor) return Result<BatchDto>.Failure("الكمية كبيرة جداً.");
+        var stockQuantity = (int)received * factor;
         var packageSalePrice = dto.SalePriceOverride ?? SalePricePolicy.FromPurchasePrice(dto.PurchasePrice, dto.PurchaseType);
 
         var warehouseExists = await _context.Warehouses.AnyAsync(w => w.Id == dto.WarehouseId, cancellationToken);
@@ -419,15 +478,17 @@ public class InventoryService : IInventoryService
         var batch = new Batch
         {
             ItemId = dto.ItemId,
+            ItemSaleUnitId = dto.ItemSaleUnitId,
+            ReceivedUnitFactor = factor,
             WarehouseId = dto.WarehouseId,
             BatchNumber = dto.BatchNumber.Trim(),
             ManufactureDate = dto.ManufactureDate,
             ExpiryDate = dto.ExpiryDate,
             QuantityOnHand = stockQuantity,
             PurchaseType = dto.PurchaseType,
-            PurchasePrice = Math.Round(dto.PurchasePrice / item.UnitsPerPackage, 6, MidpointRounding.AwayFromZero),
+            PurchasePrice = Math.Round(dto.PurchasePrice * dto.Quantity / stockQuantity, 6, MidpointRounding.AwayFromZero),
             PackageSalePrice = packageSalePrice,
-            SalePriceOverride = Math.Round(packageSalePrice / item.UnitsPerPackage, 2, MidpointRounding.AwayFromZero),
+            SalePriceOverride = Math.Round(packageSalePrice / factor, 2, MidpointRounding.AwayFromZero),
             HasConfiguredSalePrice = true,
             ReceivedAtUtc = _dateTime.UtcNow,
             SupplierReference = dto.SupplierReference
@@ -644,10 +705,14 @@ public class InventoryService : IInventoryService
     private async Task<Batch> ReloadBatchAsync(int batchId, CancellationToken cancellationToken) =>
         await _context.Batches.Include(b => b.Item).ThenInclude(i => i.UnitOfMeasure).Include(b => b.Warehouse).FirstAsync(b => b.Id == batchId, cancellationToken);
 
+    private static string? NormalizeBarcode(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    private static ItemSaleUnitDto MapSaleUnit(ItemSaleUnit u) => new() { Id = u.Id, Name = u.Name, BaseUnitCount = u.BaseUnitCount, Barcode = u.Barcode, IsActive = u.IsActive };
+
     private static BatchDto MapBatchToDto(Batch b, DateTime now) => new()
     {
         Id = b.Id,
         ItemId = b.ItemId,
+        ItemSaleUnitId = b.ItemSaleUnitId,
         ItemName = b.Item.Name,
         UnitOfMeasureName = b.Item.UnitOfMeasure.Name,
         WarehouseId = b.WarehouseId,

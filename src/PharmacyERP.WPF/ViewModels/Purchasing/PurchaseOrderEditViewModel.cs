@@ -130,6 +130,8 @@ public class PurchaseOrderEditViewModel : PurchasePricingViewModel
             {
                 PurchaseType = PurchaseType,
                 Id = line.Id,
+                PurchaseUnits = item?.PurchaseUnits ?? Array.Empty<PharmacyERP.Application.Features.Inventory.DTOs.PurchaseUnitOption>(),
+                ItemSaleUnitId = line.ItemSaleUnitId,
                 ItemId = line.ItemId,
                 ItemCode = item?.Code ?? string.Empty,
                 ItemName = item?.DisplayName ?? string.Empty,
@@ -181,6 +183,11 @@ public class PurchaseOrderEditViewModel : PurchasePricingViewModel
         var item = AvailableItems.FirstOrDefault(i => i.Id == itemId);
         if (item is null) return;
 
+        // SelectionChanged also fires when a saved row is displayed. Preserve its chosen unit and price.
+        if (line.ItemCode == item.Code) return;
+        line.UnitCost = 0;
+        line.PurchaseUnits = item.PurchaseUnits;
+        line.ItemSaleUnitId = null;
         line.ItemId = item.Id;
         line.ItemCode = item.Code;
         line.ItemName = item.DisplayName;
@@ -215,6 +222,7 @@ public class PurchaseOrderEditViewModel : PurchasePricingViewModel
                 Lines = Lines.Select(l => new PurchaseOrderLineUpsertDto
                 {
                     Id = l.Id,
+                    ItemSaleUnitId = l.ItemSaleUnitId,
                     ItemId = l.ItemId,
                     QuantityOrdered = l.QuantityOrdered,
                     UnitCost = l.UnitCost,

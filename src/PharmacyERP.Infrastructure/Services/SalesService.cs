@@ -141,28 +141,37 @@ public class SalesService : ISalesService
         if (searchText.Length == 0) return new();
         var today = _dateTime.UtcNow.Date;
         var matches = _context.Items.AsNoTracking().Where(i => i.IsActive &&
-            (i.Barcode == searchText || i.BaseUnitBarcode == searchText || i.Code.Contains(searchText) || i.Name.Contains(searchText) ||
+            (i.Barcode == searchText || i.BaseUnitBarcode == searchText || i.SaleUnits.Any(u => u.IsActive && u.Barcode == searchText) || i.Code.Contains(searchText) || i.Name.Contains(searchText) ||
              (i.GenericName != null && i.GenericName.Contains(searchText)) ||
              (i.Manufacturer != null && i.Manufacturer.Name.Contains(searchText)) ||
              (i.Barcode != null && i.Barcode.Contains(searchText))));
-        var items = await matches.OrderByDescending(i => i.Barcode == searchText || i.BaseUnitBarcode == searchText)
+        var items = await matches.OrderByDescending(i => i.Barcode == searchText || i.BaseUnitBarcode == searchText || i.SaleUnits.Any(u => u.IsActive && u.Barcode == searchText))
             .ThenByDescending(i => i.Code == searchText).ThenBy(i => i.Name)
-            .Include(i => i.UnitOfMeasure).Include(i => i.Manufacturer).Take(30).ToListAsync(cancellationToken);
+            .Include(i => i.UnitOfMeasure).Include(i => i.Manufacturer).Include(i => i.SaleUnits).Take(30).ToListAsync(cancellationToken);
         var ids = items.Select(i => i.Id).ToList();
         var batches = await _context.Batches.AsNoTracking()
             .Where(b => ids.Contains(b.ItemId) && b.WarehouseId == warehouseId && b.ExpiryDate >= today && b.QuantityOnHand > 0)
             .OrderBy(b => b.ExpiryDate).ThenBy(b => b.ReceivedAtUtc).ThenBy(b => b.Id)
-            .Select(b => new { b.ItemId, b.QuantityOnHand, b.PackageSalePrice,
+            .Select(b => new { b.ItemId, b.QuantityOnHand, b.PackageSalePrice, b.ReceivedUnitFactor,
                 SalePriceOverride = b.HasConfiguredSalePrice || b.SalePriceOverride > 0 ? b.SalePriceOverride : null })
             .ToListAsync(cancellationToken);
         var stock = batches.GroupBy(b => b.ItemId).ToDictionary(g => g.Key,
-            g => new { Quantity = g.Sum(b => b.QuantityOnHand), SalePrice = g.First().SalePriceOverride, PackagePrice = g.First().PackageSalePrice });
+            g => new { Quantity = g.Sum(b => b.QuantityOnHand), SalePrice = g.First().SalePriceOverride, PackagePrice = g.First().PackageSalePrice, ReceivedFactor = g.First().ReceivedUnitFactor });
         return items.Select(item => new SaleItemLookupDto
         {
             ItemId = item.Id, Code = item.Code, Barcode = item.Barcode, Name = item.Name,
             BaseUnitBarcode = item.BaseUnitBarcode, UnitsPerPackage = item.UnitsPerPackage,
             PackageUnitName = item.PackageUnitName, ManufacturerName = item.Manufacturer?.Name, Strength = item.Strength,
-            PackageSalePrice = stock.GetValueOrDefault(item.Id)?.PackagePrice ?? item.DefaultSalePrice,
+            PackageSalePrice = stock.GetValueOrDefault(item.Id) is { } priceStock
+                ? (priceStock.ReceivedFactor ?? item.UnitsPerPackage) == item.UnitsPerPackage && priceStock.PackagePrice.HasValue
+                    ? priceStock.PackagePrice.Value : Math.Round((priceStock.SalePrice ?? item.DefaultSalePrice / item.UnitsPerPackage) * item.UnitsPerPackage, 2, MidpointRounding.AwayFromZero)
+                : item.DefaultSalePrice,
+            SaleUnits = item.SaleUnits.Where(u => u.IsActive).Select(u => new PharmacyERP.Application.Features.Inventory.DTOs.ItemSaleUnitDto
+            {
+                Id = u.Id, Name = u.Name, BaseUnitCount = u.BaseUnitCount, Barcode = u.Barcode, IsActive = true,
+                SalePrice = stock.GetValueOrDefault(item.Id) is { } unitStock && unitStock.PackagePrice.HasValue && (unitStock.ReceivedFactor ?? item.UnitsPerPackage) == u.BaseUnitCount
+                    ? unitStock.PackagePrice.Value : Math.Round((stock.GetValueOrDefault(item.Id)?.SalePrice ?? item.DefaultSalePrice / item.UnitsPerPackage) * u.BaseUnitCount, 2, MidpointRounding.AwayFromZero)
+            }).ToList(),
             UnitOfMeasureName = item.UnitOfMeasure.Name,
             DefaultSalePrice = stock.GetValueOrDefault(item.Id)?.SalePrice ?? Math.Round(item.DefaultSalePrice / item.UnitsPerPackage, 2, MidpointRounding.AwayFromZero),
             TaxRatePercent = item.TaxRatePercent, RequiresPrescription = item.RequiresPrescription,
@@ -198,7 +207,7 @@ public class SalesService : ISalesService
         if (dto.Lines.Any(l => l.UnitPrice < 0 || l.TaxRatePercent < 0 || l.TaxRatePercent > 100 || l.DiscountAmount < 0 ||
             l.DiscountAmount > l.UnitPrice * l.Quantity) || dto.DiscountAmount < 0 || dto.AmountTendered < 0)
             return Result<SalesInvoiceDto>.Failure("راجع السعر والضريبة والخصومات ومبلغ الدفع.");
-        if (dto.Lines.GroupBy(l => new { l.ItemId, l.SellAsPackage }).Any(g => g.Count() > 1))
+        if (dto.Lines.GroupBy(l => new { l.ItemId, l.SellAsPackage, l.ItemSaleUnitId }).Any(g => g.Count() > 1))
             return Result<SalesInvoiceDto>.Failure("اجمع الصنف المتكرر بنفس وحدة البيع في سطر واحد.");
         if (dto.BranchId <= 0) return Result<SalesInvoiceDto>.Failure("الرجاء اختيار الفرع.");
         if (dto.WarehouseId <= 0) return Result<SalesInvoiceDto>.Failure("الرجاء اختيار المخزن.");
@@ -217,11 +226,14 @@ public class SalesService : ISalesService
         // still-fillable Prescription belonging to the same customer — enforced here rather
         // than only in the UI, since CheckoutAsync is the single choke point for every sale.
         var lineItemIds = dto.Lines.Select(l => l.ItemId).Distinct().ToList();
-        var itemsById = await _context.Items.Where(i => lineItemIds.Contains(i.Id)).Include(i => i.UnitOfMeasure).Include(i => i.Manufacturer).ToDictionaryAsync(i => i.Id, cancellationToken);
+        var itemsById = await _context.Items.Where(i => lineItemIds.Contains(i.Id)).Include(i => i.UnitOfMeasure).Include(i => i.Manufacturer).Include(i => i.SaleUnits).ToDictionaryAsync(i => i.Id, cancellationToken);
 
         if (itemsById.Count != lineItemIds.Count || itemsById.Values.Any(i => !i.IsActive))
             return Result<SalesInvoiceDto>.Failure("أحد الأصناف غير موجود أو غير نشط.");
-        int Factor(SaleLineInputDto line) => line.SellAsPackage ? itemsById[line.ItemId].UnitsPerPackage : 1;
+        if (dto.Lines.Any(l => l.ItemSaleUnitId.HasValue && (l.SellAsPackage || !itemsById[l.ItemId].SaleUnits.Any(u => u.Id == l.ItemSaleUnitId && u.IsActive))))
+            return Result<SalesInvoiceDto>.Failure("وحدة البيع لا تعود للصنف أو غير نشطة.");
+        int Factor(SaleLineInputDto line) => line.ItemSaleUnitId.HasValue ? itemsById[line.ItemId].SaleUnits.First(u => u.Id == line.ItemSaleUnitId).BaseUnitCount
+            : line.SellAsPackage ? itemsById[line.ItemId].UnitsPerPackage : 1;
         if (dto.Lines.Any(l => l.SellAsPackage && itemsById[l.ItemId].UnitsPerPackage == 1))
             return Result<SalesInvoiceDto>.Failure("هذا الصنف لا يحتوي وحدة عبوة منفصلة.");
         if (dto.Lines.Any(l => l.Quantity > int.MaxValue / Factor(l)))
@@ -324,8 +336,10 @@ public class SalesService : ISalesService
                 SalesInvoiceId = invoice.Id,
                 ItemId = line.ItemId,
                 Quantity = line.Quantity,
+                ItemSaleUnitId = line.ItemSaleUnitId,
                 UnitsPerSale = Factor(line),
-                UnitName = line.SellAsPackage ? itemsById[line.ItemId].PackageUnitName : itemsById[line.ItemId].UnitOfMeasure.Name,
+                UnitName = line.ItemSaleUnitId.HasValue ? itemsById[line.ItemId].SaleUnits.First(u => u.Id == line.ItemSaleUnitId).Name
+                    : line.SellAsPackage ? itemsById[line.ItemId].PackageUnitName : itemsById[line.ItemId].UnitOfMeasure.Name,
                 ItemDisplayName = string.Join(" · ", new[] { itemsById[line.ItemId].Name, itemsById[line.ItemId].Strength, itemsById[line.ItemId].Manufacturer?.Name }.Where(v => !string.IsNullOrWhiteSpace(v))),
                 UnitPrice = line.UnitPrice,
                 TaxRatePercent = line.TaxRatePercent,

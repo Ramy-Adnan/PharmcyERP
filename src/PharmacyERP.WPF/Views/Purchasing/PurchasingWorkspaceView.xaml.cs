@@ -25,6 +25,21 @@ public partial class PurchasingWorkspaceView : UserControl
         Loaded += async (_, _) => await viewModel.InitializeAsync();
     }
 
+    private async void ImportPhotoClicked(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not PurchasingWorkspaceViewModel vm || vm.IsBusy || !vm.IsGoodsStep) return;
+        if (vm.ReceiptId.HasValue || vm.Receipt.Lines.Count > 0) { _dialogs.ShowError("ابدأ استلاماً جديداً فارغاً لاستيراد الصورة؛ احفظ السند الحالي أولاً."); return; }
+        if (vm.SelectedSupplierId <= 0 || vm.Receipt.BranchId <= 0 || vm.Receipt.WarehouseId <= 0) { _dialogs.ShowError("اختر المورد والفرع والمخزن أولاً."); return; }
+        try
+        {
+            var dialog = _dialogs.CreateDialog<InvoiceImageImportDialog>();
+            var editor = (InvoiceImageImportViewModel)dialog.DataContext;
+            await editor.InitializeAsync(vm.SelectedSupplierId, vm.Receipt.BranchId, vm.Receipt.WarehouseId);
+            if (_dialogs.ShowDialog(dialog) == true && editor.SavedReceiptId.HasValue) await vm.ResumeReceiptAsync(editor.SavedReceiptId.Value);
+        }
+        catch (Exception) { _dialogs.ShowError("تعذر فتح استيراد الفاتورة. راجع الاتصال وإعدادات النظام."); }
+    }
+
     private async void AddItemClicked(object sender, RoutedEventArgs e)
     {
         if (DataContext is not PurchasingWorkspaceViewModel vm || !vm.CanManageItems || vm.IsBusy || !vm.IsGoodsStep) return;

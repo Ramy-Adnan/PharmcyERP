@@ -4,6 +4,7 @@ namespace PharmacyERP.Application.Features.Sales.DTOs;
 
 public class SaleLineInputDto
 {
+    public int? ItemSaleUnitId { get; set; }
     public int ItemId { get; set; }
     public bool SellAsPackage { get; set; }
     public int Quantity { get; set; }

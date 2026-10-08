@@ -3,13 +3,13 @@ using PharmacyERP.WPF.MVVM;
 
 namespace PharmacyERP.WPF.ViewModels.Purchasing;
 
-public abstract class PurchasePriceRowBase : PurchasePricingViewModel
+public abstract class PurchasePriceRowBase : PurchaseUnitRowBase
 {
     private decimal _unitCost, _salePrice;
 
     protected PurchasePriceRowBase() => CalculateSalePriceCommand = new RelayCommand(CalculateSalePrice);
 
-    public decimal UnitCost
+    public override decimal UnitCost
     {
         get => _unitCost;
         set

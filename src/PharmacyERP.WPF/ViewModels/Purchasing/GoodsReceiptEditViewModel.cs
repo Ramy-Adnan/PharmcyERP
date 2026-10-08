@@ -158,6 +158,8 @@ public class GoodsReceiptEditViewModel : PurchasePricingViewModel
                 PurchaseType = PurchaseType,
                 Id = line.Id,
                 PurchaseOrderItemId = line.PurchaseOrderItemId,
+                PurchaseUnits = AvailableItems.FirstOrDefault(i => i.Id == line.ItemId)?.PurchaseUnits ?? Array.Empty<PharmacyERP.Application.Features.Inventory.DTOs.PurchaseUnitOption>(),
+                ItemSaleUnitId = line.ItemSaleUnitId,
                 ItemId = line.ItemId,
                 ItemCode = item?.Code ?? string.Empty,
                 ItemName = item?.DisplayName ?? string.Empty,
@@ -165,6 +167,7 @@ public class GoodsReceiptEditViewModel : PurchasePricingViewModel
                 BatchNumber = line.BatchNumber,
                 ManufactureDate = line.ManufactureDate,
                 ExpiryDate = line.ExpiryDate,
+                BonusQuantity = line.BonusQuantity,
                 QuantityReceived = line.QuantityReceived,
                 UnitCost = line.UnitCost,
                 SalePrice = line.SalePrice ?? SalePricePolicy.FromPurchasePrice(line.UnitCost, PurchaseType)
@@ -258,6 +261,8 @@ public class GoodsReceiptEditViewModel : PurchasePricingViewModel
             {
                 PurchaseType = PurchaseType,
                 PurchaseOrderItemId = line.Id,
+                PurchaseUnits = AvailableItems.FirstOrDefault(i => i.Id == line.ItemId)?.PurchaseUnits ?? Array.Empty<PharmacyERP.Application.Features.Inventory.DTOs.PurchaseUnitOption>(),
+                ItemSaleUnitId = line.ItemSaleUnitId,
                 ItemId = line.ItemId,
                 ItemCode = line.ItemCode,
                 ItemName = AvailableItems.FirstOrDefault(i => i.Id == line.ItemId)?.DisplayName ?? line.ItemName,
@@ -276,6 +281,11 @@ public class GoodsReceiptEditViewModel : PurchasePricingViewModel
         var item = AvailableItems.FirstOrDefault(i => i.Id == itemId);
         if (item is null) return;
 
+        // SelectionChanged also fires when a saved row is displayed. Preserve its chosen unit and price.
+        if (line.ItemCode == item.Code) return;
+        line.UnitCost = 0;
+        line.PurchaseUnits = item.PurchaseUnits;
+        line.ItemSaleUnitId = null;
         line.ItemId = item.Id;
         line.ItemCode = item.Code;
         line.ItemName = item.DisplayName;
@@ -293,7 +303,7 @@ public class GoodsReceiptEditViewModel : PurchasePricingViewModel
         if (!Lines.Any()) { ErrorMessage = "يجب إضافة صنف واحد على الأقل."; return; }
         if (Lines.Any(l => l.ItemId <= 0)) { ErrorMessage = "الرجاء اختيار الصنف لكل سطر."; return; }
         if (Lines.Any(l => string.IsNullOrWhiteSpace(l.BatchNumber))) { ErrorMessage = "رقم الدفعة مطلوب لكل سطر."; return; }
-        if (Lines.Any(l => l.QuantityReceived <= 0)) { ErrorMessage = "الكمية يجب أن تكون أكبر من صفر لكل سطر."; return; }
+        if (Lines.Any(l => l.QuantityReceived < 0 || l.BonusQuantity < 0 || (long)l.QuantityReceived + l.BonusQuantity <= 0)) { ErrorMessage = "الكمية يجب أن تكون أكبر من صفر لكل سطر."; return; }
         if (Lines.Any(l => l.ExpiryDate.Date <= ReceiptDate.Date)) { ErrorMessage = "تاريخ انتهاء الصلاحية يجب أن يكون بعد تاريخ الاستلام."; return; }
 
         IsBusy = true;
@@ -313,10 +323,12 @@ public class GoodsReceiptEditViewModel : PurchasePricingViewModel
                 {
                     Id = l.Id,
                     PurchaseOrderItemId = l.PurchaseOrderItemId,
+                    ItemSaleUnitId = l.ItemSaleUnitId,
                     ItemId = l.ItemId,
                     BatchNumber = l.BatchNumber,
                     ManufactureDate = l.ManufactureDate,
                     ExpiryDate = l.ExpiryDate,
+                    BonusQuantity = l.BonusQuantity,
                     QuantityReceived = l.QuantityReceived,
                     UnitCost = l.UnitCost,
                     SalePrice = l.SalePrice

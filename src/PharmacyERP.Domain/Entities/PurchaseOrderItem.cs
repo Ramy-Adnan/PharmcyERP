@@ -7,6 +7,7 @@ public class PurchaseOrderItem : BaseEntity
     public int PurchaseOrderId { get; set; }
     public PurchaseOrder PurchaseOrder { get; set; } = null!;
 
+    public int? ItemSaleUnitId { get; set; }
     public int ItemId { get; set; }
     public Item Item { get; set; } = null!;
 

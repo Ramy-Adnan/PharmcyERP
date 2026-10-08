@@ -18,6 +18,9 @@ public class ReceiveBatchViewModel : PurchasePricingViewModel
     private readonly ICurrentUserService _currentUserService;
 
     private int _itemId;
+    private int _bonusQuantity;
+    private int? _itemSaleUnitId;
+    private IReadOnlyList<PurchaseUnitOption> _purchaseUnits = Array.Empty<PurchaseUnitOption>();
     private int _warehouseId;
     private string _batchNumber = string.Empty;
     private DateTime? _manufactureDate;
@@ -44,7 +47,21 @@ public class ReceiveBatchViewModel : PurchasePricingViewModel
 
     public ObservableCollection<WarehouseDto> Warehouses { get; }
 
-    public string PackagingDescription { get; private set; } = string.Empty;
+    public IReadOnlyList<PurchaseUnitOption> PurchaseUnits { get => _purchaseUnits; private set { if (SetProperty(ref _purchaseUnits, value)) OnPropertyChanged(nameof(SelectedPurchaseUnit)); OnPropertyChanged(nameof(PackagingDescription)); } }
+    public PurchaseUnitOption? SelectedPurchaseUnit { get => PurchaseUnits.FirstOrDefault(u => u.Id == ItemSaleUnitId); set { if (value is not null) ItemSaleUnitId = value.Id; } }
+    public int BonusQuantity { get => _bonusQuantity; set => SetProperty(ref _bonusQuantity, value); }
+    public int? ItemSaleUnitId
+    {
+        get => _itemSaleUnitId;
+        set
+        {
+            var old = PurchaseUnits.FirstOrDefault(u => u.Id == _itemSaleUnitId)?.BaseUnitCount ?? 1;
+            if (!SetProperty(ref _itemSaleUnitId, value)) return;
+            PurchasePrice = Math.Round(PurchasePrice / old * (PurchaseUnits.FirstOrDefault(u => u.Id == value)?.BaseUnitCount ?? 1), 2, MidpointRounding.AwayFromZero);
+            OnPropertyChanged(nameof(SelectedPurchaseUnit)); OnPropertyChanged(nameof(PackagingDescription));
+        }
+    }
+    public string PackagingDescription => SelectedPurchaseUnit is { } unit ? $"الكمية والأسعار لوحدة الاستلام: {unit.DisplayName}." : string.Empty;
     public int WarehouseId { get => _warehouseId; set => SetProperty(ref _warehouseId, value); }
     public string BatchNumber { get => _batchNumber; set => SetProperty(ref _batchNumber, value); }
     public DateTime? ManufactureDate { get => _manufactureDate; set => SetProperty(ref _manufactureDate, value); }
@@ -74,8 +91,13 @@ public class ReceiveBatchViewModel : PurchasePricingViewModel
     {
         _itemId = itemId;
         var item = await _inventoryService.GetItemForEditAsync(itemId);
-        PackagingDescription = item is null ? string.Empty : item.UnitsPerPackage == 1 ? "الكمية والأسعار بوحدة الصنف الحالية (وحدة واحدة)." : $"الكمية والأسعار للعبوة: {item.PackageUnitName} = {item.UnitsPerPackage} وحدة مخزون صغيرة.";
         OnPropertyChanged(nameof(PackagingDescription));
+        if (item is not null)
+        {
+            var names = await _inventoryService.GetUnitsAsync();
+            PurchaseUnits = new[] { new PurchaseUnitOption(null, item.UnitsPerPackage > 1 ? item.PackageUnitName : names.FirstOrDefault(u => u.Id == item.UnitOfMeasureId)?.Name ?? "وحدة", item.UnitsPerPackage) }
+                .Concat(item.SaleUnits.Where(u => u.IsActive).Select(u => new PurchaseUnitOption(u.Id, u.Name, u.BaseUnitCount))).ToList();
+        }
         PurchaseType = item?.PurchaseType ?? PurchasePricingType.Other;
         PurchasePrice = item?.DefaultPurchasePrice ?? 0;
         SalePriceOverride = SalePricePolicy.FromPurchasePrice(PurchasePrice, PurchaseType);
@@ -96,6 +118,8 @@ public class ReceiveBatchViewModel : PurchasePricingViewModel
             var dto = new ReceiveBatchDto
             {
                 ItemId = _itemId,
+                ItemSaleUnitId = ItemSaleUnitId,
+                BonusQuantity = BonusQuantity,
                 WarehouseId = WarehouseId,
                 BatchNumber = BatchNumber,
                 ManufactureDate = ManufactureDate,

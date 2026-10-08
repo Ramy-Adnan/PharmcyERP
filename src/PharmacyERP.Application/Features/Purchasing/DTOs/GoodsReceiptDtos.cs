@@ -21,12 +21,14 @@ public class GoodsReceiptNoteDto
 public class GoodsReceiptLineDto
 {
     public int Id { get; set; }
+    public int? ItemSaleUnitId { get; set; }
     public int ItemId { get; set; }
     public string ItemCode { get; set; } = string.Empty;
     public string ItemName { get; set; } = string.Empty;
     public string BatchNumber { get; set; } = string.Empty;
     public DateTime? ManufactureDate { get; set; }
     public DateTime ExpiryDate { get; set; }
+    public int BonusQuantity { get; set; }
     public int QuantityReceived { get; set; }
     public decimal UnitCost { get; set; }
     public decimal SalePrice { get; set; }
@@ -54,10 +56,12 @@ public class GoodsReceiptLineUpsertDto
 {
     public int? Id { get; set; }
     public int? PurchaseOrderItemId { get; set; }
+    public int? ItemSaleUnitId { get; set; }
     public int ItemId { get; set; }
     public string BatchNumber { get; set; } = string.Empty;
     public DateTime? ManufactureDate { get; set; }
     public DateTime ExpiryDate { get; set; }
+    public int BonusQuantity { get; set; }
     public int QuantityReceived { get; set; }
     public decimal UnitCost { get; set; }
     public decimal? SalePrice { get; set; }
