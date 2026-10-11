@@ -58,6 +58,79 @@ public class PackagingSalesTests
         await pos.InitializeAsync(); return pos;
     }
 
+    [Theory]
+    [InlineData(1, PurchasePricingType.Other, 25000)]
+    [InlineData(5, PurchasePricingType.Other, 25000)]
+    [InlineData(5, PurchasePricingType.ByHand, 24000)]
+    public async Task UnpricedMaster_ReceivedAtTwentyThousand_PosUsesBatchPriceForEveryUnit(int factor, PurchasePricingType type, int price)
+    {
+        await using var db = TestDb.CreateContext(_clock); var f = await SeedAsync(db, factor);
+        var item = await db.Items.SingleAsync(); item.DefaultPurchasePrice = 0; item.DefaultSalePrice = 0;
+        await db.SaveChangesAsync();
+        var editor = new PharmacyERP.WPF.ViewModels.Inventory.ReceiveBatchViewModel(Inventory(db),
+            new BranchService(db, new PermissiveLicenseService()), new FakeCurrentUserService());
+        await editor.InitializeAsync(f.ItemId, f.BranchId);
+        editor.PurchaseType = type; editor.PurchasePrice = 20000; editor.Quantity = 4; editor.BatchNumber = "NEW-PRICED";
+        editor.ExpiryDate = _clock.UtcNow.AddMonths(3);
+        await editor.SaveAsync(); editor.SavedSuccessfully.Should().BeTrue();
+        var pos = await PosAsync(db, f);
+        pos.ProductCards.Single().Price.Should().Be(price);
+        await pos.SubmitSearchAsync("1234567890", true);
+        var row = pos.CartLines.Single(); row.UnitPrice.Should().Be(price);
+        row.SelectedSaleUnit = row.SaleUnits.First(); row.UnitPrice.Should().Be(price / (decimal)factor);
+        row.SelectedSaleUnit = row.SaleUnits.Last(); row.Quantity = 4;
+        await pos.CheckoutAsync(); pos.ErrorMessage.Should().BeEmpty();
+        (await db.SalesInvoiceItems.SingleAsync()).UnitPrice.Should().Be(price);
+        (await db.SalesInvoices.SingleAsync()).TotalAmount.Should().Be(price * 4);
+    }
+
+    [Fact]
+    public async Task CatalogueCard_RefreshesBatchPriceAndStockBeforeAddingToBasket()
+    {
+        await using var db = TestDb.CreateContext(_clock); var f = await SeedAsync(db);
+        var item = await db.Items.SingleAsync(); item.DefaultSalePrice = 0; item.DefaultPurchasePrice = 0;
+        await db.SaveChangesAsync(); await ReceiveAsync(db, f, sale: 0);
+        var pos = await PosAsync(db, f); var oldCard = pos.ProductCards.Single(); oldCard.Price.Should().Be(0);
+        (await Inventory(db).IssueStockFefoAsync(f.ItemId, f.WarehouseId, 10, "Test", null, null)).Succeeded.Should().BeTrue();
+        await ReceiveAsync(db, f, batch: "NEW-PRICE", sale: 25000);
+        await Task.WhenAll(pos.AddProductAsync(oldCard), pos.AddProductAsync(oldCard));
+        pos.CartLines.Single().Quantity.Should().Be(2); pos.CartLines.Single().UnitPrice.Should().Be(25000);
+        pos.ProductCards.Single().Price.Should().Be(25000);
+        await pos.CheckoutAsync(); pos.ErrorMessage.Should().BeEmpty();
+        (await db.SalesInvoices.SingleAsync()).TotalAmount.Should().Be(50000);
+    }
+
+    [Fact]
+    public async Task Pos_ZeroUnitPriceRequiresCorrectionWithoutConsumingStockOrSavingInvoice()
+    {
+        await using var db = TestDb.CreateContext(_clock); var f = await SeedAsync(db);
+        await ReceiveAsync(db, f, sale: 0); var pos = await PosAsync(db, f);
+        await pos.SubmitSearchAsync("1234567890", true);
+        await pos.CheckoutAsync(); pos.ErrorMessage.Should().Contain("صفر");
+        (await db.SalesInvoices.CountAsync()).Should().Be(0);
+        (await db.StockTransactions.CountAsync()).Should().Be(1);
+        (await db.Batches.SingleAsync()).QuantityOnHand.Should().Be(10);
+        pos.CartLines.Single().UnitPrice = 25000;
+        await pos.CheckoutAsync(); pos.ErrorMessage.Should().BeEmpty();
+        (await db.SalesInvoices.SingleAsync()).TotalAmount.Should().Be(25000);
+    }
+
+    [Theory]
+    [InlineData(PurchasePricingType.Other, 25000)]
+    [InlineData(PurchasePricingType.ByHand, 24000)]
+    public async Task LegacyBatchWithCostAndNoSalePrice_UnpricedMasterUsesCostPlusMarkup(PurchasePricingType type, int expected)
+    {
+        await using var db = TestDb.CreateContext(_clock); var f = await SeedAsync(db);
+        var item = await db.Items.SingleAsync(); item.DefaultPurchasePrice = 0; item.DefaultSalePrice = 0;
+        await TestDb.AddBatchAsync(db, f, "LEGACY-COST", _clock.UtcNow.AddMonths(3), 20, purchasePrice: 4000);
+        (await db.Batches.SingleAsync()).PurchaseType = type;
+        await db.SaveChangesAsync();
+        var pos = await PosAsync(db, f); await pos.SubmitSearchAsync("1234567890", true);
+        pos.CartLines.Single().UnitPrice.Should().Be(expected);
+        pos.CartLines.Single().SelectedSaleUnit = pos.CartLines.Single().SaleUnits.First();
+        pos.CartLines.Single().UnitPrice.Should().Be(expected / 5m);
+    }
+
     [Fact]
     public async Task BoxWithFiveTwentyPillStrips_PricesAndDeductsEveryUnitInPills()
     {

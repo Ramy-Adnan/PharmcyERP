@@ -170,11 +170,11 @@ public class PosCategoryTests
         await db.SaveChangesAsync(); await TestDb.AddBatchAsync(db, fixture, "FRESH", _clock.UtcNow.AddDays(100), 10);
         var pos = await PosAsync(db, fixture); var card = pos.ProductCards.Single();
         card.Price.Should().Be(10000); card.UnitName.Should().Be("علبة");
-        pos.AddProductCommand.Execute(card);
+        await pos.AddProductAsync(card);
         pos.CartLines.Single().UnitPrice.Should().Be(card.Price);
         var line = pos.CartLines.Single(); line.SelectedSaleUnit = line.SaleUnits.First();
         line.UnitPrice.Should().Be(2000);
-        pos.AddProductCommand.Execute(card);
+        await pos.AddProductAsync(card);
         pos.CartLines.Should().HaveCount(2); pos.CartLines.Single(l => l.SellAsPackage).UnitPrice.Should().Be(card.Price);
         pos.TotalAmount.Should().Be(12000);
         await pos.PrepareToCloseAsync(); pos.CanScan.Should().BeFalse();

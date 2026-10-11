@@ -7,6 +7,7 @@ using PharmacyERP.Application.Features.Accounting.DTOs;
 using PharmacyERP.Application.Features.Inventory;
 using PharmacyERP.Application.Features.Sales;
 using PharmacyERP.Application.Features.Sales.DTOs;
+using PharmacyERP.Domain.Common;
 using PharmacyERP.Domain.Entities;
 using PharmacyERP.Domain.Enums;
 
@@ -163,30 +164,45 @@ public class SalesService : ISalesService
         var batches = await _context.Batches.AsNoTracking()
             .Where(b => ids.Contains(b.ItemId) && b.WarehouseId == warehouseId && b.ExpiryDate >= today && b.QuantityOnHand > 0)
             .OrderBy(b => b.ExpiryDate).ThenBy(b => b.ReceivedAtUtc).ThenBy(b => b.Id)
-            .Select(b => new { b.ItemId, b.QuantityOnHand, b.PackageSalePrice, b.ReceivedUnitFactor,
+            .Select(b => new { b.ItemId, b.QuantityOnHand, b.PackageSalePrice, b.ReceivedUnitFactor, b.PurchasePrice, b.PurchaseType,
                 SalePriceOverride = b.HasConfiguredSalePrice || b.SalePriceOverride > 0 ? b.SalePriceOverride : null })
             .ToListAsync(cancellationToken);
         var stock = batches.GroupBy(b => b.ItemId).ToDictionary(g => g.Key,
-            g => new { Quantity = g.Sum(b => b.QuantityOnHand), SalePrice = g.First().SalePriceOverride, PackagePrice = g.First().PackageSalePrice, ReceivedFactor = g.First().ReceivedUnitFactor });
-        return items.Select(item => new SaleItemLookupDto
+            g => new { Quantity = g.Sum(b => b.QuantityOnHand), SalePrice = g.First().SalePriceOverride, PackagePrice = g.First().PackageSalePrice,
+                ReceivedFactor = g.First().ReceivedUnitFactor, Cost = g.First().PurchasePrice, PurchaseType = g.First().PurchaseType });
+        return items.Select(item =>
         {
-            ItemId = item.Id, Code = item.Code, Barcode = item.Barcode, Name = item.Name,
-            BaseUnitBarcode = item.BaseUnitBarcode, UnitsPerPackage = item.UnitsPerPackage,
-            PackageUnitName = item.PackageUnitName, ManufacturerName = item.Manufacturer?.Name, Strength = item.Strength,
-            PackageSalePrice = stock.GetValueOrDefault(item.Id) is { } priceStock
-                ? (priceStock.ReceivedFactor ?? item.UnitsPerPackage) == item.UnitsPerPackage && priceStock.PackagePrice.HasValue
-                    ? priceStock.PackagePrice.Value : Math.Round((priceStock.SalePrice ?? item.DefaultSalePrice / item.UnitsPerPackage) * item.UnitsPerPackage, 2, MidpointRounding.AwayFromZero)
-                : item.DefaultSalePrice,
-            SaleUnits = item.SaleUnits.Where(u => u.IsActive).Select(u => new PharmacyERP.Application.Features.Inventory.DTOs.ItemSaleUnitDto
+            var priceStock = stock.GetValueOrDefault(item.Id);
+            decimal PriceFor(int factor)
             {
-                Id = u.Id, Name = u.Name, BaseUnitCount = u.BaseUnitCount, Barcode = u.Barcode, IsActive = true,
-                SalePrice = stock.GetValueOrDefault(item.Id) is { } unitStock && unitStock.PackagePrice.HasValue && (unitStock.ReceivedFactor ?? item.UnitsPerPackage) == u.BaseUnitCount
-                    ? unitStock.PackagePrice.Value : Math.Round((stock.GetValueOrDefault(item.Id)?.SalePrice ?? item.DefaultSalePrice / item.UnitsPerPackage) * u.BaseUnitCount, 2, MidpointRounding.AwayFromZero)
-            }).ToList(),
-            UnitOfMeasureName = item.UnitOfMeasure.Name,
-            DefaultSalePrice = stock.GetValueOrDefault(item.Id)?.SalePrice ?? Math.Round(item.DefaultSalePrice / item.UnitsPerPackage, 2, MidpointRounding.AwayFromZero),
-            TaxRatePercent = item.TaxRatePercent, RequiresPrescription = item.RequiresPrescription,
-            AvailableQuantity = stock.GetValueOrDefault(item.Id)?.Quantity ?? 0
+                var receivedFactor = priceStock?.ReceivedFactor ?? item.UnitsPerPackage;
+                if (priceStock?.PackagePrice is decimal packagePrice && receivedFactor == factor)
+                    return packagePrice;
+                // Preserve explicit batch prices, including zero. Recover unconfigured legacy
+                // stock from its purchase cost only when the master has no usable sale price.
+                var basePrice = priceStock?.SalePrice ?? (priceStock?.PackagePrice is decimal receivedPrice
+                    ? receivedPrice / receivedFactor : (decimal?)null);
+                if (basePrice.HasValue) return Math.Round(basePrice.Value * factor, 2, MidpointRounding.AwayFromZero);
+                if (item.DefaultSalePrice > 0 || priceStock is null)
+                    return Math.Round(item.DefaultSalePrice / item.UnitsPerPackage * factor, 2, MidpointRounding.AwayFromZero);
+                return SalePricePolicy.FromPurchasePrice(priceStock.Cost * factor, priceStock.PurchaseType);
+            }
+            return new SaleItemLookupDto
+            {
+                ItemId = item.Id, Code = item.Code, Barcode = item.Barcode, Name = item.Name,
+                BaseUnitBarcode = item.BaseUnitBarcode, UnitsPerPackage = item.UnitsPerPackage,
+                PackageUnitName = item.PackageUnitName, ManufacturerName = item.Manufacturer?.Name, Strength = item.Strength,
+                PackageSalePrice = PriceFor(item.UnitsPerPackage),
+                SaleUnits = item.SaleUnits.Where(u => u.IsActive).Select(u => new PharmacyERP.Application.Features.Inventory.DTOs.ItemSaleUnitDto
+                {
+                    Id = u.Id, Name = u.Name, BaseUnitCount = u.BaseUnitCount, Barcode = u.Barcode, IsActive = true,
+                    SalePrice = PriceFor(u.BaseUnitCount)
+                }).ToList(),
+                UnitOfMeasureName = item.UnitOfMeasure.Name,
+                DefaultSalePrice = PriceFor(1),
+                TaxRatePercent = item.TaxRatePercent, RequiresPrescription = item.RequiresPrescription,
+                AvailableQuantity = priceStock?.Quantity ?? 0
+            };
         }).ToList();
     }
 

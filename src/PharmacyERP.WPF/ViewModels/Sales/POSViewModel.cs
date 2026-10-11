@@ -53,13 +53,13 @@ public class POSViewModel : ViewModelBase
         _printer = printer;
         _inventoryService = inventoryService;
         _images = images;
-        AddProductCommand = new RelayCommand(p => { var card = (POSProductCard)p!; AddItem(card.Item, preferredPackage: card.UsePackage); }, p => CanScan && p is POSProductCard card && card.Item.AvailableQuantity > 0);
+        AddProductCommand = new RelayCommand(p => _ = AddProductAsync((POSProductCard)p!), p => CanScan && p is POSProductCard card);
         LoadMoreProductsCommand = new AsyncRelayCommand(LoadMoreProductsAsync, () => CanScan && _pendingScans == 0 && HasMoreProducts && !_isSearching);
         BrowseCategoryCommand = new AsyncRelayCommand(p => BrowseCategoryAsync((POSCategoryOption)p!), p => CanScan && _pendingScans == 0 && p is POSCategoryOption);
         CloseResultsCommand = new RelayCommand(CloseResults, () => !IsBusy);
         ResolveCheckoutCommand = new AsyncRelayCommand(ResolveCheckoutAsync, () => !IsBusy && CheckoutUncertain);
         SearchCommand = new AsyncRelayCommand(() => SubmitSearchAsync(SearchText), () => !IsBusy);
-        AddToCartCommand = new RelayCommand(() => { if (SelectedSearchResult is not null) AddItem(SelectedSearchResult); }, () => !IsBusy && SelectedSearchResult is not null);
+        AddToCartCommand = new RelayCommand(() => { if (SelectedSearchResult is { } item) _ = AddCatalogueItemAsync(item, false); }, () => CanScan && SelectedSearchResult is not null);
         RemoveLineCommand = new RelayCommand(() => { if (SelectedCartLine is not null) CartLines.Remove(SelectedCartLine); }, () => !IsBusy && SelectedCartLine is not null);
         ClearCartCommand = new RelayCommand(() => CartLines.Clear(), () => !IsBusy && CartLines.Count > 0);
         CancelTransactionCommand = new RelayCommand(CancelTransaction, () => CanScan && _pendingScans == 0 && CartLines.Count > 0);
@@ -393,6 +393,30 @@ public class POSViewModel : ViewModelBase
         finally { _pendingScans--; _operations.Release(); Requery(); ScanFocusRequested?.Invoke(); }
     }
 
+    public Task AddProductAsync(POSProductCard card) => AddCatalogueItemAsync(card.Item, true);
+
+    private async Task AddCatalogueItemAsync(SaleItemLookupDto cachedItem, bool useDisplayedUnit)
+    {
+        if (!CanScan) return;
+        _pendingScans++; Requery();
+        await _operations.WaitAsync();
+        try
+        {
+            if (!CanScan) return;
+            ErrorMessage = string.Empty; SuccessMessage = string.Empty;
+            var results = await _salesService.SearchSaleItemsAsync(cachedItem.Code, WarehouseId);
+            if (!CanScan) return;
+            var item = results.SingleOrDefault(i => i.ItemId == cachedItem.ItemId);
+            if (item is null) { ErrorMessage = "الصنف لم يعد متاحاً للبيع؛ حدّث قائمة الأصناف."; return; }
+            // Catalogue cards are snapshots. Stock and prices may have changed since opening POS.
+            var cardIndex = ProductCards.ToList().FindIndex(c => c.Item.ItemId == item.ItemId);
+            if (cardIndex >= 0) ProductCards[cardIndex] = new POSProductCard(item, _images?.GetPath(item.ItemId, item.Code));
+            AddItem(item, preferredPackage: useDisplayedUnit ? item.UnitsPerPackage > 1 && item.AvailableQuantity >= item.UnitsPerPackage : null);
+        }
+        catch (Exception ex) { ErrorMessage = $"تعذر تحديث سعر ومخزون الصنف: {ex.Message}"; }
+        finally { _pendingScans--; _operations.Release(); Requery(); ScanFocusRequested?.Invoke(); }
+    }
+
     private void AddItem(SaleItemLookupDto item, string? scannedBarcode = null, bool? preferredPackage = null)
     {
         var scanBase = !string.IsNullOrWhiteSpace(scannedBarcode) && string.Equals(item.BaseUnitBarcode, scannedBarcode, StringComparison.OrdinalIgnoreCase);
@@ -467,6 +491,8 @@ public class POSViewModel : ViewModelBase
         if (_isClosing || IsBusy || CheckoutUncertain || _pendingScans > 0) return;
         ErrorMessage = string.Empty; SuccessMessage = string.Empty;
         if (!CartLines.Any()) { ErrorMessage = "السلة فارغة."; return; }
+        if (CartLines.FirstOrDefault(l => l.UnitPrice == 0) is { } unpriced)
+        { ErrorMessage = $"سعر البيع للصنف {unpriced.Name} صفر. حدّد سعر بيع صحيحاً قبل إتمام البيع؛ راجع سعر الدفعة ووحدة البيع."; return; }
         if (CartLines.Any(l => l.Quantity <= 0 || l.Quantity > l.AvailableQuantity || l.UnitPrice < 0 || l.DiscountAmount < 0 || l.DiscountAmount > l.UnitPrice * l.Quantity)
             || DiscountAmount < 0 || DiscountAmount + CartLines.Sum(l => l.DiscountAmount) > SubTotal)
         { ErrorMessage = "راجع الكميات والأسعار والخصومات."; return; }
