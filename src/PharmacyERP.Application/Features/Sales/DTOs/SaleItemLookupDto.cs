@@ -8,6 +8,7 @@ public class SaleItemLookupDto
     public string? Barcode { get; set; }
     /// <summary>Stock is counted in the base unit; purchasing quantities/prices are per package.</summary>
     public List<PharmacyERP.Application.Features.Inventory.DTOs.ItemSaleUnitDto> SaleUnits { get; set; } = new();
+    public List<SaleBatchPriceDto> BatchPrices { get; set; } = new();
     public int UnitsPerPackage { get; set; } = 1;
     public string PackageUnitName { get; set; } = "علبة";
     public string? BaseUnitBarcode { get; set; }

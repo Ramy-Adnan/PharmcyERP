@@ -13,7 +13,7 @@ using Xunit;
 
 namespace PharmacyERP.Application.Tests;
 
-public class PackagingSalesTests
+public partial class PackagingSalesTests
 {
     private readonly FakeDateTime _clock = new();
     private sealed class TestPrinter : PharmacyERP.WPF.Services.IReceiptPrinter

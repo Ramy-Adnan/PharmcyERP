@@ -11,6 +11,9 @@ public class SaleLineInputDto
     public decimal UnitPrice { get; set; }
     public decimal TaxRatePercent { get; set; }
     public decimal DiscountAmount { get; set; }
+    /// <summary>Automatic POS pricing is rechecked inside the checkout transaction before charging.</summary>
+    public bool UseBatchPricing { get; set; }
+    public List<SalePriceSegmentDto>? ExpectedPrices { get; set; }
 }
 
 public class SalesCheckoutDto

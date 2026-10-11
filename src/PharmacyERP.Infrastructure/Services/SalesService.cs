@@ -164,44 +164,47 @@ public class SalesService : ISalesService
         var batches = await _context.Batches.AsNoTracking()
             .Where(b => ids.Contains(b.ItemId) && b.WarehouseId == warehouseId && b.ExpiryDate >= today && b.QuantityOnHand > 0)
             .OrderBy(b => b.ExpiryDate).ThenBy(b => b.ReceivedAtUtc).ThenBy(b => b.Id)
-            .Select(b => new { b.ItemId, b.QuantityOnHand, b.PackageSalePrice, b.ReceivedUnitFactor, b.PurchasePrice, b.PurchaseType,
+            .Select(b => new { b.Id, b.ItemId, b.QuantityOnHand, b.PackageSalePrice, b.ReceivedUnitFactor, b.PurchasePrice, b.PurchaseType,
                 SalePriceOverride = b.HasConfiguredSalePrice || b.SalePriceOverride > 0 ? b.SalePriceOverride : null })
             .ToListAsync(cancellationToken);
-        var stock = batches.GroupBy(b => b.ItemId).ToDictionary(g => g.Key,
-            g => new { Quantity = g.Sum(b => b.QuantityOnHand), SalePrice = g.First().SalePriceOverride, PackagePrice = g.First().PackageSalePrice,
-                ReceivedFactor = g.First().ReceivedUnitFactor, Cost = g.First().PurchasePrice, PurchaseType = g.First().PurchaseType });
         return items.Select(item =>
         {
-            var priceStock = stock.GetValueOrDefault(item.Id);
-            decimal PriceFor(int factor)
+            var itemBatches = batches.Where(b => b.ItemId == item.Id).ToList();
+            var factors = item.SaleUnits.Where(u => u.IsActive).Select(u => u.BaseUnitCount)
+                .Append(1).Append(item.UnitsPerPackage).Distinct().ToList();
+            var batchPrices = itemBatches.Select(batch =>
             {
-                var receivedFactor = priceStock?.ReceivedFactor ?? item.UnitsPerPackage;
-                if (priceStock?.PackagePrice is decimal packagePrice && receivedFactor == factor)
-                    return packagePrice;
-                // Preserve explicit batch prices, including zero. Recover unconfigured legacy
-                // stock from its purchase cost only when the master has no usable sale price.
-                var basePrice = priceStock?.SalePrice ?? (priceStock?.PackagePrice is decimal receivedPrice
-                    ? receivedPrice / receivedFactor : (decimal?)null);
-                if (basePrice.HasValue) return Math.Round(basePrice.Value * factor, 2, MidpointRounding.AwayFromZero);
-                if (item.DefaultSalePrice > 0 || priceStock is null)
-                    return Math.Round(item.DefaultSalePrice / item.UnitsPerPackage * factor, 2, MidpointRounding.AwayFromZero);
-                return SalePricePolicy.FromPurchasePrice(priceStock.Cost * factor, priceStock.PurchaseType);
-            }
+                decimal PriceFor(int factor)
+                {
+                    var receivedFactor = batch.ReceivedUnitFactor ?? item.UnitsPerPackage;
+                    if (batch.PackageSalePrice is decimal packagePrice && receivedFactor == factor) return packagePrice;
+                    var basePrice = batch.SalePriceOverride ?? (batch.PackageSalePrice is decimal receivedPrice
+                        ? receivedPrice / receivedFactor : (decimal?)null);
+                    if (basePrice.HasValue) return Math.Round(basePrice.Value * factor, 2, MidpointRounding.AwayFromZero);
+                    if (item.DefaultSalePrice > 0)
+                        return Math.Round(item.DefaultSalePrice / item.UnitsPerPackage * factor, 2, MidpointRounding.AwayFromZero);
+                    return SalePricePolicy.FromPurchasePrice(batch.PurchasePrice * factor, batch.PurchaseType);
+                }
+                return new SaleBatchPriceDto { BatchId = batch.Id, AvailableBaseQuantity = batch.QuantityOnHand,
+                    UnitPrices = factors.ToDictionary(f => f, PriceFor) };
+            }).ToList();
+            decimal FirstPrice(int factor) => batchPrices.FirstOrDefault()?.UnitPrices[factor]
+                ?? Math.Round(item.DefaultSalePrice / item.UnitsPerPackage * factor, 2, MidpointRounding.AwayFromZero);
             return new SaleItemLookupDto
             {
                 ItemId = item.Id, Code = item.Code, Barcode = item.Barcode, Name = item.Name,
                 BaseUnitBarcode = item.BaseUnitBarcode, UnitsPerPackage = item.UnitsPerPackage,
                 PackageUnitName = item.PackageUnitName, ManufacturerName = item.Manufacturer?.Name, Strength = item.Strength,
-                PackageSalePrice = PriceFor(item.UnitsPerPackage),
+                PackageSalePrice = FirstPrice(item.UnitsPerPackage), BatchPrices = batchPrices,
                 SaleUnits = item.SaleUnits.Where(u => u.IsActive).Select(u => new PharmacyERP.Application.Features.Inventory.DTOs.ItemSaleUnitDto
                 {
                     Id = u.Id, Name = u.Name, BaseUnitCount = u.BaseUnitCount, Barcode = u.Barcode, IsActive = true,
-                    SalePrice = PriceFor(u.BaseUnitCount)
+                    SalePrice = FirstPrice(u.BaseUnitCount)
                 }).ToList(),
                 UnitOfMeasureName = item.UnitOfMeasure.Name,
-                DefaultSalePrice = PriceFor(1),
+                DefaultSalePrice = FirstPrice(1),
                 TaxRatePercent = item.TaxRatePercent, RequiresPrescription = item.RequiresPrescription,
-                AvailableQuantity = priceStock?.Quantity ?? 0
+                AvailableQuantity = itemBatches.Sum(b => b.QuantityOnHand)
             };
         }).ToList();
     }
@@ -232,7 +235,7 @@ public class SalesService : ISalesService
         if (dto.CustomerId.HasValue && !await _context.Customers.AnyAsync(c => c.Id == dto.CustomerId && c.IsActive, cancellationToken))
             return Result<SalesInvoiceDto>.Failure("العميل غير موجود أو غير نشط.");
         if (dto.Lines.Any(l => l.UnitPrice < 0 || l.TaxRatePercent < 0 || l.TaxRatePercent > 100 || l.DiscountAmount < 0 ||
-            l.DiscountAmount > l.UnitPrice * l.Quantity) || dto.DiscountAmount < 0 || dto.AmountTendered < 0)
+            (!l.UseBatchPricing && l.DiscountAmount > l.UnitPrice * l.Quantity)) || dto.DiscountAmount < 0 || dto.AmountTendered < 0)
             return Result<SalesInvoiceDto>.Failure("راجع السعر والضريبة والخصومات ومبلغ الدفع.");
         if (dto.Lines.GroupBy(l => new { l.ItemId, l.SellAsPackage, l.ItemSaleUnitId }).Any(g => g.Count() > 1))
             return Result<SalesInvoiceDto>.Failure("اجمع الصنف المتكرر بنفس وحدة البيع في سطر واحد.");
@@ -303,9 +306,47 @@ public class SalesService : ISalesService
                 return Result<SalesInvoiceDto>.Failure($"الكمية المتوفرة غير كافية لأحد الأصناف. المتوفر: {available}.");
         }
 
-        var subTotal = dto.Lines.Sum(l => l.UnitPrice * l.Quantity);
-        var taxAmount = dto.Lines.Sum(l => l.UnitPrice * l.Quantity * l.TaxRatePercent / 100m);
-        var lineDiscounts = dto.Lines.Sum(l => l.DiscountAmount);
+        var checkoutLines = new List<SaleLineInputDto>();
+        if (dto.Lines.Any(l => l.UseBatchPricing))
+        {
+            // The POS context can outlive sales on another register. Discard unchanged
+            // tracked batches so stock issue reads the same current state as this quote.
+            if (_context is DbContext pricingContext)
+                foreach (var entry in pricingContext.ChangeTracker.Entries<Batch>().Where(e => e.State == EntityState.Unchanged
+                    && lineItemIds.Contains(e.Entity.ItemId) && e.Entity.WarehouseId == dto.WarehouseId).ToList())
+                    entry.State = EntityState.Detached;
+            var pricedItems = (await LoadSaleItemsAsync(_context.Items.AsNoTracking().Where(i => lineItemIds.Contains(i.Id)),
+                dto.WarehouseId, lineItemIds.Count, cancellationToken)).ToDictionary(i => i.ItemId);
+            var reserved = new Dictionary<int, int>();
+            foreach (var line in dto.Lines)
+            {
+                var prices = BatchSalePricing.Quote(pricedItems[line.ItemId].BatchPrices, line.Quantity, Factor(line), reserved);
+                if (!line.UseBatchPricing) { checkoutLines.Add(line); continue; }
+                if (prices.Sum(p => p.Quantity) != line.Quantity || line.ExpectedPrices is null || !prices.SequenceEqual(line.ExpectedPrices))
+                    return Result<SalesInvoiceDto>.Failure(BatchSalePricing.PricesChangedMessage);
+                var total = prices.Sum(p => p.Quantity * p.UnitPrice);
+                if (line.DiscountAmount > total) return Result<SalesInvoiceDto>.Failure("الخصم يتجاوز قيمة الأصناف.");
+                var remainingDiscount = line.DiscountAmount;
+                for (var index = 0; index < prices.Count; index++)
+                {
+                    var price = prices[index];
+                    var share = total > 0 ? price.Quantity * price.UnitPrice / total : price.Quantity / (decimal)line.Quantity;
+                    var discount = index == prices.Count - 1 ? remainingDiscount
+                        : Math.Min(remainingDiscount, Math.Round(line.DiscountAmount * share, 2, MidpointRounding.AwayFromZero));
+                    remainingDiscount -= discount;
+                    checkoutLines.Add(new SaleLineInputDto
+                    {
+                        ItemId = line.ItemId, ItemSaleUnitId = line.ItemSaleUnitId, SellAsPackage = line.SellAsPackage,
+                        Quantity = price.Quantity, UnitPrice = price.UnitPrice, TaxRatePercent = line.TaxRatePercent, DiscountAmount = discount
+                    });
+                }
+            }
+        }
+        else checkoutLines.AddRange(dto.Lines);
+
+        var subTotal = checkoutLines.Sum(l => l.UnitPrice * l.Quantity);
+        var taxAmount = checkoutLines.Sum(l => l.UnitPrice * l.Quantity * l.TaxRatePercent / 100m);
+        var lineDiscounts = checkoutLines.Sum(l => l.DiscountAmount);
         var discountAmount = lineDiscounts + dto.DiscountAmount;
         if (discountAmount > subTotal)
             return Result<SalesInvoiceDto>.Failure("الخصم يتجاوز قيمة الأصناف.");
@@ -341,7 +382,7 @@ public class SalesService : ISalesService
         _context.SalesInvoices.Add(invoice);
         await _context.SaveChangesAsync(cancellationToken);
 
-        foreach (var line in dto.Lines)
+        foreach (var line in checkoutLines)
         {
             var issueResult = await _inventoryService.IssueStockFefoAsync(
                 line.ItemId, dto.WarehouseId, line.Quantity * Factor(line),
@@ -393,7 +434,7 @@ public class SalesService : ISalesService
 
         if (prescription is not null)
         {
-            foreach (var line in dto.Lines)
+            foreach (var line in checkoutLines)
             {
                 var prescriptionLine = prescription.Items.FirstOrDefault(i => i.ItemId == line.ItemId);
                 if (prescriptionLine is null) continue;

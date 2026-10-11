@@ -1,4 +1,5 @@
 using PharmacyERP.WPF.MVVM;
+using PharmacyERP.Application.Features.Sales.DTOs;
 
 namespace PharmacyERP.WPF.ViewModels.Sales;
 
@@ -10,6 +11,30 @@ public class POSLineRow : ViewModelBase
     private int _quantity = 1;
     private SaleUnitOption? _selectedSaleUnit;
     private int _availableQuantity;
+    private bool _manualPrice, _applyingPrice;
+    public bool UsesBatchPricing => !_manualPrice;
+    public IReadOnlyList<SalePriceSegmentDto> PriceSegments { get; private set; } = Array.Empty<SalePriceSegmentDto>();
+    public bool HasMultipleBatchPrices => UsesBatchPricing && PriceSegments.Count > 1;
+    public bool HasCompletePriceQuote => PriceSegments.Sum(p => p.Quantity) == Quantity;
+    public bool HasZeroSalePrice => UsesBatchPricing && HasCompletePriceQuote ? PriceSegments.Any(p => p.UnitPrice == 0) : UnitPrice == 0;
+    public string UnitPriceDisplay => HasMultipleBatchPrices ? "متعدد" : UnitPrice.ToString("N2");
+    public string PriceBreakdown => string.Join(" + ", PriceSegments.Select(p => $"{p.Quantity} × {p.UnitPrice:N2}"));
+    public decimal SubTotal => UsesBatchPricing && HasCompletePriceQuote ? PriceSegments.Sum(p => p.Quantity * p.UnitPrice) : UnitPrice * Quantity;
+
+    public void UseAutomaticPricing() { _manualPrice = false; OnPropertyChanged(nameof(UsesBatchPricing)); }
+    public void ApplyPriceQuote(IReadOnlyList<SalePriceSegmentDto> prices)
+    {
+        PriceSegments = prices;
+        _applyingPrice = true;
+        try
+        {
+            if (UsesBatchPricing && HasCompletePriceQuote && Quantity > 0)
+                UnitPrice = Math.Round(prices.Sum(p => p.Quantity * p.UnitPrice) / Quantity, 2, MidpointRounding.AwayFromZero);
+        }
+        finally { _applyingPrice = false; }
+        foreach (var property in new[] { nameof(SubTotal), nameof(LineTotal), nameof(HasMultipleBatchPrices), nameof(UnitPriceDisplay), nameof(PriceBreakdown) })
+            OnPropertyChanged(property);
+    }
     public IReadOnlyList<SaleUnitOption> SaleUnits { get; init; } = Array.Empty<SaleUnitOption>();
     public int UnitsPerPackage { get; init; } = 1;
     public decimal BaseSalePrice { get; init; }
@@ -20,7 +45,10 @@ public class POSLineRow : ViewModelBase
         set
         {
             if (value is null || !SaleUnits.Contains(value) || !SetProperty(ref _selectedSaleUnit, value)) return;
-            UnitPrice = value.Price ?? (value.IsPackage ? PackageSalePrice : Math.Round(BaseSalePrice * value.Factor, 2, MidpointRounding.AwayFromZero));
+            _manualPrice = false; _applyingPrice = true;
+            try { UnitPrice = value.Price ?? (value.IsPackage ? PackageSalePrice : Math.Round(BaseSalePrice * value.Factor, 2, MidpointRounding.AwayFromZero)); }
+            finally { _applyingPrice = false; }
+            OnPropertyChanged(nameof(UsesBatchPricing));
             OnPropertyChanged(nameof(UnitsPerSale));
             OnPropertyChanged(nameof(AvailableQuantity));
             OnPropertyChanged(nameof(SelectedUnitName));
@@ -54,7 +82,12 @@ public class POSLineRow : ViewModelBase
     public decimal UnitPrice
     {
         get => _unitPrice;
-        set { if (SetProperty(ref _unitPrice, value)) OnPropertyChanged(nameof(LineTotal)); }
+        set
+        {
+            if (!_applyingPrice) _manualPrice = true;
+            if (SetProperty(ref _unitPrice, value)) { OnPropertyChanged(nameof(SubTotal)); OnPropertyChanged(nameof(LineTotal)); }
+            if (!_applyingPrice) OnPropertyChanged(nameof(UsesBatchPricing));
+        }
     }
 
     public decimal DiscountAmount
@@ -63,7 +96,7 @@ public class POSLineRow : ViewModelBase
         set { if (SetProperty(ref _discountAmount, value)) OnPropertyChanged(nameof(LineTotal)); }
     }
 
-    public decimal LineTotal => Math.Round(UnitPrice * Quantity * (1 + TaxRatePercent / 100m) - DiscountAmount, 2);
+    public decimal LineTotal => Math.Round(SubTotal * (1 + TaxRatePercent / 100m) - DiscountAmount, 2);
 }
 
 public sealed record SaleUnitOption(bool IsPackage, string Name, int Factor, int? ItemSaleUnitId = null, string? Barcode = null, decimal? Price = null);

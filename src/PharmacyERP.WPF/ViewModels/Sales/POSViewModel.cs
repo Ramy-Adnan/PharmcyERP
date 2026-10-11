@@ -25,6 +25,8 @@ public class POSViewModel : ViewModelBase
     // Serialize scans, customer queries and checkout: the application's EF context is scoped/shared.
     private readonly SemaphoreSlim _operations = new(1, 1);
     private readonly HashSet<POSLineRow> _observedLines = new();
+    private readonly Dictionary<int, SaleItemLookupDto> _cartPrices = new();
+    private bool _pricingCart;
     private Guid _checkoutRequestId = Guid.NewGuid();
     private SalesInvoiceDetailDto? _lastReceipt;
     private int? _lastInvoiceId;
@@ -70,12 +72,14 @@ public class POSViewModel : ViewModelBase
         AddOtherUnitCommand = new RelayCommand(AddOtherUnit, () => !IsBusy && SelectedCartLine?.SaleUnits.Count > 1);
         RemoveItemCommand = new RelayCommand(p => CartLines.Remove((POSLineRow)p!), p => !IsBusy && p is POSLineRow);
         ReprintCommand = new AsyncRelayCommand(ReprintAsync, () => !IsBusy && _lastInvoiceId.HasValue);
+        UseBatchPricingCommand = new AsyncRelayCommand(RestoreBatchPricingAsync, () => CanScan && _pendingScans == 0 && SelectedCartLine is not null);
         CartLines.CollectionChanged += (_, _) =>
         {
             foreach (var removed in _observedLines.Where(l => !CartLines.Contains(l)).ToList())
             { removed.PropertyChanged -= LineChanged; _observedLines.Remove(removed); }
             foreach (var added in CartLines.Where(l => !_observedLines.Contains(l)))
             { added.PropertyChanged += LineChanged; _observedLines.Add(added); }
+            foreach (var unused in _cartPrices.Keys.Where(id => !CartLines.Any(l => l.ItemId == id)).ToList()) _cartPrices.Remove(unused);
             NotifyTotals();
         };
     }
@@ -138,8 +142,8 @@ public class POSViewModel : ViewModelBase
     public decimal CreditRemaining => IsCredit ? Math.Max(0, TotalAmount - AmountTendered) : 0;
     public decimal CustomerBalanceAfterSale => CustomerDebt + CreditRemaining;
     public decimal DiscountAmount { get => _discountAmount; set { SetProperty(ref _discountAmount, value); NotifyTotals(); } }
-    public decimal SubTotal => CartLines.Sum(l => l.UnitPrice * l.Quantity);
-    public decimal TaxAmount => CartLines.Sum(l => l.UnitPrice * l.Quantity * l.TaxRatePercent / 100m);
+    public decimal SubTotal => CartLines.Sum(l => l.SubTotal);
+    public decimal TaxAmount => CartLines.Sum(l => l.SubTotal * l.TaxRatePercent / 100m);
     public decimal TotalAmount => Math.Round(SubTotal + TaxAmount - CartLines.Sum(l => l.DiscountAmount) - DiscountAmount, 2);
     public int ItemCount => CartLines.Sum(l => l.Quantity);
     public decimal CartDiscount => DiscountAmount + CartLines.Sum(l => l.DiscountAmount);
@@ -168,9 +172,20 @@ public class POSViewModel : ViewModelBase
     public RelayCommand RemoveItemCommand { get; }
     public AsyncRelayCommand CheckoutCommand { get; }
     public AsyncRelayCommand ReprintCommand { get; }
+    public AsyncRelayCommand UseBatchPricingCommand { get; }
     private static void Requery() => System.Windows.Input.CommandManager.InvalidateRequerySuggested();
     private void NotifyTotals()
     {
+        if (_pricingCart) return;
+        _pricingCart = true;
+        try
+        {
+            var reserved = new Dictionary<int, int>();
+            foreach (var line in CartLines)
+                if (_cartPrices.TryGetValue(line.ItemId, out var item))
+                    line.ApplyPriceQuote(BatchSalePricing.Quote(item.BatchPrices, line.Quantity, line.UnitsPerSale, reserved));
+        }
+        finally { _pricingCart = false; }
         foreach (var name in new[] { nameof(SubTotal), nameof(TaxAmount), nameof(TotalAmount), nameof(CreditRemaining), nameof(CustomerBalanceAfterSale), nameof(CartDiscount), nameof(ItemCount), nameof(HasUnresolvedPrescriptionRequirement) }) OnPropertyChanged(name);
         Requery();
     }
@@ -419,6 +434,9 @@ public class POSViewModel : ViewModelBase
 
     private void AddItem(SaleItemLookupDto item, string? scannedBarcode = null, bool? preferredPackage = null)
     {
+        _cartPrices[item.ItemId] = item;
+        foreach (var existing in CartLines.Where(l => l.ItemId == item.ItemId)) existing.AvailableBaseQuantity = item.AvailableQuantity;
+        NotifyTotals();
         var scanBase = !string.IsNullOrWhiteSpace(scannedBarcode) && string.Equals(item.BaseUnitBarcode, scannedBarcode, StringComparison.OrdinalIgnoreCase);
         var scannedUnit = item.SaleUnits.FirstOrDefault(u => !string.IsNullOrWhiteSpace(scannedBarcode) && string.Equals(u.Barcode, scannedBarcode, StringComparison.OrdinalIgnoreCase));
         var line = preferredPackage.HasValue ? CartLines.FirstOrDefault(l => l.ItemId == item.ItemId && l.SellAsPackage == preferredPackage.Value && l.ItemSaleUnitId is null)
@@ -491,9 +509,9 @@ public class POSViewModel : ViewModelBase
         if (_isClosing || IsBusy || CheckoutUncertain || _pendingScans > 0) return;
         ErrorMessage = string.Empty; SuccessMessage = string.Empty;
         if (!CartLines.Any()) { ErrorMessage = "السلة فارغة."; return; }
-        if (CartLines.FirstOrDefault(l => l.UnitPrice == 0) is { } unpriced)
+        if (CartLines.FirstOrDefault(l => l.HasZeroSalePrice) is { } unpriced)
         { ErrorMessage = $"سعر البيع للصنف {unpriced.Name} صفر. حدّد سعر بيع صحيحاً قبل إتمام البيع؛ راجع سعر الدفعة ووحدة البيع."; return; }
-        if (CartLines.Any(l => l.Quantity <= 0 || l.Quantity > l.AvailableQuantity || l.UnitPrice < 0 || l.DiscountAmount < 0 || l.DiscountAmount > l.UnitPrice * l.Quantity)
+        if (CartLines.Any(l => l.Quantity <= 0 || l.Quantity > l.AvailableQuantity || l.UnitPrice < 0 || l.DiscountAmount < 0 || l.DiscountAmount > l.SubTotal)
             || DiscountAmount < 0 || DiscountAmount + CartLines.Sum(l => l.DiscountAmount) > SubTotal)
         { ErrorMessage = "راجع الكميات والأسعار والخصومات."; return; }
         if (CartLines.GroupBy(l => new { l.ItemId, l.SellAsPackage, l.ItemSaleUnitId }).Any(g => g.Count() > 1))
@@ -511,14 +529,24 @@ public class POSViewModel : ViewModelBase
             CustomerId = SelectedCustomer?.Id, PrescriptionId = SelectedPrescription?.Id, DiscountAmount = DiscountAmount,
             PaymentMethod = PaymentMethod, AmountTendered = IsCredit ? AmountTendered : TotalAmount,
             Lines = CartLines.Select(l => new SaleLineInputDto { ItemId = l.ItemId, SellAsPackage = l.SellAsPackage, ItemSaleUnitId = l.ItemSaleUnitId, Quantity = l.Quantity, UnitPrice = l.UnitPrice,
-                TaxRatePercent = l.TaxRatePercent, DiscountAmount = l.DiscountAmount }).ToList()
+                TaxRatePercent = l.TaxRatePercent, DiscountAmount = l.DiscountAmount,
+                UseBatchPricing = l.UsesBatchPricing, ExpectedPrices = l.PriceSegments.ToList() }).ToList()
         };
         IsBusy = true;
         await _operations.WaitAsync();
         try
         {
             var result = await _salesService.CheckoutAsync(dto, userId);
-            if (!result.Succeeded) { ErrorMessage = result.Errors.FirstOrDefault() ?? "تعذر إتمام البيع."; return; }
+            if (!result.Succeeded)
+            {
+                ErrorMessage = result.Errors.FirstOrDefault() ?? "تعذر إتمام البيع.";
+                if (result.Errors.Contains(BatchSalePricing.PricesChangedMessage))
+                {
+                    try { await RefreshCartPricesCoreAsync(); }
+                    catch (Exception ex) { ErrorMessage += $" تعذّر تحديث الأسعار: {ex.Message}"; }
+                }
+                return;
+            }
             await CompleteCommittedSaleAsync(result.Value!);
         }
         catch (Exception ex)
@@ -532,6 +560,33 @@ public class POSViewModel : ViewModelBase
             await LoadCustomerAsync();
             await RefreshProductsAfterSaleAsync();
         }
+    }
+
+    private async Task RefreshCartPricesCoreAsync()
+    {
+        foreach (var itemGroup in CartLines.GroupBy(l => l.ItemId).ToList())
+        {
+            var items = await _salesService.SearchSaleItemsAsync(itemGroup.First().Code, WarehouseId);
+            if (items.SingleOrDefault(i => i.ItemId == itemGroup.Key) is not { } item) continue;
+            _cartPrices[item.ItemId] = item;
+            foreach (var line in itemGroup) line.AvailableBaseQuantity = item.AvailableQuantity;
+        }
+        NotifyTotals();
+    }
+
+    private async Task RestoreBatchPricingAsync()
+    {
+        var selected = SelectedCartLine;
+        if (selected is null || !CanScan || _pendingScans > 0) return;
+        IsBusy = true;
+        await _operations.WaitAsync();
+        try
+        {
+            await RefreshCartPricesCoreAsync(); selected.UseAutomaticPricing();
+            ErrorMessage = string.Empty; SuccessMessage = "تم تحديث الأسعار حسب الدفعات.";
+        }
+        catch (Exception ex) { ErrorMessage = $"تعذر تحديث أسعار الدفعات: {ex.Message}"; }
+        finally { IsBusy = false; _operations.Release(); ScanFocusRequested?.Invoke(); }
     }
 
     private async Task CompleteCommittedSaleAsync(SalesInvoiceDto invoice)
