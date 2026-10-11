@@ -44,7 +44,7 @@ public static class ReceiptContentBuilder
         var received = h.PaymentMethod == PaymentMethod.Credit ? h.InitialPaymentAmount : h.AmountTendered;
         var remaining = h.PaymentMethod == PaymentMethod.Credit ? h.DebtAtSale
             : h.PaymentMethod == PaymentMethod.Cash ? h.ChangeGiven : 0;
-        content.Totals.Add(new($"الإجمالي: {h.TotalAmount:N2}", true, 15));
+        content.Totals.Add(new($"الإجمالي: {h.TotalAmount:N2} د.ع", true, 15));
         content.Totals.Add(new($"المستلم: {received:N2}"));
         content.Totals.Add(new($"الباقي: {remaining:N2}", true));
         if (settings.ShowFooterMessage && !string.IsNullOrWhiteSpace(settings.FooterMessage))

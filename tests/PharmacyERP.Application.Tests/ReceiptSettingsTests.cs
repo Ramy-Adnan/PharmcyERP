@@ -78,7 +78,7 @@ public sealed class ReceiptSettingsTests : IDisposable
         content.Products[1].Select(t => t.Value).Should().Equal("منتج ثانٍ", "2", $"{invoice.Lines[1].UnitPrice:N2}");
         content.Products.SelectMany(p => p).Should().NotContain(t => t.Value.Contains("الكمية:"));
         content.Totals.Should().HaveCount(3);
-        content.Totals.Should().Contain(t => t.Value == $"الإجمالي: {2000:N2}" && t.Bold);
+        content.Totals.Should().Contain(t => t.Value == $"الإجمالي: {2000:N2} د.ع" && t.Bold);
     }
 
     [Fact]
@@ -110,7 +110,7 @@ public sealed class ReceiptSettingsTests : IDisposable
         invoice.Header.TaxAmount = 200; invoice.Header.DiscountAmount = 100;
         invoice.Header.TotalAmount = 2100; invoice.Header.AmountTendered = 2500; invoice.Header.ChangeGiven = 400;
         var content = ReceiptContentBuilder.Build(invoice, new());
-        content.Totals.Select(t => t.Value).Should().Equal($"الإجمالي: {2100:N2}", $"المستلم: {2500:N2}", $"الباقي: {400:N2}");
+        content.Totals.Select(t => t.Value).Should().Equal($"الإجمالي: {2100:N2} د.ع", $"المستلم: {2500:N2}", $"الباقي: {400:N2}");
         var printed = content.Header.Concat(content.Products.SelectMany(p => p)).Concat(content.Totals).Concat(content.Footer);
         printed.Should().NotContain(t => t.Value.Contains("الضريبة") || t.Value.Contains("الخصم")
             || t.Value.Contains("السعر") || t.Value.Contains("طريقة الدفع") || t.Value.Contains("الموظف") || t.Value.Contains("العميل"));
