@@ -39,7 +39,10 @@ public partial class POSWindow : Window
                 "توجد فاتورة غير مكتملة. العودة للرئيسية ستلغي السلة الحالية. هل تريد العودة؟", "العودة للرئيسية", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) != MessageBoxResult.Yes) return;
             _view.StopInput(); IsEnabled = false;
             await _view.ViewModel.PrepareToCloseAsync();
-            _approved = true; Close();
+            _approved = true;
+            // Preparation can complete synchronously. Let the cancelled Closing event
+            // unwind before requesting another close; WPF forbids recursive Close().
+            _ = Dispatcher.BeginInvoke(new Action(Close));
         }
         finally { _checking = false; }
     }
