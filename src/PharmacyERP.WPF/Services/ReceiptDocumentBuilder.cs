@@ -81,10 +81,11 @@ public static class ReceiptDocumentBuilder
         if (content.Products.Count > 0)
         {
             var table = new Table { CellSpacing = 0, Margin = new Thickness(0), FlowDirection = FlowDirection.RightToLeft };
-            // Reserve a quarter of the printable width for quantities.
+            // Leave half the printable width for names, with separate quantity and unit-price columns.
             var tableWidth = Math.Max(1, width - document.PagePadding.Left - document.PagePadding.Right);
-            table.Columns.Add(new TableColumn { Width = new GridLength(tableWidth * 0.75) });
-            table.Columns.Add(new TableColumn { Width = new GridLength(tableWidth * 0.25) });
+            table.Columns.Add(new TableColumn { Width = new GridLength(tableWidth * 0.50) });
+            table.Columns.Add(new TableColumn { Width = new GridLength(tableWidth * 0.22) });
+            table.Columns.Add(new TableColumn { Width = new GridLength(tableWidth * 0.28) });
             var group = new TableRowGroup();
             table.RowGroups.Add(group);
             void AddRow(IEnumerable<ReceiptText> values)
