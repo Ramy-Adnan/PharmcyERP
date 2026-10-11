@@ -90,6 +90,8 @@ public partial class POSView : UserControl, IDisposable
     private void ApplyResponsiveLayout()
     {
         if (CatalogPanel is null || ActualWidth <= 0) return;
+        // Keep the payment section bounded when Windows scaling reduces usable height.
+        PaymentOptionsScroll.MaxHeight = Math.Clamp(ActualHeight * 0.32, 120, 300);
         BasketColumn.Width = new GridLength(Math.Clamp(ActualWidth * 0.36, 420, 580));
         var available = Math.Max(310, ActualWidth - BasketColumn.Width.Value - 128);
         var columns = Math.Clamp((int)(available / 170), 2, 6);
