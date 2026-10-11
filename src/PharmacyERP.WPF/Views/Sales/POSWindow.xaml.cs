@@ -27,7 +27,7 @@ public partial class POSWindow : Window
         if (_approved) return;
         e.Cancel = true;
         if (_checking) return;
-        if (!_view.ViewModel.CanLeave)
+        if (!_view.ViewModel.CanLeave || _view.HasPendingScannerInput)
         {
             MessageBox.Show(this, _view.ViewModel.CheckoutUncertain ? "تحقق من نتيجة البيع السابق قبل مغادرة نقطة البيع." : "انتظر اكتمال العملية الحالية ثم عد للرئيسية.", "نقطة البيع", MessageBoxButton.OK, MessageBoxImage.Information);
             return;

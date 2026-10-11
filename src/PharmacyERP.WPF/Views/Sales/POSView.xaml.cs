@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
@@ -21,9 +22,12 @@ public partial class POSView : UserControl, IDisposable
     private readonly DispatcherTimer _scanTimer = new() { Interval = TimeSpan.FromMilliseconds(180) };
     private readonly DispatcherTimer _liveSearchTimer = new() { Interval = TimeSpan.FromMilliseconds(300) };
     private readonly DispatcherTimer _clockTimer = new() { Interval = TimeSpan.FromSeconds(1) };
+    private readonly DispatcherTimer _globalScanTimer = new();
+    private readonly BarcodeInputBuffer _globalScan = new();
     private Window? _window;
-    private bool _disposed;
+    private bool _disposed, _captureInputEnabled;
     public POSViewModel ViewModel => _viewModel;
+    public bool HasPendingScannerInput => _globalScan.HasPendingInput || _scanTimer.IsEnabled;
     public PharmacyBrandingViewModel Branding { get; }
     public static readonly DependencyProperty ProductCardWidthProperty = DependencyProperty.Register(nameof(ProductCardWidth), typeof(double), typeof(POSView), new PropertyMetadata(180d));
     public double ProductCardWidth { get => (double)GetValue(ProductCardWidthProperty); set => SetValue(ProductCardWidthProperty, value); }
@@ -42,6 +46,7 @@ public partial class POSView : UserControl, IDisposable
         }
         catch { _dataScope.Dispose(); throw; }
         _clockTimer.Tick += (_, _) => UpdateClock();
+        _globalScanTimer.Tick += async (_, _) => await CompleteGlobalScanAsync();
         _liveSearchTimer.Tick += async (_, _) =>
         {
             _liveSearchTimer.Stop();
@@ -61,6 +66,8 @@ public partial class POSView : UserControl, IDisposable
             _viewModel.ScanFocusRequested += FocusScanner;
             _window = Window.GetWindow(this);
             if (_window is not null) _window.PreviewKeyDown += WindowKeyDown;
+            _captureInputEnabled = true;
+            InputManager.Current.PreProcessInput += CaptureScannerInput;
             await _viewModel.InitializeAsync();
             await Dispatcher.InvokeAsync(ApplyResponsiveLayout, DispatcherPriority.Loaded);
             FocusScanner();
@@ -68,6 +75,9 @@ public partial class POSView : UserControl, IDisposable
         Unloaded += (_, _) =>
         {
             _scanTimer.Stop(); _liveSearchTimer.Stop(); _clockTimer.Stop();
+            _captureInputEnabled = false;
+            ResetGlobalScan();
+            InputManager.Current.PreProcessInput -= CaptureScannerInput;
             _viewModel.ScanFocusRequested -= FocusScanner;
             if (_window is not null) _window.PreviewKeyDown -= WindowKeyDown;
             _window = null;
@@ -80,6 +90,9 @@ public partial class POSView : UserControl, IDisposable
         if (_disposed) return;
         _disposed = true;
         _scanTimer.Stop(); _liveSearchTimer.Stop(); _clockTimer.Stop();
+        _captureInputEnabled = false;
+        ResetGlobalScan();
+        InputManager.Current.PreProcessInput -= CaptureScannerInput;
         _viewModel.ScanFocusRequested -= FocusScanner;
         if (_window is not null) _window.PreviewKeyDown -= WindowKeyDown;
         _dataScope.Dispose();
@@ -105,7 +118,11 @@ public partial class POSView : UserControl, IDisposable
         ProductCardWidth = Math.Max(135, (available - 18) / columns - 10);
     }
 
-    public void StopInput() { _scanTimer.Stop(); _liveSearchTimer.Stop(); _clockTimer.Stop(); }
+    public void StopInput()
+    {
+        _captureInputEnabled = false; ResetGlobalScan();
+        _scanTimer.Stop(); _liveSearchTimer.Stop(); _clockTimer.Stop();
+    }
     private void ReturnHomeClicked(object sender, RoutedEventArgs e) => Window.GetWindow(this)?.Close();
     private async void AllProductsClicked(object sender, RoutedEventArgs e)
     {
@@ -132,12 +149,13 @@ public partial class POSView : UserControl, IDisposable
     }
 
     private void SearchClicked(object sender, RoutedEventArgs e)
-    { ScanBox.Focus(); ScanBox.SelectAll(); }
+    { ResetGlobalScan(); ScanBox.Focus(); ScanBox.SelectAll(); }
 
     private void CancelClicked(object sender, RoutedEventArgs e)
     {
         if (!_viewModel.CancelTransactionCommand.CanExecute(null)) return;
         if (MessageBox.Show(Window.GetWindow(this), "إلغاء المعاملة الحالية وتفريغ السلة؟", "إلغاء المعاملة", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) != MessageBoxResult.Yes) return;
+        ResetGlobalScan();
         _scanTimer.Stop(); ScanBox.Clear();
         _viewModel.CancelTransactionCommand.Execute(null);
         FocusScanner();
@@ -187,8 +205,86 @@ public partial class POSView : UserControl, IDisposable
     private void WindowKeyDown(object sender, KeyEventArgs e)
     {
         if (!IsVisible) return;
-        if (e.Key == Key.F9 && _viewModel.CanScan) { e.Handled = true; _scanTimer.Stop(); ScanBox.Clear(); ScanBox.Focus(); }
         if (e.Key == Key.F12) { e.Handled = true; Checkout(); }
+    }
+
+    private async void CaptureScannerInput(object sender, PreProcessInputEventArgs e)
+    {
+        if (!_captureInputEnabled || _disposed || _window is not { IsActive: true, IsEnabled: true })
+        { ResetGlobalScan(); return; }
+        var input = e.StagingItem.Input;
+        if (input is KeyEventArgs key && key.RoutedEvent == Keyboard.PreviewKeyDownEvent)
+        {
+            if (key.Key == Key.F9 && Keyboard.Modifiers == ModifierKeys.None)
+            {
+                key.Handled = true;
+                if (key.IsRepeat) return;
+                ScanBox.Clear(); _scanTimer.Stop(); _liveSearchTimer.Stop();
+                _globalScan.BeginPrefixedScan(Environment.TickCount64);
+                _viewModel.SuccessMessage = "جاهز لقراءة الباركود؛ امسح الآن.";
+                RestartGlobalScanTimer();
+                return;
+            }
+            if (key.Key is Key.Enter or Key.Tab)
+            {
+                var prefixed = _globalScan.IsPrefixed;
+                var barcode = _globalScan.Complete(); _globalScanTimer.Stop();
+                if (prefixed || barcode is not null)
+                {
+                    key.Handled = true;
+                    if (barcode is not null) await SubmitGlobalScanAsync(barcode);
+                }
+                return;
+            }
+            if (key.Key is Key.Escape or Key.Back or Key.Delete or Key.Left or Key.Right or Key.Up or Key.Down or Key.Home or Key.End
+                || (Keyboard.Modifiers & (ModifierKeys.Control | ModifierKeys.Alt | ModifierKeys.Windows)) != 0)
+                ResetGlobalScan();
+        }
+        else if (input is TextCompositionEventArgs text && text.RoutedEvent == TextCompositionManager.PreviewTextInputEvent)
+        {
+            if (!_globalScan.IsPrefixed && (!_viewModel.CanScan || FocusIsEditable())) { ResetGlobalScan(); return; }
+            // A configured F9 prefix allows capture inside editors without changing their text.
+            // Unprefixed input is only observed outside editors: timing alone cannot safely
+            // distinguish a scanner from a person entering a price or quantity.
+            if (_globalScan.Append(text.Text, Environment.TickCount64, allowUnprefixed: true)) text.Handled = true;
+            if (_globalScan.HasPendingInput) RestartGlobalScanTimer();
+        }
+        else if (input is KeyboardFocusChangedEventArgs && !_globalScan.IsPrefixed)
+            ResetGlobalScan();
+    }
+
+    private static bool FocusIsEditable()
+    {
+        var node = Keyboard.FocusedElement as DependencyObject;
+        while (node is not null)
+        {
+            if (node is TextBoxBase or PasswordBox or ComboBox) return true;
+            node = node is Visual or System.Windows.Media.Media3D.Visual3D
+                ? VisualTreeHelper.GetParent(node) : LogicalTreeHelper.GetParent(node);
+        }
+        return false;
+    }
+
+    private void RestartGlobalScanTimer()
+    {
+        _globalScanTimer.Stop();
+        _globalScanTimer.Interval = TimeSpan.FromMilliseconds(_globalScan.IdleTimeoutMs);
+        _globalScanTimer.Start();
+    }
+    private void ResetGlobalScan() { _globalScanTimer.Stop(); _globalScan.Reset(); }
+    private async Task CompleteGlobalScanAsync()
+    {
+        _globalScanTimer.Stop();
+        var barcode = _globalScan.Complete();
+        if (barcode is not null) await SubmitGlobalScanAsync(barcode);
+        else if (_viewModel.SuccessMessage == "جاهز لقراءة الباركود؛ امسح الآن.") _viewModel.SuccessMessage = string.Empty;
+    }
+    private async Task SubmitGlobalScanAsync(string barcode)
+    {
+        if (!_captureInputEnabled || _disposed || _window is not { IsActive: true, IsEnabled: true }) return;
+        if (!_viewModel.CanScan) { _viewModel.ErrorMessage = "انتظر اكتمال العملية الحالية ثم أعد مسح الباركود."; return; }
+        _scanTimer.Stop(); _liveSearchTimer.Stop();
+        await _viewModel.SubmitSearchAsync(barcode, barcodeOnly: true);
     }
     private void CheckoutClicked(object sender, RoutedEventArgs e) => Checkout();
     private void Checkout()
@@ -196,7 +292,7 @@ public partial class POSView : UserControl, IDisposable
         if (!CartGrid.CommitEdit(DataGridEditingUnit.Cell, true) || !CartGrid.CommitEdit(DataGridEditingUnit.Row, true) || HasValidationError(this))
         { _viewModel.ErrorMessage = "راجع الحقول الحمراء وأدخل أرقاماً صحيحة قبل البيع."; return; }
         var text = ScanBox.Text.Trim();
-        if (_scanTimer.IsEnabled || (text.Length >= 3 && text.All(char.IsAsciiDigit)))
+        if (HasPendingScannerInput || (text.Length >= 3 && text.All(char.IsAsciiDigit)))
         { _viewModel.ErrorMessage = "انتظر إضافة الباركود الأخير أو أكمل البحث قبل البيع."; return; }
         if (_viewModel.CheckoutCommand.CanExecute(null))
         {
