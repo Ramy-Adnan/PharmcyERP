@@ -66,7 +66,7 @@
                                   SelectedValue="{Binding CategoryId}" Padding="6" Margin="0,0,0,12"/>
                     </StackPanel>
                     <StackPanel Grid.Column="2">
-                        <TextBlock Text="وحدة المخزون الصغيرة (شريط مثلاً)" Margin="0,0,0,4"/>
+                        <TextBlock Text="أصغر وحدة يمكن بيعها (حبة / شريط / قطعة)" Margin="0,0,0,4"/>
                         <ComboBox ItemsSource="{Binding Units}" DisplayMemberPath="Name" SelectedValuePath="Id"
                                   SelectedValue="{Binding UnitOfMeasureId}" Padding="6" Margin="0,0,0,12"/>
                     </StackPanel>
@@ -77,19 +77,19 @@
                         <TextBlock Text="تعبئة العبوة ووحدات البيع" FontWeight="Bold" Margin="0,0,0,8"/>
                         <TextBlock Text="اسم العبوة (علبة / باكيت)"/>
                         <TextBox Text="{Binding PackageUnitName, UpdateSourceTrigger=PropertyChanged}" Padding="6" Margin="0,4,0,8"/>
-                        <TextBlock Text="عدد الوحدات الصغيرة داخل العبوة"/>
+                        <TextBlock Text="إجمالي أصغر الوحدات داخل العبوة"/>
                         <TextBox Text="{Binding UnitsPerPackage, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}" Padding="6" Margin="0,4,0,8"/>
                         <TextBlock Text="باركود الوحدة الصغيرة (اختياري)"/>
                         <TextBox Text="{Binding BaseUnitBarcode, UpdateSourceTrigger=PropertyChanged}" Padding="6" Margin="0,4,0,8"/>
-                        <TextBlock Text="مثال: الوحدة شريط، العبوة علبة، العدد 5. أسعار الشراء والبيع أدناه للعلبة. المخزون وحدود الطلب بالأشرطة. العدد 1 يبقي الصنف بوحدة واحدة." TextWrapping="Wrap" Foreground="#475569"/>
+                        <TextBlock Text="للبيع بالحبة والشريط والعلبة: اختر الحبة كوحدة المخزون. علبة بها 5 أشرطة × 20 حبة = 100 حبة؛ أدخل 100 هنا. أسعار الشراء والبيع أدناه للعلبة. إذا كان البيع بالأشرطة فقط، اختر الشريط وأدخل 5." TextWrapping="Wrap" Foreground="#475569"/>
                     </StackPanel>
                 </Border>
                 <TextBlock Text="وحدات إضافية: شريط / باكيت / عبوة بأي عدد" FontWeight="Bold" Margin="0,0,0,6"/>
-                <TextBlock Text="مثال: المخزون حبة، الشريط 10 حبات، العلبة 20 حبة. أضف علبة 30 عند اختلاف التعبئة؛ الشركة اختيارية." TextWrapping="Wrap" Foreground="#475569" Margin="0,0,0,6"/>
+                <TextBlock Text="كل وحدة إضافية تحتوي عددًا من أصغر وحدات المخزون، وليس عدد أجزاء داخلها. مثال: المخزون حبة، الشريط يحتوي 20 حبة: أضف شريطًا بعدد 20. الحبة متاحة تلقائيًا ولا تُضاف بعدد 20. علبة سعرها 1250 وبها 100 حبة: الشريط 250 والحبة 12.50." TextWrapping="Wrap" Foreground="#475569" Margin="0,0,0,6"/>
                 <DataGrid ItemsSource="{Binding SaleUnits}" AutoGenerateColumns="False" CanUserAddRows="False" CanUserDeleteRows="False" MaxHeight="180">
                     <DataGrid.Columns>
                         <DataGridTextColumn Header="الوحدة" Binding="{Binding Name, UpdateSourceTrigger=PropertyChanged}" Width="*"/>
-                        <DataGridTextColumn Header="عدد الأجزاء" Binding="{Binding BaseUnitCount, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}" Width="80"/>
+                        <DataGridTextColumn Header="عدد وحدات المخزون داخلها" Binding="{Binding BaseUnitCount, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}" Width="160"/>
                         <DataGridTextColumn Header="باركود اختياري" Binding="{Binding Barcode, UpdateSourceTrigger=PropertyChanged}" Width="120"/>
                         <DataGridCheckBoxColumn Header="نشطة" Binding="{Binding IsActive, UpdateSourceTrigger=PropertyChanged}" Width="50"/>
                     </DataGrid.Columns>

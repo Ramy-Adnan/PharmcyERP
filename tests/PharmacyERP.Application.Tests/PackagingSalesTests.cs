@@ -59,6 +59,41 @@ public class PackagingSalesTests
     }
 
     [Fact]
+    public async Task BoxWithFiveTwentyPillStrips_PricesAndDeductsEveryUnitInPills()
+    {
+        await using var db = TestDb.CreateContext(_clock);
+        var f = await SeedAsync(db, 100);
+        (await db.UnitsOfMeasure.SingleAsync()).Name = "حبة";
+        db.ItemSaleUnits.Add(new ItemSaleUnit { ItemId = f.ItemId, Name = "شريط", BaseUnitCount = 20, Barcode = "STRIP20" });
+        await db.SaveChangesAsync();
+        await ReceiveAsync(db, f, boxes: 2, sale: 1250);
+        var pos = await PosAsync(db, f);
+        await pos.SubmitSearchAsync("1234567890", true);
+        var row = pos.CartLines.Single();
+        row.UnitPrice.Should().Be(1250);
+        row.UnitsPerSale.Should().Be(100);
+        row.SelectedSaleUnit = row.SaleUnits.Single(u => u.Name == "شريط");
+        row.UnitPrice.Should().Be(250);
+        row.UnitsPerSale.Should().Be(20);
+        row.SelectedSaleUnit = row.SaleUnits.Single(u => u.Name == "حبة");
+        row.UnitPrice.Should().Be(12.50m);
+        row.UnitsPerSale.Should().Be(1);
+        await pos.SubmitSearchAsync("STRIP20", true);
+        await pos.SubmitSearchAsync("1234567890", true);
+        // The box barcode follows the currently selected strip; explicitly select a box.
+        pos.CartLines.Single(l => l.ItemSaleUnitId.HasValue).SelectedSaleUnit = row.SaleUnits.Single(u => u.IsPackage);
+        pos.CartLines.Single(l => l.SellAsPackage).Quantity = 1;
+        await pos.SubmitSearchAsync("STRIP20", true);
+        pos.TotalAmount.Should().Be(1512.50m);
+        await pos.CheckoutAsync();
+        pos.ErrorMessage.Should().BeEmpty();
+        (await db.Batches.SingleAsync()).QuantityOnHand.Should().Be(79);
+        var invoice = await db.SalesInvoices.SingleAsync();
+        var detail = (await Sales(db).GetSalesInvoiceDetailAsync(invoice.Id))!;
+        detail.Lines.Select(l => l.UnitsPerSale).Should().BeEquivalentTo(new[] { 1, 20, 100 });
+    }
+
+    [Fact]
     public async Task Receive_StoresTenStripsAndCostPerStrip_WhileLookupKeepsWholeBoxPrice()
     {
         await using var db = TestDb.CreateContext(_clock); var f = await SeedAsync(db);
