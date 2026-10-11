@@ -209,8 +209,8 @@ public class SalesService : ISalesService
         if (previous is not null)
             return Result<SalesInvoiceDto>.Success((await LoadInvoiceDtoAsync(previous.Id, cancellationToken))!);
         if (!_currentUser.HasPermission("Sales.UsePos")) return Result<SalesInvoiceDto>.Failure("لا تملك صلاحية البيع.");
-        if (dto.PaymentMethod is not (PaymentMethod.Cash or PaymentMethod.Card or PaymentMethod.Credit))
-            return Result<SalesInvoiceDto>.Failure("اختر نقدي أو بطاقة أو آجل.");
+        if (dto.PaymentMethod is not (PaymentMethod.Cash or PaymentMethod.Credit))
+            return Result<SalesInvoiceDto>.Failure("اختر نقدي أو آجل للعميل المسجل.");
         if (dto.PaymentMethod == PaymentMethod.Credit && dto.CustomerId is null)
             return Result<SalesInvoiceDto>.Failure("البيع الآجل متاح لعميل مسجل فقط.");
         if (dto.CustomerId.HasValue && !await _context.Customers.AnyAsync(c => c.Id == dto.CustomerId && c.IsActive, cancellationToken))
@@ -759,7 +759,7 @@ public class SalesService : ISalesService
             return previousReceipt.ReferenceId == dto.InvoiceId && previousReceipt.Amount == dto.Amount
                 ? Result.Success() : Result.Failure("حُفظ تسديد سابق بهذا الطلب؛ حدّث الكشف قبل إدخال تسديد جديد.");
         if (dto.Amount <= 0 || decimal.Round(dto.Amount, 2) != dto.Amount) return Result.Failure("أدخل مبلغاً موجباً بمنزلتين عشريتين كحد أقصى.");
-        if (dto.PaymentMethod is not (PaymentMethod.Cash or PaymentMethod.Card)) return Result.Failure("تسديد الدين يكون نقداً أو بالبطاقة.");
+        if (dto.PaymentMethod != PaymentMethod.Cash) return Result.Failure("تسديد ديون العملاء نقدي فقط.");
         var invoice = await _context.SalesInvoices.Include(i => i.Customer)
             .FirstOrDefaultAsync(i => i.Id == dto.InvoiceId && i.CustomerId == dto.CustomerId, cancellationToken);
         if (invoice is null || invoice.PaymentMethod != PaymentMethod.Credit || invoice.Status == SalesInvoiceStatus.Voided)
@@ -768,7 +768,7 @@ public class SalesService : ISalesService
         var returned = await _context.SalesReturns.Where(r => r.SalesInvoiceId == invoice.Id).SumAsync(r => r.TotalAmount, cancellationToken);
         var outstanding = invoice.TotalAmount - returned - await PaidForInvoiceAsync(invoice.Id, cancellationToken);
         if (dto.Amount > outstanding) return Result.Failure($"المبلغ يتجاوز الدين المتبقي ({outstanding:N2}).");
-        var sourceCode = dto.PaymentMethod == PaymentMethod.Cash ? "1110" : "1120";
+        const string sourceCode = "1110";
         var source = await _context.ChartOfAccounts.FirstAsync(a => a.Code == sourceCode, cancellationToken);
         var receivable = await _context.ChartOfAccounts.FirstAsync(a => a.Code == "1160", cancellationToken);
         var entry = new JournalEntry
@@ -787,7 +787,7 @@ public class SalesService : ISalesService
         {
             Number = number, BranchId = invoice.BranchId, ReceiptDate = _dateTime.UtcNow,
             Amount = dto.Amount, PayerName = invoice.Customer.Name, Notes = dto.Notes,
-            SourceType = dto.PaymentMethod == PaymentMethod.Cash ? CashSourceType.Cash : CashSourceType.Bank,
+            SourceType = CashSourceType.Cash,
             ReferenceType = "CustomerCredit", ReferenceId = invoice.Id, JournalEntry = entry
         };
         _context.Receipts.Add(receipt);

@@ -37,7 +37,6 @@ public class SalesPosWorkflowTests
 
     [Theory]
     [InlineData(PaymentMethod.Cash, "1110", 20)]
-    [InlineData(PaymentMethod.Card, "1120", 20)]
     [InlineData(PaymentMethod.Credit, "1160", 0)]
     public async Task Checkout_PostsTheActualPaymentMethod(PaymentMethod method, string account, int tendered)
     {
@@ -50,6 +49,28 @@ public class SalesPosWorkflowTests
         lines.Where(l => l.Account.Code == account).Sum(l => l.DebitAmount).Should().Be(20);
         lines.Sum(l => l.DebitAmount).Should().Be(lines.Sum(l => l.CreditAmount));
         if (method != PaymentMethod.Cash) lines.Where(l => l.Account.Code == "1110").Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task CardPayment_IsRejectedForNewSalesAndDebtPayments_WithoutFinancialOrStockChanges()
+    {
+        await using var db = TestDb.CreateContext(_clock);
+        var seed = await SeedAsync(db);
+        var sales = Sales(db);
+        (await sales.CheckoutAsync(Checkout(seed.Fixture, PaymentMethod.Card), seed.UserId)).Succeeded.Should().BeFalse();
+        (await db.SalesInvoices.CountAsync()).Should().Be(0);
+        (await db.JournalEntries.CountAsync()).Should().Be(0);
+        (await db.Batches.SumAsync(b => b.QuantityOnHand)).Should().Be(20);
+        var credit = await sales.CheckoutAsync(Checkout(seed.Fixture, PaymentMethod.Credit, seed.CustomerId), seed.UserId);
+        credit.Succeeded.Should().BeTrue();
+        var entries = await db.JournalEntries.CountAsync();
+        (await sales.RecordCustomerPaymentAsync(new()
+        {
+            CustomerId = seed.CustomerId, InvoiceId = credit.Value!.Id, Amount = 5, PaymentMethod = PaymentMethod.Card
+        })).Succeeded.Should().BeFalse();
+        (await db.Receipts.CountAsync()).Should().Be(0);
+        (await db.JournalEntries.CountAsync()).Should().Be(entries);
+        (await sales.GetCustomerAccountAsync(seed.CustomerId))!.OutstandingAmount.Should().Be(20);
     }
 
     [Fact]
@@ -158,7 +179,14 @@ public class SalesPosWorkflowTests
     {
         await using var db = TestDb.CreateContext(_clock); var seed = await SeedAsync(db); var sales = Sales(db);
         await sales.CheckoutAsync(Checkout(seed.Fixture, PaymentMethod.Cash), seed.UserId);
-        await sales.CheckoutAsync(Checkout(seed.Fixture, PaymentMethod.Card), seed.UserId);
+        // Historical bank-paid invoices remain in report totals after disabling new card payments.
+        db.SalesInvoices.Add(new SalesInvoice
+        {
+            Number = "LEGACY-CARD", BranchId = seed.Fixture.BranchId, WarehouseId = seed.Fixture.WarehouseId,
+            CashierUserId = seed.UserId, SaleAtUtc = _clock.UtcNow, PaymentMethod = PaymentMethod.Card,
+            SubTotal = 20, TotalAmount = 20, AmountTendered = 20, Status = SalesInvoiceStatus.Completed
+        });
+        await db.SaveChangesAsync();
         var credit = await sales.CheckoutAsync(Checkout(seed.Fixture, PaymentMethod.Credit, seed.CustomerId), seed.UserId);
         await sales.RecordCustomerPaymentAsync(new() { CustomerId = seed.CustomerId, InvoiceId = credit.Value!.Id, Amount = 5 });
         var summary = await new ReportingService(db, _clock).GetDashboardSummaryAsync(seed.Fixture.BranchId);

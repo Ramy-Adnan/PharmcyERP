@@ -19,7 +19,7 @@
    <StackPanel Grid.Row="1" Margin="0,12" Visibility="{Binding CanManage, Converter={StaticResource BoolToVisibilityConverter}}">
     <WrapPanel><TextBlock Text="مبلغ التسديد" VerticalAlignment="Center" Margin="0,0,8,0"/>
      <TextBox x:Name="AmountBox" Text="{Binding PaymentAmount, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}" Width="130" Padding="8"/>
-     <ComboBox ItemsSource="{Binding PaymentMethods}" DisplayMemberPath="Name" SelectedValuePath="Value" SelectedValue="{Binding PaymentMethod}" Width="110" Padding="7" Margin="8,0"/>
+     <TextBlock Text="نقدي" VerticalAlignment="Center" Margin="16,0"/>
      <Button Content="تسجيل قبض وتسديد" Click="PayClicked" Padding="15,8" Background="#0F766E" Foreground="White"/>
      <Button Content="تصحيح قيود الآجل القديمة" Command="{Binding ReconcileCommand}" Padding="10,8" Margin="10,0"/>
     </WrapPanel>

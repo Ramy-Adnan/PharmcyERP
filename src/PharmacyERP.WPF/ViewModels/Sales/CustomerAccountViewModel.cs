@@ -29,7 +29,7 @@ public class CustomerAccountViewModel : ViewModelBase
     }
     public ObservableCollection<CustomerCreditInvoiceDto> Invoices { get; } = new();
     public ObservableCollection<CustomerPaymentDto> Payments { get; } = new();
-    public IReadOnlyList<PaymentOption> PaymentMethods { get; } = new[] { new PaymentOption(PaymentMethod.Cash, "نقدي"), new PaymentOption(PaymentMethod.Card, "بطاقة") };
+    public IReadOnlyList<PaymentOption> PaymentMethods { get; } = new[] { new PaymentOption(PaymentMethod.Cash, "نقدي") };
     public bool CanManage => _user.HasPermission("Sales.ManageCustomers");
     public string CustomerName { get => _customerName; private set => SetProperty(ref _customerName, value); }
     public string Message { get => _message; set => SetProperty(ref _message, value); }
@@ -41,7 +41,15 @@ public class CustomerAccountViewModel : ViewModelBase
         set { if (SetProperty(ref _selectedInvoice, value)) PaymentAmount = value?.OutstandingAmount ?? 0; System.Windows.Input.CommandManager.InvalidateRequerySuggested(); }
     }
     public decimal PaymentAmount { get => _paymentAmount; set => SetProperty(ref _paymentAmount, value); }
-    public PaymentMethod PaymentMethod { get => _paymentMethod; set => SetProperty(ref _paymentMethod, value); }
+    public PaymentMethod PaymentMethod
+    {
+        get => _paymentMethod;
+        set
+        {
+            if (value != PaymentMethod.Cash) { Message = "تسديد ديون العملاء نقدي فقط."; return; }
+            SetProperty(ref _paymentMethod, value);
+        }
+    }
     public AsyncRelayCommand RefreshCommand { get; }
     public AsyncRelayCommand PayCommand { get; }
     public AsyncRelayCommand ReconcileCommand { get; }
