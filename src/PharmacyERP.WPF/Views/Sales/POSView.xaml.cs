@@ -19,6 +19,7 @@ public partial class POSView : UserControl, IDisposable
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ViewDataScope _dataScope;
     private readonly DispatcherTimer _scanTimer = new() { Interval = TimeSpan.FromMilliseconds(180) };
+    private readonly DispatcherTimer _liveSearchTimer = new() { Interval = TimeSpan.FromMilliseconds(300) };
     private readonly DispatcherTimer _clockTimer = new() { Interval = TimeSpan.FromSeconds(1) };
     private Window? _window;
     private bool _disposed;
@@ -41,6 +42,11 @@ public partial class POSView : UserControl, IDisposable
         }
         catch { _dataScope.Dispose(); throw; }
         _clockTimer.Tick += (_, _) => UpdateClock();
+        _liveSearchTimer.Tick += async (_, _) =>
+        {
+            _liveSearchTimer.Stop();
+            if (IsLoaded && !_disposed) await _viewModel.RefreshSearchResultsAsync();
+        };
         _scanTimer.Tick += async (_, _) =>
         {
             _scanTimer.Stop();
@@ -61,7 +67,7 @@ public partial class POSView : UserControl, IDisposable
         };
         Unloaded += (_, _) =>
         {
-            _scanTimer.Stop(); _clockTimer.Stop();
+            _scanTimer.Stop(); _liveSearchTimer.Stop(); _clockTimer.Stop();
             _viewModel.ScanFocusRequested -= FocusScanner;
             if (_window is not null) _window.PreviewKeyDown -= WindowKeyDown;
             _window = null;
@@ -73,7 +79,7 @@ public partial class POSView : UserControl, IDisposable
     {
         if (_disposed) return;
         _disposed = true;
-        _scanTimer.Stop(); _clockTimer.Stop();
+        _scanTimer.Stop(); _liveSearchTimer.Stop(); _clockTimer.Stop();
         _viewModel.ScanFocusRequested -= FocusScanner;
         if (_window is not null) _window.PreviewKeyDown -= WindowKeyDown;
         _dataScope.Dispose();
@@ -99,7 +105,7 @@ public partial class POSView : UserControl, IDisposable
         ProductCardWidth = Math.Max(135, (available - 18) / columns - 10);
     }
 
-    public void StopInput() { _scanTimer.Stop(); _clockTimer.Stop(); }
+    public void StopInput() { _scanTimer.Stop(); _liveSearchTimer.Stop(); _clockTimer.Stop(); }
     private void ReturnHomeClicked(object sender, RoutedEventArgs e) => Window.GetWindow(this)?.Close();
     private async void AllProductsClicked(object sender, RoutedEventArgs e)
     {
@@ -166,13 +172,16 @@ public partial class POSView : UserControl, IDisposable
     }
     private void ScanTextChanged(object sender, TextChangedEventArgs e)
     {
-        _scanTimer.Stop();
-        if (ScanBox.Text.Length > 0) _scanTimer.Start();
+        _scanTimer.Stop(); _liveSearchTimer.Stop();
+        if (_disposed) return;
+        var text = ScanBox.Text.Trim();
+        if (text.Length >= 3 && text.All(char.IsAsciiDigit)) _scanTimer.Start();
+        else _liveSearchTimer.Start();
     }
     private async void ScanKeyDown(object sender, KeyEventArgs e)
     {
         if (e.Key != Key.Enter) return;
-        e.Handled = true; _scanTimer.Stop();
+        e.Handled = true; _scanTimer.Stop(); _liveSearchTimer.Stop();
         await _viewModel.SubmitSearchAsync(ScanBox.Text);
     }
     private void WindowKeyDown(object sender, KeyEventArgs e)
@@ -186,9 +195,14 @@ public partial class POSView : UserControl, IDisposable
     {
         if (!CartGrid.CommitEdit(DataGridEditingUnit.Cell, true) || !CartGrid.CommitEdit(DataGridEditingUnit.Row, true) || HasValidationError(this))
         { _viewModel.ErrorMessage = "راجع الحقول الحمراء وأدخل أرقاماً صحيحة قبل البيع."; return; }
-        if (_scanTimer.IsEnabled || !string.IsNullOrWhiteSpace(ScanBox.Text))
+        var text = ScanBox.Text.Trim();
+        if (_scanTimer.IsEnabled || (text.Length >= 3 && text.All(char.IsAsciiDigit)))
         { _viewModel.ErrorMessage = "انتظر إضافة الباركود الأخير أو أكمل البحث قبل البيع."; return; }
-        if (_viewModel.CheckoutCommand.CanExecute(null)) _viewModel.CheckoutCommand.Execute(null);
+        if (_viewModel.CheckoutCommand.CanExecute(null))
+        {
+            ScanBox.Clear(); _liveSearchTimer.Stop();
+            _viewModel.CheckoutCommand.Execute(null);
+        }
     }
     private static bool HasValidationError(DependencyObject node)
     {

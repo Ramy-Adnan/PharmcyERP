@@ -42,6 +42,7 @@ public class POSViewModel : ViewModelBase
     private int? _catalogCategoryId;
     private bool _hasMoreProducts, _isSearching;
     private bool _isClosing;
+    private long _searchVersion;
 
     public POSViewModel(ISalesService salesService, IBranchService branchService,
         IPrescriptionService prescriptionService, ICurrentUserService currentUserService,
@@ -94,7 +95,11 @@ public class POSViewModel : ViewModelBase
     public ObservableCollection<ActivePrescriptionSummaryDto> FillablePrescriptions { get; } = new();
     public IReadOnlyList<PaymentOption> PaymentMethods { get; } = new[]
     { new PaymentOption(PaymentMethod.Cash, "نقدي"), new PaymentOption(PaymentMethod.Credit, "آجل للعميل المسجل") };
-    public string SearchText { get => _searchText; set => SetProperty(ref _searchText, value); }
+    public string SearchText
+    {
+        get => _searchText;
+        set { if (SetProperty(ref _searchText, value)) _searchVersion++; }
+    }
     public SaleItemLookupDto? SelectedSearchResult { get => _selectedSearchResult; set { SetProperty(ref _selectedSearchResult, value); Requery(); } }
     public POSLineRow? SelectedCartLine { get => _selectedCartLine; set { SetProperty(ref _selectedCartLine, value); Requery(); } }
     public int WarehouseId { get; private set; }
@@ -210,6 +215,7 @@ public class POSViewModel : ViewModelBase
     public async Task BrowseCategoryAsync(POSCategoryOption category)
     {
         if (!CanScan || _pendingScans > 0) return;
+        SearchText = string.Empty;
         await _operations.WaitAsync();
         IsBusy = true;
         try
@@ -320,6 +326,39 @@ public class POSViewModel : ViewModelBase
             }
         }
         catch (Exception ex) { ErrorMessage = $"تعذر تحميل حساب العميل: {ex.Message}"; }
+        finally { _operations.Release(); }
+    }
+
+    // Live typing updates the catalogue only; explicit scanner submissions add to the basket.
+    public async Task RefreshSearchResultsAsync()
+    {
+        if (!CanScan) return;
+        var text = SearchText.Trim();
+        var version = _searchVersion;
+        await _operations.WaitAsync();
+        try
+        {
+            if (!CanScan || version != _searchVersion) return;
+            var items = text.Length == 0
+                ? await _salesService.BrowseSaleItemsAsync(WarehouseId, _catalogCategoryId)
+                : await _salesService.SearchSaleItemsAsync(text, WarehouseId);
+            // A slower result must never replace cards for newer text or after leaving POS.
+            if (!CanScan || version != _searchVersion) return;
+            SearchResults.Clear(); SelectedSearchResult = null;
+            foreach (var item in items) SearchResults.Add(item);
+            DisplayProducts(items);
+            _isSearching = text.Length > 0;
+            HasMoreProducts = !_isSearching && items.Count == 60;
+            foreach (var category in Categories) category.IsSelected = !_isSearching && category.Id == _catalogCategoryId;
+            ResultsTitle = !_isSearching ? Categories.FirstOrDefault(c => c.IsSelected)?.Name ?? "الأصناف"
+                : items.Count == 0 ? "لا توجد نتائج للبحث"
+                : items.Count == 30 ? "أول 30 نتيجة · أدخل اسمًا أدق للمزيد" : "نتائج البحث";
+            Requery();
+        }
+        catch (Exception ex)
+        {
+            if (!_isClosing && version == _searchVersion) ErrorMessage = $"تعذر البحث: {ex.Message}";
+        }
         finally { _operations.Release(); }
     }
 

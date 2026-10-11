@@ -26,6 +26,55 @@ public class PosCategoryTests
     private sealed class Printer : IReceiptPrinter { public void Print(SalesInvoiceDetailDto invoice) { } }
 
     [Fact]
+    public async Task LiveSearch_UpdatesCardsWithoutAddingOrClearingText_AndClearingRestoresCatalogue()
+    {
+        await using var db = TestDb.CreateContext(_clock);
+        var fixture = await TestDb.SeedBaselineAsync(db);
+        await TestDb.AddBatchAsync(db, fixture, "FRESH", _clock.UtcNow.AddDays(100), 10);
+        var pos = await PosAsync(db, fixture);
+        pos.SearchText = "ITM-001";
+        await pos.RefreshSearchResultsAsync();
+        pos.ProductCards.Should().ContainSingle(c => c.Item.ItemId == fixture.ItemId);
+        pos.CartLines.Should().BeEmpty();
+        pos.SearchText.Should().Be("ITM-001");
+        pos.SearchText = "no such medicine";
+        await pos.RefreshSearchResultsAsync();
+        pos.ProductCards.Should().BeEmpty();
+        pos.SearchText = "";
+        await pos.RefreshSearchResultsAsync();
+        pos.ProductCards.Should().ContainSingle();
+        pos.Categories.First().IsSelected.Should().BeTrue();
+        await pos.SubmitSearchAsync("ITM-001");
+        pos.CartLines.Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task LiveSearch_DiscardsResultsWhenTextChangesDuringAnOutstandingQuery()
+    {
+        await using var db = TestDb.CreateContext(_clock);
+        var fixture = await TestDb.SeedBaselineAsync(db);
+        var proxy = System.Reflection.DispatchProxy.Create<PharmacyERP.Application.Features.Sales.ISalesService, DelayedSearch>();
+        var gate = (DelayedSearch)proxy; gate.Target = Sales(db);
+        var pos = await PosAsync(db, fixture, proxy);
+        var added = new List<POSProductCard>();
+        pos.ProductCards.CollectionChanged += (_, e) =>
+        {
+            if (e.NewItems is not null) added.AddRange(e.NewItems.Cast<POSProductCard>());
+        };
+        pos.SearchText = "ITM-001";
+        var oldQuery = pos.RefreshSearchResultsAsync();
+        await gate.Started.Task;
+        pos.SearchText = "no such medicine";
+        var newQuery = pos.RefreshSearchResultsAsync();
+        gate.Release.TrySetResult();
+        await Task.WhenAll(oldQuery, newQuery);
+        added.Should().BeEmpty();
+        pos.ProductCards.Should().BeEmpty();
+        pos.CartLines.Should().BeEmpty();
+        pos.SearchText.Should().Be("no such medicine");
+    }
+
+    [Fact]
     public async Task Browse_FiltersBeforeLimit_AndExcludesInactiveProducts()
     {
         await using var db = TestDb.CreateContext(_clock); var fixture = await TestDb.SeedBaselineAsync(db);
