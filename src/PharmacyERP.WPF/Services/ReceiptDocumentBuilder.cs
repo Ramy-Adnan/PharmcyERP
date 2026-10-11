@@ -21,6 +21,15 @@ public static class ReceiptDocumentBuilder
             var margins = block.Margin.Top + block.Margin.Bottom;
             if (block is Section section)
                 return margins + section.Blocks.Cast<Block>().Sum(child => BlockHeight(child, innerWidth));
+            if (block is Table table)
+            {
+                var totalWidth = table.Columns.Sum(c => c.Width.Value);
+                return margins + table.RowGroups.SelectMany(g => g.Rows.Cast<TableRow>()).Sum(row =>
+                    row.Cells.Select((cell, index) => cell.Blocks.Cast<Block>().Sum(child =>
+                        BlockHeight(child, Math.Max(1, innerWidth * table.Columns[index].Width.Value / totalWidth
+                            - cell.Padding.Left - cell.Padding.Right)))
+                        + cell.Padding.Top + cell.Padding.Bottom + cell.BorderThickness.Top + cell.BorderThickness.Bottom).Max());
+            }
             if (block is not Paragraph paragraph) return margins;
             var image = paragraph.Inlines.OfType<InlineUIContainer>().Select(i => i.Child).OfType<Image>().FirstOrDefault();
             if (image is not null) return margins + image.Height + image.Margin.Top + image.Margin.Bottom + 6;
@@ -69,10 +78,33 @@ public static class ReceiptDocumentBuilder
         }
         AddSection(document, content.Header);
         AddDivider(document);
-        foreach (var product in content.Products)
+        if (content.Products.Count > 0)
         {
-            AddSection(document, product);
-            AddDivider(document);
+            var table = new Table { CellSpacing = 0, Margin = new Thickness(0), FlowDirection = FlowDirection.RightToLeft };
+            // Reserve a quarter of the printable width for quantities.
+            var tableWidth = Math.Max(1, width - document.PagePadding.Left - document.PagePadding.Right);
+            table.Columns.Add(new TableColumn { Width = new GridLength(tableWidth * 0.75) });
+            table.Columns.Add(new TableColumn { Width = new GridLength(tableWidth * 0.25) });
+            var group = new TableRowGroup();
+            table.RowGroups.Add(group);
+            void AddRow(IEnumerable<ReceiptText> values)
+            {
+                var row = new TableRow();
+                foreach (var value in values)
+                    row.Cells.Add(new TableCell(new Paragraph(new Run(value.Value))
+                    {
+                        Margin = new Thickness(0), TextAlignment = TextAlignment.Center,
+                        FontSize = value.FontSize, FontWeight = value.Bold ? FontWeights.Bold : FontWeights.Normal
+                    })
+                    {
+                        Padding = new Thickness(3, 3, 3, 3), BorderBrush = Brushes.Black,
+                        BorderThickness = new Thickness(0, 0, 0, 0.7)
+                    });
+                group.Rows.Add(row);
+            }
+            AddRow(content.ProductHeaders);
+            foreach (var product in content.Products) AddRow(product);
+            document.Blocks.Add(table);
         }
         AddSection(document, content.Totals);
         if (content.Footer.Count > 0)

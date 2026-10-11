@@ -73,9 +73,10 @@ public sealed class ReceiptSettingsTests : IDisposable
         content.Footer.Any(t => t.Value == settings.FooterMessage).Should().Be(visible);
         content.Header.Should().Contain(t => t.Value == invoice.Header.Number);
         content.Products.Should().HaveCount(2);
-        content.Products[0].Should().ContainSingle(); content.Products[1].Should().ContainSingle();
-        content.Products[0][0].Value.Should().Be("منتج أول  —  الكمية: 1");
-        content.Products[1][0].Value.Should().Be("منتج ثانٍ  —  الكمية: 2");
+        content.ProductHeaders.Select(t => t.Value).Should().Equal("الاسم", "الكمية");
+        content.Products[0].Select(t => t.Value).Should().Equal("منتج أول", "1");
+        content.Products[1].Select(t => t.Value).Should().Equal("منتج ثانٍ", "2");
+        content.Products.SelectMany(p => p).Should().NotContain(t => t.Value.Contains("الكمية:"));
         content.Totals.Should().HaveCount(3);
         content.Totals.Should().Contain(t => t.Value == $"الإجمالي: {2000:N2}" && t.Bold);
     }

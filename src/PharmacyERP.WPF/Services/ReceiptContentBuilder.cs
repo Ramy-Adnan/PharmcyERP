@@ -10,6 +10,7 @@ public sealed class ReceiptContent
     public string? LogoBase64 { get; init; }
     public List<ReceiptText> Header { get; } = new();
     public List<List<ReceiptText>> Products { get; } = new();
+    public IReadOnlyList<ReceiptText> ProductHeaders { get; } = new[] { new ReceiptText("الاسم", true), new ReceiptText("الكمية", true) };
     public List<ReceiptText> Totals { get; } = new();
     public List<ReceiptText> Footer { get; } = new();
 }
@@ -34,7 +35,8 @@ public static class ReceiptContentBuilder
         {
             var product = new List<ReceiptText>
             {
-                new($"{line.ItemName}  —  الكمية: {line.Quantity}{(string.IsNullOrWhiteSpace(line.UnitName) ? "" : " " + line.UnitName)}", true, 11)
+                new(line.ItemName, false, 11),
+                new($"{line.Quantity}{(string.IsNullOrWhiteSpace(line.UnitName) ? "" : " " + line.UnitName)}", false, 11)
             };
             content.Products.Add(product);
         }

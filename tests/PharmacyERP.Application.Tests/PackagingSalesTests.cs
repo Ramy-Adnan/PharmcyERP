@@ -155,7 +155,7 @@ public class PackagingSalesTests
         await pos.CheckoutAsync(); pos.ErrorMessage.Should().BeEmpty(); (await db.Batches.SingleAsync()).QuantityOnHand.Should().Be(7);
         var detail = (await Sales(db).GetSalesInvoiceDetailAsync((await db.SalesInvoices.SingleAsync()).Id))!;
         var content = PharmacyERP.WPF.Services.ReceiptContentBuilder.Build(detail, new());
-        content.Products.Single().Single().Value.Should().Contain("3 شريط");
+        content.Products.Single()[1].Value.Should().Be("3 شريط");
     }
 
     [Fact]
