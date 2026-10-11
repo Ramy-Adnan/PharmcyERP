@@ -28,6 +28,7 @@ public interface ISalesService
 
     // POS item lookup
     Task<List<SaleItemLookupDto>> SearchSaleItemsAsync(string searchText, int warehouseId, CancellationToken cancellationToken = default);
+    Task<List<SaleItemLookupDto>> BrowseSaleItemsAsync(int warehouseId, int? categoryId = null, CancellationToken cancellationToken = default);
 
     Task<SalesInvoiceDto?> FindCheckoutAsync(Guid requestId, CancellationToken cancellationToken = default);
 

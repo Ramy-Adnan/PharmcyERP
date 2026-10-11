@@ -139,15 +139,26 @@ public class SalesService : ISalesService
     {
         searchText = searchText.Trim();
         if (searchText.Length == 0) return new();
-        var today = _dateTime.UtcNow.Date;
         var matches = _context.Items.AsNoTracking().Where(i => i.IsActive &&
             (i.Barcode == searchText || i.BaseUnitBarcode == searchText || i.SaleUnits.Any(u => u.IsActive && u.Barcode == searchText) || i.Code.Contains(searchText) || i.Name.Contains(searchText) ||
              (i.GenericName != null && i.GenericName.Contains(searchText)) ||
              (i.Manufacturer != null && i.Manufacturer.Name.Contains(searchText)) ||
              (i.Barcode != null && i.Barcode.Contains(searchText))));
-        var items = await matches.OrderByDescending(i => i.Barcode == searchText || i.BaseUnitBarcode == searchText || i.SaleUnits.Any(u => u.IsActive && u.Barcode == searchText))
-            .ThenByDescending(i => i.Code == searchText).ThenBy(i => i.Name)
-            .Include(i => i.UnitOfMeasure).Include(i => i.Manufacturer).Include(i => i.SaleUnits).Take(30).ToListAsync(cancellationToken);
+        return await LoadSaleItemsAsync(matches.OrderByDescending(i => i.Barcode == searchText || i.BaseUnitBarcode == searchText || i.SaleUnits.Any(u => u.IsActive && u.Barcode == searchText))
+            .ThenByDescending(i => i.Code == searchText).ThenBy(i => i.Name), warehouseId, 30, cancellationToken);
+    }
+
+    public Task<List<SaleItemLookupDto>> BrowseSaleItemsAsync(int warehouseId, int? categoryId = null, CancellationToken cancellationToken = default)
+    {
+        // Filter in the database, before limiting results. Barcode search remains global.
+        var items = _context.Items.AsNoTracking().Where(i => i.IsActive && (!categoryId.HasValue || i.CategoryId == categoryId.Value));
+        return LoadSaleItemsAsync(items.OrderBy(i => i.Name), warehouseId, 60, cancellationToken);
+    }
+
+    private async Task<List<SaleItemLookupDto>> LoadSaleItemsAsync(IQueryable<Item> matches, int warehouseId, int limit, CancellationToken cancellationToken)
+    {
+        var today = _dateTime.UtcNow.Date;
+        var items = await matches.Include(i => i.UnitOfMeasure).Include(i => i.Manufacturer).Include(i => i.SaleUnits).Take(limit).ToListAsync(cancellationToken);
         var ids = items.Select(i => i.Id).ToList();
         var batches = await _context.Batches.AsNoTracking()
             .Where(b => ids.Contains(b.ItemId) && b.WarehouseId == warehouseId && b.ExpiryDate >= today && b.QuantityOnHand > 0)

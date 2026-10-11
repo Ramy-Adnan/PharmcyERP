@@ -24,8 +24,9 @@ public class InventoryService : IInventoryService
 
     public async Task<List<ItemCategoryDto>> GetCategoriesAsync(CancellationToken cancellationToken = default)
     {
-        var categories = await _context.ItemCategories.Include(c => c.Items).OrderBy(c => c.Name).ToListAsync(cancellationToken);
-        return categories.Select(c => new ItemCategoryDto { Id = c.Id, Code = c.Code, Name = c.Name, IsActive = c.IsActive, ItemCount = c.Items.Count }).ToList();
+        return await _context.ItemCategories.AsNoTracking().OrderBy(c => c.Name)
+            .Select(c => new ItemCategoryDto { Id = c.Id, Code = c.Code, Name = c.Name, IsActive = c.IsActive, ItemCount = c.Items.Count })
+            .ToListAsync(cancellationToken);
     }
 
     public async Task<Result<ItemCategoryDto>> UpsertCategoryAsync(int? id, string code, string name, bool isActive, CancellationToken cancellationToken = default)
