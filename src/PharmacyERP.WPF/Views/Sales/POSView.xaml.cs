@@ -90,8 +90,6 @@ public partial class POSView : UserControl, IDisposable
     private void ApplyResponsiveLayout()
     {
         if (CatalogPanel is null || ActualWidth <= 0) return;
-        // Keep the payment section bounded when Windows scaling reduces usable height.
-        PaymentOptionsScroll.MaxHeight = Math.Clamp(ActualHeight * 0.30, 110, 300);
         var usableWidth = Math.Max(1, ActualWidth - 114);
         BasketColumn.Width = new GridLength(Math.Min(Math.Clamp(ActualWidth * 0.40, 420, 620), usableWidth * 0.55));
         // At high Windows scaling keep touch quantity controls visible; price remains editable in the expander.

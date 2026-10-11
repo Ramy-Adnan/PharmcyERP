@@ -42,6 +42,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Remove="Resources\Fonts\*.ttf" />
+    <Resource Include="Resources\Fonts\*.ttf" />
+  </ItemGroup>
+
+  <ItemGroup>
     <None Update="appsettings.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
