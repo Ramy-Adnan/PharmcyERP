@@ -3,9 +3,13 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
+using System.IO;
+using System.Windows.Media.Imaging;
+using Microsoft.Win32;
 using Microsoft.Extensions.DependencyInjection;
 using PharmacyERP.WPF.Services;
 using PharmacyERP.WPF.ViewModels.Sales;
+using PharmacyERP.WPF.ViewModels;
 
 namespace PharmacyERP.WPF.Views.Sales;
 
@@ -17,6 +21,11 @@ public partial class POSView : UserControl, IDisposable
     private readonly DispatcherTimer _scanTimer = new() { Interval = TimeSpan.FromMilliseconds(180) };
     private readonly DispatcherTimer _clockTimer = new() { Interval = TimeSpan.FromSeconds(1) };
     private Window? _window;
+    private bool _disposed;
+    public POSViewModel ViewModel => _viewModel;
+    public PharmacyBrandingViewModel Branding { get; }
+    public static readonly DependencyProperty ProductCardWidthProperty = DependencyProperty.Register(nameof(ProductCardWidth), typeof(double), typeof(POSView), new PropertyMetadata(180d));
+    public double ProductCardWidth { get => (double)GetValue(ProductCardWidthProperty); set => SetValue(ProductCardWidthProperty, value); }
 
     public POSView(IServiceScopeFactory scopeFactory)
     {
@@ -25,6 +34,8 @@ public partial class POSView : UserControl, IDisposable
         try
         {
             _viewModel = _dataScope.Services.GetRequiredService<POSViewModel>();
+            Branding = _dataScope.Services.GetRequiredService<PharmacyBrandingViewModel>();
+            Branding.Activate();
             InitializeComponent();
             DataContext = _viewModel;
         }
@@ -60,6 +71,8 @@ public partial class POSView : UserControl, IDisposable
     // Keep the context alive across WPF unload/reload and pending queries. DI owns disposal.
     public void Dispose()
     {
+        if (_disposed) return;
+        _disposed = true;
         _scanTimer.Stop(); _clockTimer.Stop();
         _viewModel.ScanFocusRequested -= FocusScanner;
         if (_window is not null) _window.PreviewKeyDown -= WindowKeyDown;
@@ -76,28 +89,37 @@ public partial class POSView : UserControl, IDisposable
     private void LayoutSizeChanged(object sender, SizeChangedEventArgs e) => ApplyResponsiveLayout();
     private void ApplyResponsiveLayout()
     {
-        if (CategoryPanel is null || ActualWidth <= 0) return;
-        var compact = ActualWidth < 1050;
-        CategoryColumn.Width = new GridLength(compact ? 0 : 186);
-        ActionColumn.Width = new GridLength(ActualWidth < 820 ? 238 : 278);
-        Grid.SetRow(CategoryPanel, compact ? 0 : 1);
-        Grid.SetColumnSpan(CategoryPanel, compact ? 3 : 1);
-        CategoryPanel.Margin = compact ? new Thickness(0, 0, 0, 12) : new Thickness(0, 0, 12, 0);
-        CategoryPanel.Padding = compact ? new Thickness(8) : new Thickness(10, 16, 10, 16);
-        CategoryPanel.MaxHeight = compact ? 126 : double.PositiveInfinity;
-        CategoryHeading.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
-        // Use the same controls and selection when categories become a horizontal strip.
-        foreach (var panel in Descendants(CategoryItems).OfType<System.Windows.Controls.Primitives.UniformGrid>())
-            panel.Columns = compact ? Math.Max(2, (int)((ActualWidth - 52) / 115)) : 2;
+        if (CatalogPanel is null || ActualWidth <= 0) return;
+        BasketColumn.Width = new GridLength(Math.Clamp(ActualWidth * 0.36, 420, 580));
+        var available = Math.Max(310, ActualWidth - BasketColumn.Width.Value - 128);
+        var columns = Math.Clamp((int)(available / 170), 2, 6);
+        ProductCardWidth = Math.Max(135, (available - 18) / columns - 10);
     }
-    private static IEnumerable<DependencyObject> Descendants(DependencyObject node)
+
+    public void StopInput() { _scanTimer.Stop(); _clockTimer.Stop(); }
+    private void ReturnHomeClicked(object sender, RoutedEventArgs e) => Window.GetWindow(this)?.Close();
+    private async void AllProductsClicked(object sender, RoutedEventArgs e)
     {
-        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(node); i++)
+        if (_viewModel.Categories.Count > 0) await _viewModel.BrowseCategoryAsync(_viewModel.Categories[0]);
+    }
+    private void ChooseProductImageClicked(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: POSProductCard card }) return;
+        var picker = new OpenFileDialog { Title = "اختيار صورة الصنف", Filter = "صور المنتجات|*.png;*.jpg;*.jpeg", CheckFileExists = true };
+        if (picker.ShowDialog(Window.GetWindow(this)) != true) return;
+        try
         {
-            var child = VisualTreeHelper.GetChild(node, i);
-            yield return child;
-            foreach (var descendant in Descendants(child)) yield return descendant;
+            if (new FileInfo(picker.FileName).Length > 5 * 1024 * 1024) throw new InvalidOperationException("اختر صورة لا يتجاوز حجمها 5MB.");
+            // Decode once, release the source file and store a small preview suitable for catalog cards.
+            using var input = File.OpenRead(picker.FileName);
+            var bitmap = new BitmapImage(); bitmap.BeginInit(); bitmap.CacheOption = BitmapCacheOption.OnLoad;
+            bitmap.DecodePixelWidth = 512; bitmap.StreamSource = input; bitmap.EndInit(); bitmap.Freeze();
+            var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(bitmap));
+            using var output = new MemoryStream(); encoder.Save(output);
+            _viewModel.SetProductImage(card, output.ToArray());
         }
+        catch (Exception ex) { _viewModel.ErrorMessage = $"تعذر حفظ صورة الصنف: {ex.Message}"; }
+        FocusScanner();
     }
 
     private void SearchClicked(object sender, RoutedEventArgs e)
@@ -106,7 +128,7 @@ public partial class POSView : UserControl, IDisposable
     private void CancelClicked(object sender, RoutedEventArgs e)
     {
         if (!_viewModel.CancelTransactionCommand.CanExecute(null)) return;
-        if (MessageBox.Show(Window.GetWindow(this), "إلغاء المعاملة الحالية وتفريغ السلة؟", "إلغاء المعاملة", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+        if (MessageBox.Show(Window.GetWindow(this), "إلغاء المعاملة الحالية وتفريغ السلة؟", "إلغاء المعاملة", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) != MessageBoxResult.Yes) return;
         _scanTimer.Stop(); ScanBox.Clear();
         _viewModel.CancelTransactionCommand.Execute(null);
         FocusScanner();

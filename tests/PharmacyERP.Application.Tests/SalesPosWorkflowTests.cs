@@ -291,7 +291,7 @@ public class SalesPosWorkflowTests
         ((LostCheckoutResponse)proxy).Target = Sales(db);
         var (pos, printer) = await PosAsync(db, seed.Fixture, proxy);
         await pos.SubmitSearchAsync("ITM-001");
-        await pos.CheckoutAsync(); pos.CheckoutUncertain.Should().BeTrue(); pos.CanScan.Should().BeFalse();
+        await pos.CheckoutAsync(); pos.CheckoutUncertain.Should().BeTrue(); pos.CanScan.Should().BeFalse(); pos.CanLeave.Should().BeFalse();
         await pos.CheckoutAsync(); (await db.SalesInvoices.CountAsync()).Should().Be(1);
         await pos.ResolveCheckoutAsync(); pos.CheckoutUncertain.Should().BeFalse(); pos.CartLines.Should().BeEmpty();
         printer.PrintedIds.Should().HaveCount(1); (await db.SalesInvoices.CountAsync()).Should().Be(1);
@@ -410,12 +410,12 @@ public class SalesPosWorkflowTests
     }
 
     [Fact]
-    public async Task Pos_CashAndCardCheckoutNeedNoAmountEntryAndModeChangesResetCreditDeposit()
+    public async Task Pos_CashCheckoutNeedsNoAmountEntryAndModeChangesResetCreditDeposit()
     {
         await using var db = TestDb.CreateContext(_clock); var seed = await SeedAsync(db); var (pos, printer) = await PosAsync(db, seed.Fixture);
         await pos.SubmitSearchAsync("ITM-001"); pos.AmountTendered.Should().Be(0);
         await pos.CheckoutAsync(); printer.PrintedIds.Should().HaveCount(1);
-        pos.IsCredit = true; pos.AmountTendered = 3; pos.IsCard = true; pos.AmountTendered.Should().Be(0);
+        pos.IsCredit = true; pos.AmountTendered = 3; pos.IsCash = true; pos.AmountTendered.Should().Be(0);
         await pos.SubmitSearchAsync("ITM-001"); await pos.CheckoutAsync(); printer.PrintedIds.Should().HaveCount(2);
         var invoices = await db.SalesInvoices.ToListAsync(); invoices.Should().AllSatisfy(i => { i.AmountTendered.Should().Be(10); i.ChangeGiven.Should().Be(0); });
     }

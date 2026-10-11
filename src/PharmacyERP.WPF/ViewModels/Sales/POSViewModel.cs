@@ -21,6 +21,7 @@ public class POSViewModel : ViewModelBase
     private readonly ICurrentUserService _currentUserService;
     private readonly IReceiptPrinter _printer;
     private readonly IInventoryService? _inventoryService;
+    private readonly ProductImageStore? _images;
     // Serialize scans, customer queries and checkout: the application's EF context is scoped/shared.
     private readonly SemaphoreSlim _operations = new(1, 1);
     private readonly HashSet<POSLineRow> _observedLines = new();
@@ -38,15 +39,21 @@ public class POSViewModel : ViewModelBase
     private bool _isBusy, _initialized, _checkoutUncertain;
     private int _pendingScans;
     private string _resultsTitle = "نتائج البحث";
+    private int? _catalogCategoryId;
+    private bool _hasMoreProducts, _isSearching;
+    private bool _isClosing;
 
     public POSViewModel(ISalesService salesService, IBranchService branchService,
         IPrescriptionService prescriptionService, ICurrentUserService currentUserService,
-        IReceiptPrinter printer, IInventoryService? inventoryService = null)
+        IReceiptPrinter printer, IInventoryService? inventoryService = null, ProductImageStore? images = null)
     {
         _salesService = salesService; _branchService = branchService;
         _prescriptionService = prescriptionService; _currentUserService = currentUserService;
         _printer = printer;
         _inventoryService = inventoryService;
+        _images = images;
+        AddProductCommand = new RelayCommand(p => { var card = (POSProductCard)p!; AddItem(card.Item, preferredPackage: card.UsePackage); }, p => CanScan && p is POSProductCard card && card.Item.AvailableQuantity > 0);
+        LoadMoreProductsCommand = new AsyncRelayCommand(LoadMoreProductsAsync, () => CanScan && _pendingScans == 0 && HasMoreProducts && !_isSearching);
         BrowseCategoryCommand = new AsyncRelayCommand(p => BrowseCategoryAsync((POSCategoryOption)p!), p => CanScan && _pendingScans == 0 && p is POSCategoryOption);
         CloseResultsCommand = new RelayCommand(CloseResults, () => !IsBusy);
         ResolveCheckoutCommand = new AsyncRelayCommand(ResolveCheckoutAsync, () => !IsBusy && CheckoutUncertain);
@@ -55,7 +62,7 @@ public class POSViewModel : ViewModelBase
         RemoveLineCommand = new RelayCommand(() => { if (SelectedCartLine is not null) CartLines.Remove(SelectedCartLine); }, () => !IsBusy && SelectedCartLine is not null);
         ClearCartCommand = new RelayCommand(() => CartLines.Clear(), () => !IsBusy && CartLines.Count > 0);
         CancelTransactionCommand = new RelayCommand(CancelTransaction, () => CanScan && _pendingScans == 0 && CartLines.Count > 0);
-        CheckoutCommand = new AsyncRelayCommand(CheckoutAsync, () => !IsBusy && !CheckoutUncertain && _pendingScans == 0 && CartLines.Count > 0);
+        CheckoutCommand = new AsyncRelayCommand(CheckoutAsync, () => CanScan && _pendingScans == 0 && CartLines.Count > 0);
         PayAllCreditCommand = new RelayCommand(() => AmountTendered = TotalAmount, () => IsCredit && !IsBusy);
         IncrementLineCommand = new RelayCommand(p => AdjustQuantity((POSLineRow)p!, 1), p => !IsBusy && p is POSLineRow line && line.Quantity < line.AvailableQuantity);
         DecrementLineCommand = new RelayCommand(p => AdjustQuantity((POSLineRow)p!, -1), p => !IsBusy && p is POSLineRow line && line.Quantity > 1);
@@ -74,6 +81,10 @@ public class POSViewModel : ViewModelBase
 
     public event Action? ScanFocusRequested;
     public ObservableCollection<SaleItemLookupDto> SearchResults { get; } = new();
+    public ObservableCollection<POSProductCard> ProductCards { get; } = new();
+    public RelayCommand AddProductCommand { get; }
+    public AsyncRelayCommand LoadMoreProductsCommand { get; }
+    public bool HasMoreProducts { get => _hasMoreProducts; private set => SetProperty(ref _hasMoreProducts, value); }
     public ObservableCollection<POSCategoryOption> Categories { get; } = new();
     public string ResultsTitle { get => _resultsTitle; private set => SetProperty(ref _resultsTitle, value); }
     public AsyncRelayCommand BrowseCategoryCommand { get; }
@@ -82,7 +93,7 @@ public class POSViewModel : ViewModelBase
     public ObservableCollection<CustomerOption> Customers { get; } = new();
     public ObservableCollection<ActivePrescriptionSummaryDto> FillablePrescriptions { get; } = new();
     public IReadOnlyList<PaymentOption> PaymentMethods { get; } = new[]
-    { new PaymentOption(PaymentMethod.Cash, "نقدي"), new PaymentOption(PaymentMethod.Card, "بطاقة"), new PaymentOption(PaymentMethod.Credit, "آجل للعميل المسجل") };
+    { new PaymentOption(PaymentMethod.Cash, "نقدي"), new PaymentOption(PaymentMethod.Credit, "آجل للعميل المسجل") };
     public string SearchText { get => _searchText; set => SetProperty(ref _searchText, value); }
     public SaleItemLookupDto? SelectedSearchResult { get => _selectedSearchResult; set { SetProperty(ref _selectedSearchResult, value); Requery(); } }
     public POSLineRow? SelectedCartLine { get => _selectedCartLine; set { SetProperty(ref _selectedCartLine, value); Requery(); } }
@@ -103,19 +114,20 @@ public class POSViewModel : ViewModelBase
         get => _paymentMethod;
         set
         {
+            if (value is not (PaymentMethod.Cash or PaymentMethod.Credit))
+            { ErrorMessage = "نقطة البيع تدعم النقدي والآجل فقط."; return; }
             if (!SetProperty(ref _paymentMethod, value)) return;
             AmountTendered = 0;
-            OnPropertyChanged(nameof(IsCash)); OnPropertyChanged(nameof(IsCard)); OnPropertyChanged(nameof(IsCredit));
+            OnPropertyChanged(nameof(IsCash)); OnPropertyChanged(nameof(IsCredit));
             OnPropertyChanged(nameof(PaymentHint)); OnPropertyChanged(nameof(CreditRemaining)); OnPropertyChanged(nameof(CustomerBalanceAfterSale)); Requery();
         }
     }
     public bool IsCash { get => PaymentMethod == PaymentMethod.Cash; set { if (value) PaymentMethod = PaymentMethod.Cash; } }
-    public bool IsCard { get => PaymentMethod == PaymentMethod.Card; set { if (value) PaymentMethod = PaymentMethod.Card; } }
     public bool IsCredit { get => PaymentMethod == PaymentMethod.Credit; set { if (value) PaymentMethod = PaymentMethod.Credit; } }
     public bool HasCreditCustomer => SelectedCustomer?.Id is not null;
     public string CashierName => _currentUserService.UserName ?? "الكاشير";
     public string PaymentHint => IsCredit ? "استلم جزءاً من المبلغ الآن، وسجّل المتبقي على العميل. اتركه صفراً لآجل كامل."
-        : IsCash ? "سيُسجَّل كامل المبلغ نقداً عند إتمام البيع." : "أكد نجاح الدفع على جهاز البطاقة قبل إتمام البيع.";
+        : "سيُسجَّل كامل المبلغ نقداً عند إتمام البيع.";
     public decimal CustomerDebt { get => _customerDebt; private set { SetProperty(ref _customerDebt, value); OnPropertyChanged(nameof(CustomerBalanceAfterSale)); } }
     public decimal AmountTendered { get => _amountTendered; set { SetProperty(ref _amountTendered, value); OnPropertyChanged(nameof(CreditRemaining)); OnPropertyChanged(nameof(CustomerBalanceAfterSale)); } }
     public decimal CreditRemaining => IsCredit ? Math.Max(0, TotalAmount - AmountTendered) : 0;
@@ -130,7 +142,14 @@ public class POSViewModel : ViewModelBase
     public string SuccessMessage { get => _successMessage; set => SetProperty(ref _successMessage, value); }
     public bool IsBusy { get => _isBusy; private set { SetProperty(ref _isBusy, value); Requery(); } }
     public bool CheckoutUncertain { get => _checkoutUncertain; private set { SetProperty(ref _checkoutUncertain, value); Requery(); } }
-    public bool CanScan => _initialized && !IsBusy && !CheckoutUncertain;
+    public bool CanScan => _initialized && !IsBusy && !CheckoutUncertain && !_isClosing;
+    public bool CanLeave => !IsBusy && !CheckoutUncertain && _pendingScans == 0;
+    public async Task PrepareToCloseAsync()
+    {
+        _isClosing = true;
+        await _operations.WaitAsync();
+        _operations.Release();
+    }
     public AsyncRelayCommand ResolveCheckoutCommand { get; }
     public AsyncRelayCommand SearchCommand { get; }
     public RelayCommand AddToCartCommand { get; }
@@ -154,6 +173,7 @@ public class POSViewModel : ViewModelBase
 
     public async Task InitializeAsync()
     {
+        if (_isClosing) return;
         if (_initialized) { ScanFocusRequested?.Invoke(); return; }
         await _operations.WaitAsync();
         IsBusy = true;
@@ -162,7 +182,7 @@ public class POSViewModel : ViewModelBase
             var warehouses = await _branchService.GetWarehousesAsync(_currentUserService.CurrentBranchId ?? 0);
             WarehouseId = (warehouses.FirstOrDefault(w => w.IsDefault && w.IsActive) ?? warehouses.FirstOrDefault(w => w.IsActive))?.Id ?? 0;
             var customers = await _salesService.GetCustomersAsync();
-            Customers.Clear(); Customers.Add(new CustomerOption { Name = "عميل مباشر — نقدي / بطاقة" });
+            Customers.Clear(); Customers.Add(new CustomerOption { Name = "عميل نقدي" });
             foreach (var c in customers.Where(c => c.IsActive)) Customers.Add(new CustomerOption { Id = c.Id, Name = $"{c.Code} — {c.Name}" });
             SelectedCustomer = Customers.First();
             Categories.Clear();
@@ -174,6 +194,13 @@ public class POSViewModel : ViewModelBase
                     Categories.Add(POSCategoryOption.Create(category.Id, category.Name));
             }
             _initialized = true;
+            if (WarehouseId > 0)
+            {
+                var items = await _salesService.BrowseSaleItemsAsync(WarehouseId);
+                foreach (var item in items) SearchResults.Add(item);
+                DisplayProducts(items);
+                Categories[0].IsSelected = true; ResultsTitle = "جميع الأصناف"; HasMoreProducts = items.Count == 60;
+            }
             if (WarehouseId == 0) ErrorMessage = "لا يوجد مخزن نشط في الفرع الحالي.";
         }
         catch (Exception ex) { ErrorMessage = $"تعذر تحميل نقطة البيع: {ex.Message}"; }
@@ -189,19 +216,66 @@ public class POSViewModel : ViewModelBase
         {
             ErrorMessage = string.Empty; SuccessMessage = string.Empty;
             var items = await _salesService.BrowseSaleItemsAsync(WarehouseId, category.Id);
+            _catalogCategoryId = category.Id; _isSearching = false; HasMoreProducts = items.Count == 60;
             foreach (var option in Categories) option.IsSelected = option == category;
-            ResultsTitle = items.Count == 60 ? $"{category.Name} · أول 60 نتيجة، ابحث بالاسم للمزيد" : $"{category.Name} · {items.Count} أصناف";
+            ResultsTitle = category.Name;
             SearchResults.Clear(); SelectedSearchResult = null;
             foreach (var item in items) SearchResults.Add(item);
+            DisplayProducts(items);
             if (items.Count == 0) SuccessMessage = "لا توجد أصناف في هذا التصنيف.";
         }
         catch (Exception ex) { ErrorMessage = $"تعذر تحميل الأصناف: {ex.Message}"; }
         finally { IsBusy = false; _operations.Release(); ScanFocusRequested?.Invoke(); }
     }
 
+    private async Task LoadMoreProductsAsync()
+    {
+        if (!CanScan || _isSearching || !HasMoreProducts) return;
+        await _operations.WaitAsync(); IsBusy = true;
+        try
+        {
+            var items = await _salesService.BrowseSaleItemsAsync(WarehouseId, _catalogCategoryId, skip: ProductCards.Count);
+            foreach (var item in items) SearchResults.Add(item);
+            foreach (var item in items) ProductCards.Add(new POSProductCard(item, _images?.GetPath(item.ItemId, item.Code)));
+            HasMoreProducts = items.Count == 60;
+        }
+        catch (Exception ex) { ErrorMessage = $"تعذر تحميل الأصناف: {ex.Message}"; }
+        finally { IsBusy = false; _operations.Release(); ScanFocusRequested?.Invoke(); }
+    }
+
+    public void SetProductImage(POSProductCard card, byte[] data)
+    {
+        if (_images is null) return;
+        var path = _images.Save(card.Item.ItemId, card.Item.Code, data);
+        card.PhotoPath = path;
+        foreach (var line in CartLines.Where(l => l.ItemId == card.Item.ItemId)) line.PhotoPath = path;
+    }
+
+    private void DisplayProducts(IEnumerable<SaleItemLookupDto> items)
+    {
+        ProductCards.Clear();
+        foreach (var item in items) ProductCards.Add(new POSProductCard(item, _images?.GetPath(item.ItemId, item.Code)));
+    }
+
+    private async Task RefreshProductsAfterSaleAsync()
+    {
+        if (_isClosing) return;
+        await _operations.WaitAsync(); IsBusy = true;
+        try
+        {
+            var items = await _salesService.BrowseSaleItemsAsync(WarehouseId, _catalogCategoryId);
+            DisplayProducts(items); HasMoreProducts = items.Count == 60; _isSearching = false;
+            foreach (var category in Categories) category.IsSelected = category.Id == _catalogCategoryId;
+            ResultsTitle = Categories.FirstOrDefault(c => c.IsSelected)?.Name ?? "الأصناف";
+        }
+        catch { ErrorMessage += " تعذر تحديث كروت الأصناف؛ أعد اختيار التصنيف لتحديث المتوفر."; }
+        finally { IsBusy = false; _operations.Release(); }
+    }
+
     private void CloseResults()
     {
         SearchResults.Clear(); SelectedSearchResult = null;
+        HasMoreProducts = false;
         foreach (var option in Categories) option.IsSelected = false;
         ScanFocusRequested?.Invoke();
     }
@@ -229,6 +303,7 @@ public class POSViewModel : ViewModelBase
 
     private async Task LoadCustomerAsync()
     {
+        if (_isClosing) return;
         var id = SelectedCustomer?.Id;
         await _operations.WaitAsync();
         try
@@ -259,8 +334,6 @@ public class POSViewModel : ViewModelBase
         try
         {
             ErrorMessage = string.Empty; SuccessMessage = string.Empty;
-            foreach (var category in Categories) category.IsSelected = false;
-            ResultsTitle = "نتائج البحث";
             var results = await _salesService.SearchSaleItemsAsync(text, WarehouseId);
             var exact = results.Where(r => (string.Equals(r.Barcode, text, StringComparison.OrdinalIgnoreCase) || string.Equals(r.BaseUnitBarcode, text, StringComparison.OrdinalIgnoreCase) || r.SaleUnits.Any(u => string.Equals(u.Barcode, text, StringComparison.OrdinalIgnoreCase)))).ToList();
             if (exact.Count == 0 && !barcodeOnly) exact = results.Where(r => string.Equals(r.Code, text, StringComparison.OrdinalIgnoreCase)).ToList();
@@ -268,7 +341,11 @@ public class POSViewModel : ViewModelBase
             if (exact.Count == 1) AddItem(exact[0], text);
             else
             {
+                foreach (var category in Categories) category.IsSelected = false;
+                ResultsTitle = results.Count == 30 ? "أول 30 نتيجة · أدخل اسمًا أدق للمزيد" : "نتائج البحث";
+                _isSearching = true; HasMoreProducts = false;
                 foreach (var item in results) SearchResults.Add(item);
+                DisplayProducts(results);
                 if (exact.Count > 1) ErrorMessage = "الباركود مسجل لأكثر من صنف؛ اختر الصنف الصحيح وصحح بيانات الأصناف.";
                 else if (barcodeOnly || results.Count == 0) ErrorMessage = $"لم يتم العثور على باركود مطابق: {text}";
             }
@@ -277,15 +354,17 @@ public class POSViewModel : ViewModelBase
         finally { _pendingScans--; _operations.Release(); Requery(); ScanFocusRequested?.Invoke(); }
     }
 
-    private void AddItem(SaleItemLookupDto item, string? scannedBarcode = null)
+    private void AddItem(SaleItemLookupDto item, string? scannedBarcode = null, bool? preferredPackage = null)
     {
         var scanBase = !string.IsNullOrWhiteSpace(scannedBarcode) && string.Equals(item.BaseUnitBarcode, scannedBarcode, StringComparison.OrdinalIgnoreCase);
         var scannedUnit = item.SaleUnits.FirstOrDefault(u => !string.IsNullOrWhiteSpace(scannedBarcode) && string.Equals(u.Barcode, scannedBarcode, StringComparison.OrdinalIgnoreCase));
-        var line = scannedUnit is not null ? CartLines.FirstOrDefault(l => l.ItemId == item.ItemId && l.ItemSaleUnitId == scannedUnit.Id) : scanBase
+        var line = preferredPackage.HasValue ? CartLines.FirstOrDefault(l => l.ItemId == item.ItemId && l.SellAsPackage == preferredPackage.Value && l.ItemSaleUnitId is null)
+            : scannedUnit is not null ? CartLines.FirstOrDefault(l => l.ItemId == item.ItemId && l.ItemSaleUnitId == scannedUnit.Id) : scanBase
             ? CartLines.FirstOrDefault(l => l.ItemId == item.ItemId && !l.SellAsPackage && l.ItemSaleUnitId is null)
             : SelectedCartLine is { } selected && CartLines.Contains(selected) && selected.ItemId == item.ItemId
                 ? selected : CartLines.LastOrDefault(l => l.ItemId == item.ItemId);
-        var factor = scannedUnit?.BaseUnitCount ?? (scanBase ? 1 : line?.UnitsPerSale ?? (item.AvailableQuantity >= item.UnitsPerPackage ? item.UnitsPerPackage : 1));
+        var factor = preferredPackage.HasValue ? preferredPackage.Value ? item.UnitsPerPackage : 1
+            : scannedUnit?.BaseUnitCount ?? (scanBase ? 1 : line?.UnitsPerSale ?? (item.AvailableQuantity >= item.UnitsPerPackage ? item.UnitsPerPackage : 1));
         if (ReservedStock(item.ItemId) + factor > item.AvailableQuantity)
         { ErrorMessage = $"المتوفر من {item.DisplayName}: {item.StockDisplay}. اختر الوحدة الصغيرة عند عدم توفر عبوة كاملة."; return; }
         foreach (var existing in CartLines.Where(l => l.ItemId == item.ItemId)) existing.AvailableBaseQuantity = item.AvailableQuantity;
@@ -299,6 +378,7 @@ public class POSViewModel : ViewModelBase
             if (item.UnitsPerPackage > 1) units.Add(new(true, item.PackageUnitName, item.UnitsPerPackage));
             units.AddRange(item.SaleUnits.Select(u => new SaleUnitOption(false, u.Name, u.BaseUnitCount, u.Id, u.Barcode, u.SalePrice)));
             line = new POSLineRow { ItemId = item.ItemId, Code = item.Code, Name = item.DisplayName,
+                PhotoPath = _images?.GetPath(item.ItemId, item.Code),
                 UnitOfMeasureName = item.UnitOfMeasureName, TaxRatePercent = item.TaxRatePercent,
                 AvailableBaseQuantity = item.AvailableQuantity, RequiresPrescription = item.RequiresPrescription,
                 UnitsPerPackage = item.UnitsPerPackage, BaseSalePrice = item.DefaultSalePrice,
@@ -326,6 +406,7 @@ public class POSViewModel : ViewModelBase
         var row = new POSLineRow
         {
             ItemId = source.ItemId, Code = source.Code, Name = source.Name, UnitOfMeasureName = source.UnitOfMeasureName,
+            PhotoPath = source.PhotoPath,
             TaxRatePercent = source.TaxRatePercent, AvailableBaseQuantity = source.AvailableBaseQuantity,
             RequiresPrescription = source.RequiresPrescription, UnitsPerPackage = source.UnitsPerPackage,
             BaseSalePrice = source.BaseSalePrice, PackageSalePrice = source.PackageSalePrice, SaleUnits = source.SaleUnits
@@ -344,7 +425,7 @@ public class POSViewModel : ViewModelBase
 
     public async Task CheckoutAsync()
     {
-        if (IsBusy || CheckoutUncertain || _pendingScans > 0) return;
+        if (_isClosing || IsBusy || CheckoutUncertain || _pendingScans > 0) return;
         ErrorMessage = string.Empty; SuccessMessage = string.Empty;
         if (!CartLines.Any()) { ErrorMessage = "السلة فارغة."; return; }
         if (CartLines.Any(l => l.Quantity <= 0 || l.Quantity > l.AvailableQuantity || l.UnitPrice < 0 || l.DiscountAmount < 0 || l.DiscountAmount > l.UnitPrice * l.Quantity)
@@ -381,7 +462,11 @@ public class POSViewModel : ViewModelBase
             ErrorMessage = $"تعذر التأكد من حفظ العملية: {ex.Message} أعد الاتصال ثم اضغط التحقق من البيع السابق قبل متابعة البيع.";
         }
         finally { IsBusy = false; _operations.Release(); ScanFocusRequested?.Invoke(); }
-        if (!CheckoutUncertain) await LoadCustomerAsync();
+        if (!CheckoutUncertain)
+        {
+            await LoadCustomerAsync();
+            await RefreshProductsAfterSaleAsync();
+        }
     }
 
     private async Task CompleteCommittedSaleAsync(SalesInvoiceDto invoice)
@@ -434,6 +519,18 @@ public class POSViewModel : ViewModelBase
 }
 
 public record PaymentOption(PaymentMethod Value, string Name);
+public sealed class POSProductCard : ViewModelBase
+{
+    private string? _photoPath;
+    public POSProductCard(SaleItemLookupDto item, string? photoPath) { Item = item; _photoPath = photoPath; }
+    public SaleItemLookupDto Item { get; }
+    public string? PhotoPath { get => _photoPath; set { _photoPath = value; OnPropertyChanged(); } }
+    public bool UsePackage => Item.UnitsPerPackage > 1 && Item.AvailableQuantity >= Item.UnitsPerPackage;
+    public decimal Price => UsePackage ? Item.PackageSalePrice : Item.DefaultSalePrice;
+    public string UnitName => UsePackage ? Item.PackageUnitName : Item.UnitOfMeasureName;
+    public string StockText => $"{Item.AvailableQuantity / (UsePackage ? Item.UnitsPerPackage : 1)} {UnitName}";
+    public string StockStatus => Item.AvailableQuantity > 0 ? "متوفر" : "غير متوفر";
+}
 public sealed class POSCategoryOption : ViewModelBase
 {
     private bool _isSelected;

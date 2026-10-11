@@ -16,10 +16,10 @@ public class PosCategoryTests
 {
     private readonly FakeDateTime _clock = new();
     private SalesService Sales(ApplicationDbContext db) => new(db, new InventoryService(db, _clock), new AccountingService(db, _clock), _clock, new FakeCurrentUserService());
-    private async Task<POSViewModel> PosAsync(ApplicationDbContext db, TestFixture fixture)
+    private async Task<POSViewModel> PosAsync(ApplicationDbContext db, TestFixture fixture, PharmacyERP.Application.Features.Sales.ISalesService? service = null)
     {
         var user = new FakeCurrentUserService(); user.SetSession(1, "cashier", fixture.BranchId, Array.Empty<string>());
-        var pos = new POSViewModel(Sales(db), new BranchService(db, new PermissiveLicenseService()), new PrescriptionService(db, _clock), user,
+        var pos = new POSViewModel(service ?? Sales(db), new BranchService(db, new PermissiveLicenseService()), new PrescriptionService(db, _clock), user,
             new Printer(), new InventoryService(db, _clock));
         await pos.InitializeAsync(); return pos;
     }
@@ -37,6 +37,10 @@ public class PosCategoryTests
         var results = await Sales(db).BrowseSaleItemsAsync(fixture.WarehouseId, category.Id);
         results.Should().ContainSingle().Which.Code.Should().Be("SERUM");
         (await Sales(db).BrowseSaleItemsAsync(fixture.WarehouseId)).Should().HaveCount(60);
+        var first = await Sales(db).BrowseSaleItemsAsync(fixture.WarehouseId);
+        var second = await Sales(db).BrowseSaleItemsAsync(fixture.WarehouseId, skip: 60);
+        second.Should().HaveCount(12);
+        first.Concat(second).Select(i => i.ItemId).Should().OnlyHaveUniqueItems();
     }
 
     [Fact]
@@ -59,7 +63,8 @@ public class PosCategoryTests
         await pos.SubmitSearchAsync(item.Barcode, barcodeOnly: true);
         pos.CartLines.Should().ContainSingle().Which.Quantity.Should().Be(2);
         pos.CartLines.Single().ItemId.Should().Be(fixture.ItemId);
-        tile.IsSelected.Should().BeFalse(); pos.SearchResults.Should().BeEmpty();
+        tile.IsSelected.Should().BeTrue(); pos.SearchResults.Should().BeEmpty();
+        pos.ProductCards.Should().ContainSingle().Which.Item.Code.Should().Be("SERUM");
     }
 
     [Fact]
@@ -90,6 +95,7 @@ public class PosCategoryTests
         categories.Should().ContainSingle().Which.ItemCount.Should().Be(1);
         var lookup = await Sales(db).BrowseSaleItemsAsync(fixture.WarehouseId, fixture.CategoryId);
         lookup.Should().ContainSingle().Which.AvailableQuantity.Should().Be(5);
+        (await Sales(db).BrowseSaleItemsAsync(fixture.WarehouseId)).Should().ContainSingle();
         (await Sales(db).BrowseSaleItemsAsync(fixture.WarehouseId, fixture.CategoryId + 100)).Should().BeEmpty();
     }
 
@@ -105,5 +111,66 @@ public class PosCategoryTests
         pos.SelectedCustomer = pos.Customers.Single(c => c.Id.HasValue);
         await pos.ShowCustomerProfileAsync(id => { id.Should().Be(pos.SelectedCustomer.Id); called++; pos.IsBusy.Should().BeTrue(); return Task.CompletedTask; });
         called.Should().Be(1); pos.CartLines.Should().ContainSingle(); pos.IsBusy.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task ProductCard_AddsTheDisplayedUnitAndPrice_AfterTheBasketUnitIsChanged()
+    {
+        await using var db = TestDb.CreateContext(_clock); var fixture = await TestDb.SeedBaselineAsync(db);
+        var item = await db.Items.SingleAsync(); item.UnitsPerPackage = 5; item.DefaultSalePrice = 10000; item.PackageUnitName = "علبة";
+        await db.SaveChangesAsync(); await TestDb.AddBatchAsync(db, fixture, "FRESH", _clock.UtcNow.AddDays(100), 10);
+        var pos = await PosAsync(db, fixture); var card = pos.ProductCards.Single();
+        card.Price.Should().Be(10000); card.UnitName.Should().Be("علبة");
+        pos.AddProductCommand.Execute(card);
+        pos.CartLines.Single().UnitPrice.Should().Be(card.Price);
+        var line = pos.CartLines.Single(); line.SelectedSaleUnit = line.SaleUnits.First();
+        line.UnitPrice.Should().Be(2000);
+        pos.AddProductCommand.Execute(card);
+        pos.CartLines.Should().HaveCount(2); pos.CartLines.Single(l => l.SellAsPackage).UnitPrice.Should().Be(card.Price);
+        pos.TotalAmount.Should().Be(12000);
+        await pos.PrepareToCloseAsync(); pos.CanScan.Should().BeFalse();
+        pos.CheckoutCommand.CanExecute(null).Should().BeFalse();
+        await pos.CheckoutAsync();
+        await pos.SubmitSearchAsync("ITM-001"); pos.TotalAmount.Should().Be(12000);
+        (await db.SalesInvoices.CountAsync()).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task Pos_OffersOnlyCashAndCredit_AndRejectsCardSelection()
+    {
+        await using var db = TestDb.CreateContext(_clock); var fixture = await TestDb.SeedBaselineAsync(db);
+        var pos = await PosAsync(db, fixture);
+        pos.PaymentMethods.Select(m => m.Value).Should().BeEquivalentTo(new[] { PaymentMethod.Cash, PaymentMethod.Credit });
+        pos.PaymentMethod = PaymentMethod.Card;
+        pos.PaymentMethod.Should().Be(PaymentMethod.Cash); pos.ErrorMessage.Should().Contain("النقدي والآجل");
+    }
+
+    public class DelayedSearch : System.Reflection.DispatchProxy
+    {
+        public PharmacyERP.Application.Features.Sales.ISalesService Target = null!;
+        public TaskCompletionSource Started = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource Release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        protected override object? Invoke(System.Reflection.MethodInfo? method, object?[]? args)
+        {
+            var result = method!.Invoke(Target, args);
+            return method.Name == "SearchSaleItemsAsync" ? DelayAsync((Task<List<SaleItemLookupDto>>)result!) : result;
+        }
+        private async Task<List<SaleItemLookupDto>> DelayAsync(Task<List<SaleItemLookupDto>> result)
+        { Started.TrySetResult(); await Release.Task; return await result; }
+    }
+
+    [Fact]
+    public async Task Closing_WaitsForAnOutstandingScanAndStopsNewScans()
+    {
+        await using var db = TestDb.CreateContext(_clock); var fixture = await TestDb.SeedBaselineAsync(db);
+        await TestDb.AddBatchAsync(db, fixture, "FRESH", _clock.UtcNow.AddDays(100), 10);
+        var proxy = System.Reflection.DispatchProxy.Create<PharmacyERP.Application.Features.Sales.ISalesService, DelayedSearch>();
+        var gate = (DelayedSearch)proxy; gate.Target = Sales(db);
+        var pos = await PosAsync(db, fixture, proxy); var scan = pos.SubmitSearchAsync("ITM-001");
+        await gate.Started.Task; pos.CanLeave.Should().BeFalse();
+        var close = pos.PrepareToCloseAsync(); close.IsCompleted.Should().BeFalse();
+        gate.Release.TrySetResult(); await Task.WhenAll(scan, close);
+        pos.CanScan.Should().BeFalse(); pos.CartLines.Should().ContainSingle();
+        await pos.SubmitSearchAsync("ITM-001"); pos.CartLines.Single().Quantity.Should().Be(1);
     }
 }

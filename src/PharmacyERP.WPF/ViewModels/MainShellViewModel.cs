@@ -51,7 +51,7 @@ public class MainShellViewModel : ViewModelBase
 
         NavigateToPurchasingCommand = new RelayCommand(() => CurrentView = _serviceProvider.GetService(typeof(PurchasingWorkspaceView)), () => CanAccessPurchasing);
 
-        NavigateToPosCommand = new RelayCommand(() => CurrentView = _serviceProvider.GetService(typeof(POSView)));
+        NavigateToPosCommand = new RelayCommand(OpenPos, () => CanUsePos);
         NavigateToCustomersCommand = new RelayCommand(() => CurrentView = _serviceProvider.GetService(typeof(CustomersView)));
         NavigateToSalesInvoicesCommand = new RelayCommand(() => CurrentView = _serviceProvider.GetService(typeof(SalesInvoicesView)));
 
@@ -192,6 +192,13 @@ public class MainShellViewModel : ViewModelBase
     private void CheckForUpdates(object? parameter)
     {
         var window = _dialogService.CreateDialog<UpdateCheckDialog>();
+        _dialogService.ShowDialog(window);
+    }
+
+    private void OpenPos()
+    {
+        // The checkout workspace occupies its own window; keep the main page intact.
+        var window = _dialogService.CreateDialog<POSWindow>();
         _dialogService.ShowDialog(window);
     }
 }

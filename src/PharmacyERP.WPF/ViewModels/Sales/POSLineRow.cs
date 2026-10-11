@@ -5,6 +5,8 @@ namespace PharmacyERP.WPF.ViewModels.Sales;
 /// <summary>A single line in the POS cart before checkout.</summary>
 public class POSLineRow : ViewModelBase
 {
+    private string? _photoPath;
+    public string? PhotoPath { get => _photoPath; set { _photoPath = value; OnPropertyChanged(); } }
     private int _quantity = 1;
     private SaleUnitOption? _selectedSaleUnit;
     private int _availableQuantity;

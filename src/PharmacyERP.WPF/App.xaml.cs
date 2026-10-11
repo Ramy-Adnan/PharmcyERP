@@ -158,6 +158,8 @@ public partial class App : System.Windows.Application
                     // Sales module (POS, Customers, Sales Invoices, Returns)
                     services.AddTransient<POSViewModel>();
                     services.AddTransient<POSView>();
+                    services.AddTransient<POSWindow>();
+                    services.AddSingleton<ProductImageStore>();
                     services.AddTransient<CustomersViewModel>();
                     services.AddTransient<CustomersView>();
                     services.AddTransient<CustomerAccountViewModel>();

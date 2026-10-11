@@ -148,11 +148,11 @@ public class SalesService : ISalesService
             .ThenByDescending(i => i.Code == searchText).ThenBy(i => i.Name), warehouseId, 30, cancellationToken);
     }
 
-    public Task<List<SaleItemLookupDto>> BrowseSaleItemsAsync(int warehouseId, int? categoryId = null, CancellationToken cancellationToken = default)
+    public Task<List<SaleItemLookupDto>> BrowseSaleItemsAsync(int warehouseId, int? categoryId = null, CancellationToken cancellationToken = default, int skip = 0)
     {
         // Filter in the database, before limiting results. Barcode search remains global.
         var items = _context.Items.AsNoTracking().Where(i => i.IsActive && (!categoryId.HasValue || i.CategoryId == categoryId.Value));
-        return LoadSaleItemsAsync(items.OrderBy(i => i.Name), warehouseId, 60, cancellationToken);
+        return LoadSaleItemsAsync(items.OrderBy(i => i.Name).ThenBy(i => i.Id).Skip(Math.Max(0, skip)), warehouseId, 60, cancellationToken);
     }
 
     private async Task<List<SaleItemLookupDto>> LoadSaleItemsAsync(IQueryable<Item> matches, int warehouseId, int limit, CancellationToken cancellationToken)
