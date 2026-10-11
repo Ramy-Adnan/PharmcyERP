@@ -91,10 +91,13 @@ public partial class POSView : UserControl, IDisposable
     {
         if (CatalogPanel is null || ActualWidth <= 0) return;
         // Keep the payment section bounded when Windows scaling reduces usable height.
-        PaymentOptionsScroll.MaxHeight = Math.Clamp(ActualHeight * 0.32, 120, 300);
-        BasketColumn.Width = new GridLength(Math.Clamp(ActualWidth * 0.36, 420, 580));
+        PaymentOptionsScroll.MaxHeight = Math.Clamp(ActualHeight * 0.30, 110, 300);
+        var usableWidth = Math.Max(1, ActualWidth - 114);
+        BasketColumn.Width = new GridLength(Math.Min(Math.Clamp(ActualWidth * 0.40, 420, 620), usableWidth * 0.55));
+        // At high Windows scaling keep touch quantity controls visible; price remains editable in the expander.
+        UnitPriceColumn.Visibility = BasketColumn.Width.Value < 500 ? Visibility.Collapsed : Visibility.Visible;
         var available = Math.Max(310, ActualWidth - BasketColumn.Width.Value - 128);
-        var columns = Math.Clamp((int)(available / 170), 2, 6);
+        var columns = Math.Clamp((int)(available / 190), 1, 6);
         ProductCardWidth = Math.Max(135, (available - 18) / columns - 10);
     }
 

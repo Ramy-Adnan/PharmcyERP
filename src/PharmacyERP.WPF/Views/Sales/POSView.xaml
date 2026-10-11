@@ -12,6 +12,7 @@
   <Style x:Key="Card" TargetType="Border"><Setter Property="Background" Value="White"/><Setter Property="CornerRadius" Value="14"/><Setter Property="BorderBrush" Value="#E6EBF2"/><Setter Property="BorderThickness" Value="1"/><Setter Property="Effect"><Setter.Value><DropShadowEffect Color="#15233D" BlurRadius="18" ShadowDepth="3" Opacity="0.045"/></Setter.Value></Setter></Style>
   <Style x:Key="Caption" TargetType="TextBlock"><Setter Property="Foreground" Value="{StaticResource Muted}"/><Setter Property="FontSize" Value="12"/></Style>
   <Style x:Key="ButtonBase" TargetType="Button">
+   <Setter Property="MinWidth" Value="44"/><Setter Property="MinHeight" Value="44"/>
    <Setter Property="HorizontalContentAlignment" Value="Center"/><Setter Property="Background" Value="#F1F5F9"/><Setter Property="Foreground" Value="{StaticResource Ink}"/><Setter Property="BorderBrush" Value="Transparent"/>
    <Setter Property="BorderThickness" Value="1"/><Setter Property="Padding" Value="14,10"/><Setter Property="Cursor" Value="Hand"/><Setter Property="FontSize" Value="13"/>
    <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">
@@ -26,7 +27,7 @@
    </ControlTemplate></Setter.Value></Setter>
   </Style>
   <Style TargetType="Button" BasedOn="{StaticResource ButtonBase}"/>
-  <Style x:Key="MiniButton" TargetType="Button" BasedOn="{StaticResource ButtonBase}"><Setter Property="Width" Value="28"/><Setter Property="Height" Value="28"/><Setter Property="Padding" Value="0"/><Setter Property="FontSize" Value="17"/></Style>
+  <Style x:Key="MiniButton" TargetType="Button" BasedOn="{StaticResource ButtonBase}"><Setter Property="Width" Value="44"/><Setter Property="Height" Value="44"/><Setter Property="Padding" Value="0"/><Setter Property="FontSize" Value="17"/></Style>
   <Style TargetType="TextBox">
    <Setter Property="Padding" Value="12,10"/><Setter Property="FontSize" Value="15"/><Setter Property="Background" Value="#F8FAFC"/><Setter Property="Foreground" Value="{StaticResource Ink}"/>
    <Setter Property="BorderBrush" Value="#E2E8F0"/><Setter Property="BorderThickness" Value="1"/><Setter Property="VerticalContentAlignment" Value="Center"/>
@@ -40,8 +41,10 @@
     </ControlTemplate.Triggers>
    </ControlTemplate></Setter.Value></Setter>
   </Style>
-  <Style TargetType="ComboBox"><Setter Property="Padding" Value="10,9"/><Setter Property="FontSize" Value="13"/><Setter Property="Background" Value="#F8FAFC"/><Setter Property="BorderBrush" Value="#E2E8F0"/><Setter Property="Foreground" Value="{StaticResource Ink}"/></Style>
+  <Style TargetType="ComboBoxItem"><Setter Property="MinHeight" Value="44"/><Setter Property="Padding" Value="10,8"/></Style>
+  <Style TargetType="ComboBox"><Setter Property="MinHeight" Value="44"/><Setter Property="Padding" Value="10,9"/><Setter Property="FontSize" Value="13"/><Setter Property="Background" Value="#F8FAFC"/><Setter Property="BorderBrush" Value="#E2E8F0"/><Setter Property="Foreground" Value="{StaticResource Ink}"/></Style>
   <Style x:Key="PaymentChip" TargetType="RadioButton">
+   <Setter Property="MinHeight" Value="48"/>
    <Setter Property="Cursor" Value="Hand"/><Setter Property="Margin" Value="3"/><Setter Property="Padding" Value="6,12"/><Setter Property="Foreground" Value="#6C7890"/>
    <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="RadioButton">
     <Border x:Name="Chip" Background="#F8FAFC" BorderBrush="#E6EBF2" BorderThickness="1" CornerRadius="12" Padding="{TemplateBinding Padding}">
@@ -107,7 +110,7 @@
        <Button Grid.Column="2" Command="{Binding SearchCommand}" Background="Transparent" Padding="12" ToolTip="بحث"><TextBlock Text="&#xE721;" FontFamily="Segoe MDL2 Assets" Foreground="#07656A" FontSize="22"/></Button>
       </Grid>
      </Border>
-     <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Disabled" HorizontalScrollBarVisibility="Auto" Margin="0,0,0,8">
+     <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Disabled" HorizontalScrollBarVisibility="Auto" PanningMode="HorizontalOnly" Margin="0,0,0,8">
       <ItemsControl ItemsSource="{Binding Categories}"><ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
        <ItemsControl.ItemTemplate><DataTemplate>
         <RadioButton GroupName="CatalogCategories" IsChecked="{Binding IsSelected, Mode=OneWay}" Command="{Binding DataContext.BrowseCategoryCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" Cursor="Hand" Margin="0,0,7,0">
@@ -118,10 +121,10 @@
      </ScrollViewer>
      <DockPanel Grid.Row="2" Margin="5,0,5,8"><TextBlock Text="{Binding ResultsTitle}" Style="{StaticResource Caption}"/><TextBlock Text="{Binding ProductCards.Count, StringFormat='{}{0} صنف'}" Style="{StaticResource Caption}" HorizontalAlignment="Left"/></DockPanel>
      <Grid Grid.Row="3">
-      <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+      <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" PanningMode="VerticalOnly">
        <ItemsControl ItemsSource="{Binding ProductCards}" HorizontalContentAlignment="Stretch"><ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
         <ItemsControl.ItemTemplate><DataTemplate>
-         <Border Style="{StaticResource Card}" Width="{Binding ProductCardWidth, RelativeSource={RelativeSource AncestorType=UserControl}}" Height="250" Margin="5" Padding="11">
+         <Border Style="{StaticResource Card}" Width="{Binding ProductCardWidth, RelativeSource={RelativeSource AncestorType=UserControl}}" Height="280" Margin="5" Padding="11">
           <Grid><Grid.RowDefinitions><RowDefinition Height="104"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
            <Grid>
             <Image x:Name="ProductPhoto" Source="{Binding PhotoPath, Converter={StaticResource ProductPhoto}}" Stretch="Uniform" Margin="10,0"/>
@@ -160,19 +163,19 @@
       <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><ComboBox x:Name="CustomerBox" ItemsSource="{Binding Customers}" DisplayMemberPath="Name" SelectedItem="{Binding SelectedCustomer}" IsTextSearchEnabled="True"/><Button Grid.Column="1" Content="&#xE77B;" FontFamily="Segoe MDL2 Assets" Click="CustomerProfileClicked" Background="#E2F2F0" Foreground="#07656A" Padding="12" Margin="7,0,0,0" ToolTip="ملف العميل"/></Grid>
      </StackPanel>
      <Border Grid.Row="1" Style="{StaticResource Card}">
-      <Grid><DataGrid x:Name="CartGrid" ItemsSource="{Binding CartLines}" SelectedItem="{Binding SelectedCartLine}" AutoGenerateColumns="False" CanUserAddRows="False" CanUserDeleteRows="False" GridLinesVisibility="None" BorderThickness="0" HeadersVisibility="Column" EnableRowVirtualization="True" Background="White" RowBackground="White" AlternatingRowBackground="#F5FAF9" ScrollViewer.HorizontalScrollBarVisibility="Auto">
+      <Grid><DataGrid x:Name="CartGrid" ItemsSource="{Binding CartLines}" SelectedItem="{Binding SelectedCartLine}" AutoGenerateColumns="False" CanUserAddRows="False" CanUserDeleteRows="False" GridLinesVisibility="None" BorderThickness="0" HeadersVisibility="Column" EnableRowVirtualization="True" Background="White" RowBackground="White" AlternatingRowBackground="#F5FAF9" ScrollViewer.HorizontalScrollBarVisibility="Auto" ScrollViewer.PanningMode="Both">
        <DataGrid.Columns>
-        <DataGridTemplateColumn Header="الصنف / الوحدة" Width="*" MinWidth="116" IsReadOnly="True"><DataGridTemplateColumn.CellTemplate><DataTemplate><StackPanel Margin="7,6"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="40"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><Image Source="{Binding PhotoPath, Converter={StaticResource ProductPhoto}}" Width="36" Height="36" Stretch="Uniform"/><StackPanel Grid.Column="1" Margin="5,0,0,0"><TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="12" TextTrimming="CharacterEllipsis" ToolTip="{Binding Name}"/><TextBlock Text="{Binding Code}" Style="{StaticResource Caption}" FontSize="9"/></StackPanel></Grid><ComboBox DropDownClosed="SaleUnitClosed" PreviewKeyDown="SaleUnitKeyDown" ItemsSource="{Binding SaleUnits}" DisplayMemberPath="Name" SelectedItem="{Binding SelectedSaleUnit, UpdateSourceTrigger=PropertyChanged}" Padding="3" FontSize="11" Margin="0,4,0,0"/></StackPanel></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
-        <DataGridTemplateColumn Header="الكمية" Width="96"><DataGridTemplateColumn.CellTemplate><DataTemplate><StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center"><Button Content="+" Style="{StaticResource MiniButton}" Width="25" Height="27" Command="{Binding DataContext.IncrementLineCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"/><TextBox Text="{Binding Quantity, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}" Width="36" Padding="2,5" FontSize="14" TextAlignment="Center" Margin="3,0"/><Button Content="−" Style="{StaticResource MiniButton}" Width="25" Height="27" Command="{Binding DataContext.DecrementLineCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"/></StackPanel></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
-        <DataGridTextColumn Header="السعر" Binding="{Binding UnitPrice, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}" ElementStyle="{StaticResource CellText}" Width="74"/>
-        <DataGridTextColumn Header="الإجمالي" Binding="{Binding LineTotal, StringFormat=N2}" ElementStyle="{StaticResource MoneyText}" Width="85" IsReadOnly="True"/>
-        <DataGridTemplateColumn Width="28" IsReadOnly="True"><DataGridTemplateColumn.CellTemplate><DataTemplate><Button Content="×" Style="{StaticResource MiniButton}" Width="24" Foreground="#CA5762" Background="Transparent" Command="{Binding DataContext.RemoveItemCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" VerticalAlignment="Center"/></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+        <DataGridTemplateColumn Header="الصنف / الوحدة" Width="*" MinWidth="96" IsReadOnly="True"><DataGridTemplateColumn.CellTemplate><DataTemplate><StackPanel Margin="7,6"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="40"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><Image Source="{Binding PhotoPath, Converter={StaticResource ProductPhoto}}" Width="36" Height="36" Stretch="Uniform"/><StackPanel Grid.Column="1" Margin="5,0,0,0"><TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="12" TextTrimming="CharacterEllipsis" ToolTip="{Binding Name}"/><TextBlock Text="{Binding Code}" Style="{StaticResource Caption}" FontSize="9"/></StackPanel></Grid><ComboBox DropDownClosed="SaleUnitClosed" PreviewKeyDown="SaleUnitKeyDown" ItemsSource="{Binding SaleUnits}" DisplayMemberPath="Name" SelectedItem="{Binding SelectedSaleUnit, UpdateSourceTrigger=PropertyChanged}" Padding="6" FontSize="13" Margin="0,4,0,0"/></StackPanel></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+        <DataGridTemplateColumn Header="الكمية" Width="136"><DataGridTemplateColumn.CellTemplate><DataTemplate><StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center"><Button Content="+" Style="{StaticResource MiniButton}" Width="44" Height="44" Command="{Binding DataContext.IncrementLineCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"/><TextBox Text="{Binding Quantity, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}" Width="36" MinHeight="44" Padding="2,5" FontSize="16" TextAlignment="Center" Margin="3,0"/><Button Content="−" Style="{StaticResource MiniButton}" Width="44" Height="44" Command="{Binding DataContext.DecrementLineCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"/></StackPanel></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+        <DataGridTextColumn x:Name="UnitPriceColumn" Header="السعر" Binding="{Binding UnitPrice, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}" ElementStyle="{StaticResource CellText}" Width="74"/>
+        <DataGridTextColumn Header="الإجمالي" Binding="{Binding LineTotal, StringFormat=N2}" ElementStyle="{StaticResource MoneyText}" Width="76" IsReadOnly="True"/>
+        <DataGridTemplateColumn Width="48" IsReadOnly="True"><DataGridTemplateColumn.CellTemplate><DataTemplate><Button Content="×" Style="{StaticResource MiniButton}" Width="44" Height="44" Foreground="#CA5762" Background="Transparent" Command="{Binding DataContext.RemoveItemCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" VerticalAlignment="Center"/></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
        </DataGrid.Columns>
       </DataGrid>
        <TextBlock Text="امسح منتجًا أو أضفه من الكروت" Foreground="#75A3A0" HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding CartLines.Count}" Value="0"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
       </Grid>
      </Border>
-     <ScrollViewer x:Name="PaymentOptionsScroll" Grid.Row="2" MaxHeight="300" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Margin="0,10,0,0">
+     <ScrollViewer x:Name="PaymentOptionsScroll" Grid.Row="2" MaxHeight="300" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" PanningMode="VerticalOnly" Margin="0,10,0,0">
      <StackPanel>
       <Border Style="{StaticResource Card}" Padding="12,10"><StackPanel>
        <DockPanel><TextBlock Text="المجموع الفرعي"/><TextBlock Text="{Binding SubTotal, StringFormat=N2}" HorizontalAlignment="Left" FontWeight="SemiBold"/></DockPanel>
@@ -184,7 +187,6 @@
        <RadioButton GroupName="Payment" IsChecked="{Binding IsCash, Mode=TwoWay}" Style="{StaticResource PaymentChip}" Padding="8"><StackPanel Orientation="Horizontal"><TextBlock Text="&#xE8D4;" FontFamily="Segoe MDL2 Assets" Foreground="#07656A" FontSize="19" Margin="0,0,9,0"/><TextBlock Text="نقدي" FontWeight="SemiBold"/></StackPanel></RadioButton>
        <RadioButton GroupName="Payment" IsChecked="{Binding IsCredit, Mode=TwoWay}" Style="{StaticResource PaymentChip}" Padding="8"><StackPanel Orientation="Horizontal"><TextBlock Text="&#xE823;" FontFamily="Segoe MDL2 Assets" Foreground="#07656A" FontSize="19" Margin="0,0,9,0"/><TextBlock Text="آجل" FontWeight="SemiBold"/></StackPanel></RadioButton>
       </UniformGrid>
-      <ScrollViewer MaxHeight="150" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Visibility="{Binding IsCredit, Converter={StaticResource BoolToVisibilityConverter}}">
        <StackPanel Visibility="{Binding IsCredit, Converter={StaticResource BoolToVisibilityConverter}}" Margin="0,6,0,0">
         <DockPanel><TextBlock Text="الرصيد السابق" Style="{StaticResource Caption}"/><TextBlock Text="{Binding CustomerDebt, StringFormat=N2}" HorizontalAlignment="Left" Foreground="#B45309"/></DockPanel>
         <Border Background="#FFFBEB" CornerRadius="9" Padding="10" Margin="0,6,0,0"><Border.Style><Style TargetType="Border"><Style.Triggers><DataTrigger Binding="{Binding HasCreditCustomer}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></Border.Style><TextBlock Text="اختر عميلاً مسجلاً لحفظ الدين باسمه" Foreground="#B45309" FontSize="12" TextWrapping="Wrap"/></Border>
@@ -194,13 +196,13 @@
         <DockPanel Margin="0,6,0,0"><TextBlock Text="رصيد العميل بعد البيع" Style="{StaticResource Caption}"/><TextBlock Text="{Binding CustomerBalanceAfterSale, StringFormat=N2}" HorizontalAlignment="Left" FontWeight="SemiBold"/></DockPanel>
        </StackPanel>
 
-      </ScrollViewer>
-      <Expander Header="الوحدات والخصم والوصفة" Margin="0,4,0,5"><Expander.Style><Style TargetType="Expander"><Style.Triggers><DataTrigger Binding="{Binding HasUnresolvedPrescriptionRequirement}" Value="True"><Setter Property="IsExpanded" Value="True"/></DataTrigger></Style.Triggers></Style></Expander.Style><ScrollViewer MaxHeight="145" VerticalScrollBarVisibility="Auto"><StackPanel><Button Content="إضافة الصنف بوحدة أخرى" Command="{Binding AddOtherUnitCommand}" Background="#E2F2F0" Padding="8"/>
-        <StackPanel Margin="0,10,0,0"><TextBlock Text="خصم الصنف المحدد في السلة" Style="{StaticResource Caption}" Margin="0,0,0,6"/><TextBox  Text="{Binding SelectedCartLine.DiscountAmount, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}"/>
+
+      <Expander Header="الوحدات والخصم والوصفة" Margin="0,4,0,5"><Expander.Style><Style TargetType="Expander"><Style.Triggers><DataTrigger Binding="{Binding HasUnresolvedPrescriptionRequirement}" Value="True"><Setter Property="IsExpanded" Value="True"/></DataTrigger></Style.Triggers></Style></Expander.Style><StackPanel><Button Content="إضافة الصنف بوحدة أخرى" Command="{Binding AddOtherUnitCommand}" Background="#E2F2F0" Padding="8"/>
+        <StackPanel Margin="0,10,0,0"><TextBlock Text="سعر الوحدة للصنف المحدد" Style="{StaticResource Caption}" Margin="0,0,0,6"/><TextBox Text="{Binding SelectedCartLine.UnitPrice, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}" Margin="0,0,0,10"/><TextBlock Text="خصم الصنف المحدد في السلة" Style="{StaticResource Caption}" Margin="0,0,0,6"/><TextBox  Text="{Binding SelectedCartLine.DiscountAmount, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}"/>
          <TextBlock Text="الوصفة الطبية المرتبطة" Style="{StaticResource Caption}" Margin="0,12,0,6"/><ComboBox ItemsSource="{Binding FillablePrescriptions}" DisplayMemberPath="Number" SelectedItem="{Binding SelectedPrescription}"/>
          <TextBlock Text="يلزم ربط وصفة لهذا الصنف قبل البيع" Foreground="#B45309" FontSize="12" TextWrapping="Wrap" Margin="0,8,0,0" Visibility="{Binding HasUnresolvedPrescriptionRequirement, Converter={StaticResource BoolToVisibilityConverter}}"/>
         </StackPanel>
-      </StackPanel></ScrollViewer></Expander>
+      </StackPanel></Expander>
      </StackPanel>
      </ScrollViewer>
      <StackPanel Grid.Row="3" Margin="0,7,0,0">
