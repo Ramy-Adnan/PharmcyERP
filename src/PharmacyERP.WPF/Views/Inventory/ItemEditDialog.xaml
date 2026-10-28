@@ -1,11 +1,12 @@
 <Window x:Class="PharmacyERP.WPF.Views.Inventory.ItemEditDialog"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="{Binding DialogTitle}" Height="720" Width="520"
-        WindowStartupLocation="CenterOwner" ResizeMode="NoResize" FlowDirection="RightToLeft"
+        Title="{Binding DialogTitle}" Height="680" Width="720" MinHeight="440" MinWidth="520"
+        WindowStartupLocation="CenterOwner" ResizeMode="CanResize" FlowDirection="RightToLeft"
         Background="#F4F6F8">
 
     <Grid Margin="24">
+        <Grid.Style><Style TargetType="Grid"><Style.Triggers><DataTrigger Binding="{Binding IsBusy}" Value="True"><Setter Property="IsEnabled" Value="False"/></DataTrigger></Style.Triggers></Style></Grid.Style>
         <Grid.RowDefinitions>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
@@ -13,6 +14,7 @@
 
         <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto">
             <StackPanel>
+                <Border Background="#E8F6F3" Padding="10" CornerRadius="6" Margin="0,0,0,12"><TextBlock Text="{Binding SuccessMessage}" Foreground="#166534" TextWrapping="Wrap" Visibility="{Binding SuccessMessage, Converter={StaticResource StringToVisibilityConverter}}"/></Border>
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
@@ -22,7 +24,7 @@
 
                     <StackPanel Grid.Column="0">
                         <TextBlock Text="رمز الصنف" Margin="0,0,0,4"/>
-                        <TextBox Text="{Binding Code, UpdateSourceTrigger=PropertyChanged}" Padding="6" Margin="0,0,0,12"/>
+                        <TextBox x:Name="CodeBox" Text="{Binding Code, UpdateSourceTrigger=PropertyChanged}" Padding="6" Margin="0,0,0,12"/>
                     </StackPanel>
                     <StackPanel Grid.Column="2">
                         <TextBlock Text="باركود العبوة" Margin="0,0,0,4"/>
@@ -120,16 +122,16 @@
 
                     <StackPanel Grid.Column="0">
                         <TextBlock Text="سعر الشراء الافتراضي" Margin="0,0,0,4"/>
-                        <TextBox Text="{Binding DefaultPurchasePrice, UpdateSourceTrigger=PropertyChanged}" Padding="6" Margin="0,0,0,12"/>
+                        <TextBox Text="{Binding DefaultPurchasePrice, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}" Padding="6" Margin="0,0,0,12"/>
                     </StackPanel>
                     <StackPanel Grid.Column="2">
                         <TextBlock Text="{Binding SalePriceLabel}" Margin="0,0,0,4"/>
-                        <TextBox Text="{Binding DefaultSalePrice, UpdateSourceTrigger=PropertyChanged}" Padding="6" Margin="0,0,0,12"/>
+                        <TextBox Text="{Binding DefaultSalePrice, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}" Padding="6" Margin="0,0,0,12"/>
                         <Button Content="{Binding RecalculatePriceLabel}" Command="{Binding CalculateSalePriceCommand}" Padding="8,4" Margin="0,0,0,10"/>
                     </StackPanel>
                     <StackPanel Grid.Column="4">
                         <TextBlock Text="نسبة الضريبة %" Margin="0,0,0,4"/>
-                        <TextBox Text="{Binding TaxRatePercent, UpdateSourceTrigger=PropertyChanged}" Padding="6" Margin="0,0,0,12"/>
+                        <TextBox Text="{Binding TaxRatePercent, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}" Padding="6" Margin="0,0,0,12"/>
                     </StackPanel>
                 </Grid>
 
@@ -144,15 +146,15 @@
 
                     <StackPanel Grid.Column="0">
                         <TextBlock Text="حد الطلب (Reorder)" Margin="0,0,0,4"/>
-                        <TextBox Text="{Binding ReorderPoint, UpdateSourceTrigger=PropertyChanged}" Padding="6" Margin="0,0,0,12"/>
+                        <TextBox Text="{Binding ReorderPoint, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}" Padding="6" Margin="0,0,0,12"/>
                     </StackPanel>
                     <StackPanel Grid.Column="2">
                         <TextBlock Text="الحد الأدنى للمخزون" Margin="0,0,0,4"/>
-                        <TextBox Text="{Binding MinStockLevel, UpdateSourceTrigger=PropertyChanged}" Padding="6" Margin="0,0,0,12"/>
+                        <TextBox Text="{Binding MinStockLevel, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}" Padding="6" Margin="0,0,0,12"/>
                     </StackPanel>
                     <StackPanel Grid.Column="4">
                         <TextBlock Text="الحد الأعلى للمخزون" Margin="0,0,0,4"/>
-                        <TextBox Text="{Binding MaxStockLevel, UpdateSourceTrigger=PropertyChanged}" Padding="6" Margin="0,0,0,12"/>
+                        <TextBox Text="{Binding MaxStockLevel, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}" Padding="6" Margin="0,0,0,12"/>
                     </StackPanel>
                 </Grid>
 
@@ -163,10 +165,17 @@
             </StackPanel>
         </ScrollViewer>
 
-        <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,16,0,0">
-            <Button Content="حفظ" Padding="18,8" Background="#1F6F50" Foreground="White" BorderThickness="0"
+        <StackPanel Grid.Row="1" Margin="0,12,0,0">
+            <WrapPanel HorizontalAlignment="Left" Margin="0,0,0,8">
+                <WrapPanel.Style><Style TargetType="WrapPanel"><Style.Triggers><DataTrigger Binding="{Binding IsEditMode}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></WrapPanel.Style>
+                <Button Content="حفظ واستلام أول دفعة" ToolTip="Ctrl+R" Padding="12,8" Margin="0,0,8,0" Background="#1F6F50" Foreground="White" Click="SaveAndReceive_Click" Visibility="{Binding CanReceiveStock, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                <Button Content="حفظ وصنف آخر" ToolTip="Ctrl+Shift+S" Padding="12,8" Click="SaveAndNext_Click"/>
+            </WrapPanel>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
+            <Button Content="حفظ وإغلاق" ToolTip="Ctrl+S" Padding="18,8" Background="#1F6F50" Foreground="White" BorderThickness="0"
                     Click="SaveButton_Click" Margin="0,0,8,0"/>
-            <Button Content="إلغاء" Padding="18,8" Click="CancelButton_Click"/>
+            <Button Content="إغلاق" Padding="18,8" Click="CancelButton_Click"/>
+            </StackPanel>
         </StackPanel>
     </Grid>
 </Window>

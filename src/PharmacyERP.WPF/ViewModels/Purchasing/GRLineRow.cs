@@ -10,7 +10,7 @@ public class GRLineRow : PurchasePriceRowBase
     private string _itemName = string.Empty;
     private string _batchNumber = string.Empty;
     private DateTime? _manufactureDate;
-    private DateTime _expiryDate = DateTime.Today.AddYears(1);
+    private DateTime? _expiryDate;
     private int _quantityReceived = 1;
 
     public int? Id { get; set; }
@@ -23,7 +23,7 @@ public class GRLineRow : PurchasePriceRowBase
     public string ItemName { get => _itemName; set => SetProperty(ref _itemName, value); }
     public string BatchNumber { get => _batchNumber; set => SetProperty(ref _batchNumber, value); }
     public DateTime? ManufactureDate { get => _manufactureDate; set => SetProperty(ref _manufactureDate, value); }
-    public DateTime ExpiryDate { get => _expiryDate; set => SetProperty(ref _expiryDate, value); }
+    public DateTime? ExpiryDate { get => _expiryDate; set => SetProperty(ref _expiryDate, value); }
 
     public int QuantityReceived
     {

@@ -303,7 +303,9 @@ public class SalesService : ISalesService
         {
             var available = await _inventoryService.GetAvailableQuantityAsync(group.Key, dto.WarehouseId, cancellationToken);
             if (available < group.Sum(l => (long)l.Quantity * Factor(l)))
-                return Result<SalesInvoiceDto>.Failure($"الكمية المتوفرة غير كافية لأحد الأصناف. المتوفر: {available}.");
+                return group.Any(l => l.UseBatchPricing)
+                    ? Result<SalesInvoiceDto>.Failure(BatchSalePricing.PricesChangedMessage, $"الكمية المتوفرة: {available}.")
+                    : Result<SalesInvoiceDto>.Failure($"الكمية المتوفرة غير كافية لأحد الأصناف. المتوفر: {available}.");
         }
 
         var checkoutLines = new List<SaleLineInputDto>();

@@ -35,6 +35,10 @@ public class GoodsReceiptEditViewModel : PurchasePricingViewModel
     private string _errorMessage = string.Empty;
     private bool _isBusy;
     private GRLineRow? _selectedLine;
+    private readonly SemaphoreSlim _operations = new(1, 1);
+    private bool _saving;
+    private string _quickSearchText = string.Empty, _quickEntryMessage = string.Empty;
+    private ItemDto? _selectedQuickItem;
 
     public GoodsReceiptEditViewModel(IPurchasingService purchasingService, IInventoryService inventoryService, IBranchService branchService)
     {
@@ -49,10 +53,11 @@ public class GoodsReceiptEditViewModel : PurchasePricingViewModel
         AvailableItems = new ObservableCollection<ItemDto>();
         Lines = new ObservableCollection<GRLineRow>();
 
-        LoadFromPurchaseOrderCommand = new AsyncRelayCommand(LoadFromPurchaseOrderAsync, () => PurchaseOrderId.HasValue);
-        AddLineCommand = new RelayCommand(() => Lines.Add(new GRLineRow { PurchaseType = PurchaseType }));
-        RemoveLineCommand = new RelayCommand(() => { if (SelectedLine is not null) Lines.Remove(SelectedLine); }, () => SelectedLine is not null);
+        LoadFromPurchaseOrderCommand = new AsyncRelayCommand(LoadFromPurchaseOrderAsync, () => !IsBusy && PurchaseOrderId.HasValue);
+        AddLineCommand = new RelayCommand(() => { var row = new GRLineRow { PurchaseType = PurchaseType }; Lines.Add(row); SelectedLine = row; }, () => !IsBusy);
+        RemoveLineCommand = new RelayCommand(() => { if (SelectedLine is not null) Lines.Remove(SelectedLine); }, () => !IsBusy && SelectedLine is not null);
         SaveCommand = new AsyncRelayCommand(SaveAsync, () => !IsBusy);
+        AddQuickItemCommand = new RelayCommand(() => AddQuickItem(), () => !IsBusy && !string.IsNullOrWhiteSpace(QuickSearchText));
     }
 
     protected override void OnPurchaseTypeChanged()
@@ -69,6 +74,55 @@ public class GoodsReceiptEditViewModel : PurchasePricingViewModel
     public ObservableCollection<WarehouseDto> Warehouses { get; }
     public ObservableCollection<ItemDto> AvailableItems { get; }
     public ObservableCollection<GRLineRow> Lines { get; }
+    public ObservableCollection<ItemDto> QuickMatches { get; } = new();
+    public bool HasQuickMatches => QuickMatches.Count > 0;
+    public string QuickSearchText
+    {
+        get => _quickSearchText;
+        set { if (SetProperty(ref _quickSearchText, value)) UpdateQuickMatches(); }
+    }
+    public ItemDto? SelectedQuickItem { get => _selectedQuickItem; set => SetProperty(ref _selectedQuickItem, value); }
+    public string QuickEntryMessage { get => _quickEntryMessage; private set => SetProperty(ref _quickEntryMessage, value); }
+    public RelayCommand AddQuickItemCommand { get; }
+    public event Action<GRLineRow>? QuickItemAdded;
+
+    private static bool Exact(string? value, string term) => !string.IsNullOrWhiteSpace(value) && string.Equals(value, term, StringComparison.OrdinalIgnoreCase);
+    private static bool Contains(string? value, string term) => value?.Contains(term, StringComparison.OrdinalIgnoreCase) == true;
+    private void UpdateQuickMatches()
+    {
+        var term = QuickSearchText.Trim(); QuickMatches.Clear(); SelectedQuickItem = null;
+        if (term.Length > 0)
+            foreach (var item in AvailableItems.Where(i => Contains(i.DisplayName, term) || Contains(i.GenericName, term) || Contains(i.Code, term)
+                || Contains(i.Barcode, term) || Exact(i.BaseUnitBarcode, term) || i.SaleUnits.Any(u => u.IsActive && Exact(u.Barcode, term)))
+                .OrderByDescending(i => Exact(i.Code, term) || Exact(i.Barcode, term) || Exact(i.BaseUnitBarcode, term) || i.SaleUnits.Any(u => u.IsActive && Exact(u.Barcode, term)))
+                .ThenBy(i => i.Name).Take(12)) QuickMatches.Add(item);
+        if (QuickMatches.Count == 1) SelectedQuickItem = QuickMatches[0];
+        OnPropertyChanged(nameof(HasQuickMatches));
+        System.Windows.Input.CommandManager.InvalidateRequerySuggested();
+    }
+    public bool AddQuickItem()
+    {
+        if (IsBusy) return false;
+        var term = QuickSearchText.Trim();
+        var exact = AvailableItems.Where(i => Exact(i.Code, term) || Exact(i.Barcode, term) || Exact(i.BaseUnitBarcode, term)
+            || i.SaleUnits.Any(u => u.IsActive && Exact(u.Barcode, term))).ToList();
+        var item = exact.Count == 1 ? exact[0] : exact.Count == 0 && SelectedQuickItem is not null && QuickMatches.Contains(SelectedQuickItem) ? SelectedQuickItem : null;
+        if (item is null) { QuickEntryMessage = QuickMatches.Count == 0 ? "لم يوجد الصنف. أضف بطاقة جديدة أو غيّر البحث." : "اختر الصنف المطلوب من النتائج ثم اضغط إضافة."; return false; }
+        var scannedUnit = item.SaleUnits.FirstOrDefault(u => u.IsActive && Exact(u.Barcode, term));
+        if (scannedUnit is null && Exact(item.BaseUnitBarcode, term) && !Exact(item.Barcode, term) && item.UnitsPerPackage > 1)
+        {
+            scannedUnit = item.SaleUnits.FirstOrDefault(u => u.IsActive && u.BaseUnitCount == 1 && u.Id.HasValue);
+            if (scannedUnit is null) { QuickEntryMessage = "هذا باركود وحدة المخزون. اختر العبوة بالاسم، أو عرّف وحدة شراء صغيرة في بطاقة الصنف."; return false; }
+        }
+        var row = new GRLineRow { PurchaseType = PurchaseType };
+        ApplyItemSelection(row, item.Id);
+        if (scannedUnit is not null) row.ItemSaleUnitId = scannedUnit.Id;
+        Lines.Add(row); SelectedLine = row;
+        QuickSearchText = string.Empty;
+        QuickEntryMessage = $"أُضيف {item.DisplayName}. أكمل رقم الدفعة والصلاحية والكمية؛ السطر مستقل عن الدفعات السابقة.";
+        QuickItemAdded?.Invoke(row);
+        return true;
+    }
 
     public int SupplierId
     {
@@ -76,7 +130,7 @@ public class GoodsReceiptEditViewModel : PurchasePricingViewModel
         set
         {
             if (SetProperty(ref _supplierId, value))
-                _ = LoadOpenPurchaseOrdersForSupplierAsync();
+                _ = RunSerializedAsync(async () => { if (SupplierId == value) { PurchaseOrderId = null; await LoadOpenPurchaseOrdersForSupplierAsync(); } });
         }
     }
 
@@ -96,7 +150,7 @@ public class GoodsReceiptEditViewModel : PurchasePricingViewModel
         set
         {
             if (SetProperty(ref _branchId, value))
-                _ = LoadWarehousesForBranchAsync();
+                _ = RunSerializedAsync(async () => { if (BranchId == value) await LoadWarehousesForBranchAsync(); });
         }
     }
 
@@ -115,7 +169,7 @@ public class GoodsReceiptEditViewModel : PurchasePricingViewModel
     }
 
     public string ErrorMessage { get => _errorMessage; set => SetProperty(ref _errorMessage, value); }
-    public bool IsBusy { get => _isBusy; set => SetProperty(ref _isBusy, value); }
+    public bool IsBusy { get => _isBusy; set { if (SetProperty(ref _isBusy, value)) System.Windows.Input.CommandManager.InvalidateRequerySuggested(); } }
 
     public AsyncRelayCommand LoadFromPurchaseOrderCommand { get; }
     public RelayCommand AddLineCommand { get; }
@@ -125,14 +179,16 @@ public class GoodsReceiptEditViewModel : PurchasePricingViewModel
     public int? SavedReceiptId => _id;
     public event Action? RequestClose;
 
-    public async Task LoadForCreateAsync(int? defaultBranchId = null)
+    public Task LoadForCreateAsync(int? defaultBranchId = null) => RunSerializedAsync(() => LoadForCreateCoreAsync(defaultBranchId));
+    private async Task LoadForCreateCoreAsync(int? defaultBranchId)
     {
         _id = null;
         if (defaultBranchId.HasValue) SetProperty(ref _branchId, defaultBranchId.Value, nameof(BranchId));
         await LoadLookupsAsync();
     }
 
-    public async Task LoadForEditAsync(int goodsReceiptNoteId)
+    public Task LoadForEditAsync(int goodsReceiptNoteId) => RunSerializedAsync(() => LoadForEditCoreAsync(goodsReceiptNoteId));
+    private async Task LoadForEditCoreAsync(int goodsReceiptNoteId)
     {
         await LoadLookupsAsync();
 
@@ -191,12 +247,14 @@ public class GoodsReceiptEditViewModel : PurchasePricingViewModel
         var items = await _inventoryService.GetItemsAsync();
         AvailableItems.Clear();
         foreach (var i in items.Where(i => i.IsActive)) AvailableItems.Add(i);
+        UpdateQuickMatches();
 
         if (BranchId == 0 && Branches.Count > 0) SetProperty(ref _branchId, Branches.First().Id, nameof(BranchId));
         await LoadWarehousesForBranchAsync();
     }
 
-    public async Task SelectSupplierAsync(int supplierId)
+    public Task SelectSupplierAsync(int supplierId) => RunSerializedAsync(() => SelectSupplierCoreAsync(supplierId));
+    private async Task SelectSupplierCoreAsync(int supplierId)
     {
         var suppliers = await _purchasingService.GetSuppliersAsync();
         Suppliers.Clear();
@@ -205,11 +263,13 @@ public class GoodsReceiptEditViewModel : PurchasePricingViewModel
         await LoadOpenPurchaseOrdersForSupplierAsync();
     }
 
-    public async Task ReloadItemsAsync()
+    public Task ReloadItemsAsync() => RunSerializedAsync(ReloadItemsCoreAsync);
+    private async Task ReloadItemsCoreAsync()
     {
         var items = await _inventoryService.GetItemsAsync();
         AvailableItems.Clear();
         foreach (var item in items.Where(i => i.IsActive)) AvailableItems.Add(item);
+        UpdateQuickMatches();
     }
 
     private async Task LoadOpenPurchaseOrdersForSupplierAsync()
@@ -230,7 +290,9 @@ public class GoodsReceiptEditViewModel : PurchasePricingViewModel
         Warehouses.Clear();
         if (BranchId == 0) return;
 
-        var warehouses = await _branchService.GetWarehousesAsync(BranchId);
+        var branchId = BranchId;
+        var warehouses = await _branchService.GetWarehousesAsync(branchId);
+        if (BranchId != branchId) return;
         foreach (var w in warehouses.Where(w => w.IsActive)) Warehouses.Add(w);
 
         if (WarehouseId == 0 || Warehouses.All(w => w.Id != WarehouseId))
@@ -238,7 +300,8 @@ public class GoodsReceiptEditViewModel : PurchasePricingViewModel
     }
 
     /// <summary>Pulls the selected PO's branch/warehouse and pre-fills one grid row per outstanding line.</summary>
-    public async Task LoadFromPurchaseOrderAsync()
+    public Task LoadFromPurchaseOrderAsync() => RunSerializedAsync(LoadFromPurchaseOrderCoreAsync);
+    private async Task LoadFromPurchaseOrderCoreAsync()
     {
         if (!PurchaseOrderId.HasValue) return;
 
@@ -270,7 +333,7 @@ public class GoodsReceiptEditViewModel : PurchasePricingViewModel
                 QuantityReceived = line.QuantityOutstanding,
                 UnitCost = line.UnitCost,
                 SalePrice = line.SalePrice,
-                ExpiryDate = DateTime.Today.AddYears(1)
+                ExpiryDate = null
             });
         }
     }
@@ -295,6 +358,17 @@ public class GoodsReceiptEditViewModel : PurchasePricingViewModel
 
     public async Task SaveAsync()
     {
+        if (_saving) return;
+        _saving = true;
+        try
+        {
+            await RunSerializedAsync(SaveCoreAsync);
+            if (SavedSuccessfully) RequestClose?.Invoke();
+        }
+        finally { _saving = false; }
+    }
+    private async Task SaveCoreAsync()
+    {
         SavedSuccessfully = false;
         ErrorMessage = string.Empty;
 
@@ -302,57 +376,58 @@ public class GoodsReceiptEditViewModel : PurchasePricingViewModel
         if (BranchId <= 0 || WarehouseId <= 0) { ErrorMessage = "الرجاء اختيار الفرع والمخزن."; return; }
         if (!Lines.Any()) { ErrorMessage = "يجب إضافة صنف واحد على الأقل."; return; }
         if (Lines.Any(l => l.ItemId <= 0)) { ErrorMessage = "الرجاء اختيار الصنف لكل سطر."; return; }
+        if (Lines.Any(l => l.UnitCost < 0 || l.SalePrice < 0)) { ErrorMessage = "أسعار الشراء والبيع لا تقبل القيم السالبة."; return; }
         if (Lines.Any(l => string.IsNullOrWhiteSpace(l.BatchNumber))) { ErrorMessage = "رقم الدفعة مطلوب لكل سطر."; return; }
         if (Lines.Any(l => l.QuantityReceived < 0 || l.BonusQuantity < 0 || (long)l.QuantityReceived + l.BonusQuantity <= 0)) { ErrorMessage = "الكمية يجب أن تكون أكبر من صفر لكل سطر."; return; }
-        if (Lines.Any(l => l.ExpiryDate.Date <= ReceiptDate.Date)) { ErrorMessage = "تاريخ انتهاء الصلاحية يجب أن يكون بعد تاريخ الاستلام."; return; }
+        if (Lines.Any(l => !l.ExpiryDate.HasValue || l.ExpiryDate.Value.Date <= ReceiptDate.Date)) { ErrorMessage = "تاريخ انتهاء الصلاحية يجب أن يكون بعد تاريخ الاستلام."; return; }
 
+        var dto = new GoodsReceiptUpsertDto
+        {
+            Id = _id,
+            PurchaseOrderId = PurchaseOrderId,
+            SupplierId = SupplierId,
+            BranchId = BranchId,
+            WarehouseId = WarehouseId,
+            ReceiptDate = ReceiptDate,
+            PurchaseType = PurchaseType,
+            Notes = Notes,
+            Lines = Lines.Select(l => new GoodsReceiptLineUpsertDto
+            {
+                Id = l.Id,
+                PurchaseOrderItemId = l.PurchaseOrderItemId,
+                ItemSaleUnitId = l.ItemSaleUnitId,
+                ItemId = l.ItemId,
+                BatchNumber = l.BatchNumber,
+                ManufactureDate = l.ManufactureDate,
+                ExpiryDate = l.ExpiryDate!.Value,
+                BonusQuantity = l.BonusQuantity,
+                QuantityReceived = l.QuantityReceived,
+                UnitCost = l.UnitCost,
+                SalePrice = l.SalePrice
+            }).ToList()
+        };
+
+        var result = _id.HasValue
+            ? await _purchasingService.UpdateGoodsReceiptAsync(dto)
+            : await _purchasingService.CreateGoodsReceiptAsync(dto);
+
+        if (!result.Succeeded)
+        {
+            ErrorMessage = result.Errors.FirstOrDefault() ?? "تعذر حفظ سند الاستلام.";
+            return;
+        }
+
+        _id = result.Value!.Id;
+        OnPropertyChanged(nameof(SavedReceiptId));
+        SavedSuccessfully = true;
+    }
+
+    private async Task RunSerializedAsync(Func<Task> action)
+    {
+        await _operations.WaitAsync();
         IsBusy = true;
-        try
-        {
-            var dto = new GoodsReceiptUpsertDto
-            {
-                Id = _id,
-                PurchaseOrderId = PurchaseOrderId,
-                SupplierId = SupplierId,
-                BranchId = BranchId,
-                WarehouseId = WarehouseId,
-                ReceiptDate = ReceiptDate,
-                PurchaseType = PurchaseType,
-                Notes = Notes,
-                Lines = Lines.Select(l => new GoodsReceiptLineUpsertDto
-                {
-                    Id = l.Id,
-                    PurchaseOrderItemId = l.PurchaseOrderItemId,
-                    ItemSaleUnitId = l.ItemSaleUnitId,
-                    ItemId = l.ItemId,
-                    BatchNumber = l.BatchNumber,
-                    ManufactureDate = l.ManufactureDate,
-                    ExpiryDate = l.ExpiryDate,
-                    BonusQuantity = l.BonusQuantity,
-                    QuantityReceived = l.QuantityReceived,
-                    UnitCost = l.UnitCost,
-                    SalePrice = l.SalePrice
-                }).ToList()
-            };
-
-            var result = _id.HasValue
-                ? await _purchasingService.UpdateGoodsReceiptAsync(dto)
-                : await _purchasingService.CreateGoodsReceiptAsync(dto);
-
-            if (!result.Succeeded)
-            {
-                ErrorMessage = result.Errors.FirstOrDefault() ?? "تعذر حفظ سند الاستلام.";
-                return;
-            }
-
-            _id = result.Value!.Id;
-            OnPropertyChanged(nameof(SavedReceiptId));
-            SavedSuccessfully = true;
-            RequestClose?.Invoke();
-        }
-        finally
-        {
-            IsBusy = false;
-        }
+        try { await action(); }
+        catch (Exception ex) { ErrorMessage = "تعذر إكمال العملية. راجع الاتصال وحاول مجدداً. " + ex.Message; }
+        finally { IsBusy = false; _operations.Release(); }
     }
 }

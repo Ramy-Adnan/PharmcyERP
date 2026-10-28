@@ -206,6 +206,11 @@ public partial class POSView : UserControl, IDisposable
     {
         if (!IsVisible) return;
         if (e.Key == Key.F12) { e.Handled = true; Checkout(); }
+        if (e.Key == Key.F5)
+        {
+            e.Handled = true;
+            if (!HasPendingScannerInput && _viewModel.RefreshStockCommand.CanExecute(null)) _viewModel.RefreshStockCommand.Execute(null);
+        }
     }
 
     private async void CaptureScannerInput(object sender, PreProcessInputEventArgs e)

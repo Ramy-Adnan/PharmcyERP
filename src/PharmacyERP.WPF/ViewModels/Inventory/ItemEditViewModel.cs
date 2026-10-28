@@ -41,6 +41,7 @@ public class ItemEditViewModel : PurchasePricingViewModel
     private bool _isActive = true;
     private string _errorMessage = string.Empty;
     private bool _isBusy;
+    private string _successMessage = string.Empty;
 
     public ItemEditViewModel(IInventoryService inventoryService)
     {
@@ -100,17 +101,25 @@ public class ItemEditViewModel : PurchasePricingViewModel
     public bool IsActive { get => _isActive; set => SetProperty(ref _isActive, value); }
 
     public string ErrorMessage { get => _errorMessage; set => SetProperty(ref _errorMessage, value); }
-    public bool IsBusy { get => _isBusy; set => SetProperty(ref _isBusy, value); }
+    public bool IsBusy { get => _isBusy; set { if (SetProperty(ref _isBusy, value)) System.Windows.Input.CommandManager.InvalidateRequerySuggested(); } }
+    public string SuccessMessage { get => _successMessage; private set => SetProperty(ref _successMessage, value); }
 
     public AsyncRelayCommand SaveCommand { get; }
     public RelayCommand CalculateSalePriceCommand { get; }
     public bool SavedSuccessfully { get; private set; }
     public int? SavedItemId { get; private set; }
+    public string SavedItemCode { get; private set; } = string.Empty;
+    public string SavedItemName { get; private set; } = string.Empty;
+    public bool ReceiveStockAfterSave { get; private set; }
+    public bool CanReceiveStock { get; set; }
+    public event Action? NewItemReady;
     public event Action? RequestClose;
 
     public async Task LoadForCreateAsync()
     {
-        _id = null;
+        ResetForNextItem();
+        SavedSuccessfully = false; SavedItemId = null; ReceiveStockAfterSave = false;
+        SuccessMessage = ErrorMessage = string.Empty;
         PurchaseType = PurchasePricingType.Other;
         DefaultPurchasePrice = 0;
         DefaultSalePrice = 0;
@@ -175,6 +184,38 @@ public class ItemEditViewModel : PurchasePricingViewModel
 
     public async Task SaveAsync()
     {
+        if (await SaveCoreAsync()) RequestClose?.Invoke();
+    }
+
+    public async Task SaveAndReceiveAsync()
+    {
+        if (IsEditMode || !CanReceiveStock || !await SaveCoreAsync()) return;
+        ReceiveStockAfterSave = true;
+        RequestClose?.Invoke();
+    }
+
+    public async Task SaveAndAddAnotherAsync()
+    {
+        if (IsEditMode || !await SaveCoreAsync()) return;
+        SuccessMessage = $"تم حفظ الصنف «{SavedItemName}». أدخل الصنف التالي؛ التصنيف والوحدة محفوظان لتسريع الإدخال.";
+        ResetForNextItem();
+        NewItemReady?.Invoke();
+    }
+
+    private void ResetForNextItem()
+    {
+        _id = null;
+        Code = Name = string.Empty; Barcode = BaseUnitBarcode = GenericName = Strength = null;
+        ManufacturerId = null; RequiresPrescription = IsControlledSubstance = false;
+        UnitsPerPackage = 1; PackageUnitName = "علبة"; SaleUnits.Clear();
+        DefaultPurchasePrice = DefaultSalePrice = TaxRatePercent = 0;
+        ReorderPoint = MinStockLevel = MaxStockLevel = 0; IsActive = true;
+        OnPropertyChanged(nameof(IsEditMode)); OnPropertyChanged(nameof(DialogTitle));
+    }
+
+    private async Task<bool> SaveCoreAsync()
+    {
+        if (IsBusy) return false;
         ErrorMessage = string.Empty;
         IsBusy = true;
         try
@@ -214,12 +255,18 @@ public class ItemEditViewModel : PurchasePricingViewModel
             if (!result.Succeeded)
             {
                 ErrorMessage = result.Errors.FirstOrDefault() ?? "تعذر حفظ الصنف.";
-                return;
+                return false;
             }
 
             SavedItemId = result.Value!.Id;
+            SavedItemCode = result.Value.Code; SavedItemName = result.Value.Name;
             SavedSuccessfully = true;
-            RequestClose?.Invoke();
+            return true;
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"تعذر حفظ الصنف: {ex.Message}";
+            return false;
         }
         finally
         {

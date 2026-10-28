@@ -33,13 +33,11 @@ public class PurchasingService : IPurchasingService
 
     public async Task<List<SupplierDto>> GetSuppliersAsync(CancellationToken cancellationToken = default)
     {
-        var suppliers = await _context.Suppliers
-            .Include(s => s.PurchaseOrders)
-            .Include(s => s.PurchaseInvoices)
+        // Do not join every order to every invoice of each supplier just to show
+        // two totals. Keep the read models out of the long-lived change tracker.
+        var suppliers = await _context.Suppliers.AsNoTracking()
             .OrderBy(s => s.Name)
-            .ToListAsync(cancellationToken);
-
-        return suppliers.Select(s => new SupplierDto
+            .Select(s => new SupplierDto
         {
             Id = s.Id,
             Code = s.Code,
@@ -53,10 +51,13 @@ public class PurchasingService : IPurchasingService
             IsActive = s.IsActive,
             OpenPurchaseOrderCount = s.PurchaseOrders.Count(po =>
                 po.Status == PurchaseOrderStatus.Submitted || po.Status == PurchaseOrderStatus.PartiallyReceived),
-            TotalOutstandingBalance = s.PurchaseInvoices
-                .Where(i => i.Status != PurchaseInvoiceStatus.Cancelled)
-                .Sum(i => i.TotalAmount - i.AmountPaid)
-        }).ToList();
+        }).ToListAsync(cancellationToken);
+        var invoices = await _context.PurchaseInvoices.AsNoTracking()
+            .Where(i => i.Status != PurchaseInvoiceStatus.Cancelled)
+            .Select(i => new { i.SupplierId, i.TotalAmount, i.AmountPaid }).ToListAsync(cancellationToken);
+        var balances = invoices.GroupBy(i => i.SupplierId).ToDictionary(g => g.Key, g => g.Sum(i => i.TotalAmount - i.AmountPaid));
+        foreach (var supplier in suppliers) supplier.TotalOutstandingBalance = balances.GetValueOrDefault(supplier.Id);
+        return suppliers;
     }
 
     public async Task<SupplierUpsertDto?> GetSupplierForEditAsync(int id, CancellationToken cancellationToken = default)

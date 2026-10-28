@@ -73,6 +73,7 @@ public class POSViewModel : ViewModelBase
         RemoveItemCommand = new RelayCommand(p => CartLines.Remove((POSLineRow)p!), p => !IsBusy && p is POSLineRow);
         ReprintCommand = new AsyncRelayCommand(ReprintAsync, () => !IsBusy && _lastInvoiceId.HasValue);
         UseBatchPricingCommand = new AsyncRelayCommand(RestoreBatchPricingAsync, () => CanScan && _pendingScans == 0 && SelectedCartLine is not null);
+        RefreshStockCommand = new AsyncRelayCommand(RefreshStockAsync, () => CanScan && _pendingScans == 0);
         CartLines.CollectionChanged += (_, _) =>
         {
             foreach (var removed in _observedLines.Where(l => !CartLines.Contains(l)).ToList())
@@ -141,7 +142,7 @@ public class POSViewModel : ViewModelBase
     public decimal AmountTendered { get => _amountTendered; set { SetProperty(ref _amountTendered, value); OnPropertyChanged(nameof(CreditRemaining)); OnPropertyChanged(nameof(CustomerBalanceAfterSale)); } }
     public decimal CreditRemaining => IsCredit ? Math.Max(0, TotalAmount - AmountTendered) : 0;
     public decimal CustomerBalanceAfterSale => CustomerDebt + CreditRemaining;
-    public decimal DiscountAmount { get => _discountAmount; set { SetProperty(ref _discountAmount, value); NotifyTotals(); } }
+    public decimal DiscountAmount { get => _discountAmount; set { if (SetProperty(ref _discountAmount, value)) NotifyTotals(reprice: false); } }
     public decimal SubTotal => CartLines.Sum(l => l.SubTotal);
     public decimal TaxAmount => CartLines.Sum(l => l.SubTotal * l.TaxRatePercent / 100m);
     public decimal TotalAmount => Math.Round(SubTotal + TaxAmount - CartLines.Sum(l => l.DiscountAmount) - DiscountAmount, 2);
@@ -173,23 +174,36 @@ public class POSViewModel : ViewModelBase
     public AsyncRelayCommand CheckoutCommand { get; }
     public AsyncRelayCommand ReprintCommand { get; }
     public AsyncRelayCommand UseBatchPricingCommand { get; }
+    public AsyncRelayCommand RefreshStockCommand { get; }
     private static void Requery() => System.Windows.Input.CommandManager.InvalidateRequerySuggested();
-    private void NotifyTotals()
+    private void NotifyTotals(bool reprice = true, int? itemId = null)
     {
         if (_pricingCart) return;
         _pricingCart = true;
         try
         {
-            var reserved = new Dictionary<int, int>();
-            foreach (var line in CartLines)
-                if (_cartPrices.TryGetValue(line.ItemId, out var item))
-                    line.ApplyPriceQuote(BatchSalePricing.Quote(item.BatchPrices, line.Quantity, line.UnitsPerSale, reserved));
+            if (reprice)
+            {
+                var reserved = new Dictionary<int, int>();
+                foreach (var line in CartLines.Where(l => !itemId.HasValue || l.ItemId == itemId.Value))
+                    if (_cartPrices.TryGetValue(line.ItemId, out var item))
+                        line.ApplyPriceQuote(BatchSalePricing.Quote(item.BatchPrices, line.Quantity, line.UnitsPerSale, reserved));
+            }
         }
         finally { _pricingCart = false; }
         foreach (var name in new[] { nameof(SubTotal), nameof(TaxAmount), nameof(TotalAmount), nameof(CreditRemaining), nameof(CustomerBalanceAfterSale), nameof(CartDiscount), nameof(ItemCount), nameof(HasUnresolvedPrescriptionRequirement) }) OnPropertyChanged(name);
         Requery();
     }
-    private void LineChanged(object? sender, PropertyChangedEventArgs e) => NotifyTotals();
+    private void LineChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (sender is not POSLineRow line) return;
+        // Derived totals, display text and photos must not trigger another FEFO pass.
+        // Only rows for the changed item share batch reservations with that row.
+        if (e.PropertyName is nameof(POSLineRow.Quantity) or nameof(POSLineRow.UsesBatchPricing) or nameof(POSLineRow.AvailableBaseQuantity))
+            NotifyTotals(itemId: line.ItemId);
+        else if (e.PropertyName is nameof(POSLineRow.UnitPrice) or nameof(POSLineRow.DiscountAmount))
+            NotifyTotals(reprice: false);
+    }
 
     public async Task InitializeAsync()
     {
@@ -567,11 +581,46 @@ public class POSViewModel : ViewModelBase
         foreach (var itemGroup in CartLines.GroupBy(l => l.ItemId).ToList())
         {
             var items = await _salesService.SearchSaleItemsAsync(itemGroup.First().Code, WarehouseId);
-            if (items.SingleOrDefault(i => i.ItemId == itemGroup.Key) is not { } item) continue;
+            if (items.SingleOrDefault(i => i.ItemId == itemGroup.Key) is not { } item)
+            {
+                _cartPrices.Remove(itemGroup.Key);
+                foreach (var line in itemGroup) line.AvailableBaseQuantity = 0;
+                continue;
+            }
             _cartPrices[item.ItemId] = item;
             foreach (var line in itemGroup) line.AvailableBaseQuantity = item.AvailableQuantity;
         }
         NotifyTotals();
+    }
+
+    public async Task RefreshStockAsync()
+    {
+        if (!CanScan || _pendingScans > 0) return;
+        IsBusy = true;
+        var text = SearchText.Trim(); var version = _searchVersion;
+        await _operations.WaitAsync();
+        try
+        {
+            ErrorMessage = string.Empty;
+            await RefreshCartPricesCoreAsync();
+            var items = text.Length == 0
+                ? await _salesService.BrowseSaleItemsAsync(WarehouseId, _catalogCategoryId)
+                : await _salesService.SearchSaleItemsAsync(text, WarehouseId);
+            if (!_isClosing && version == _searchVersion)
+            {
+                SearchResults.Clear(); SelectedSearchResult = null;
+                foreach (var item in items) SearchResults.Add(item);
+                DisplayProducts(items);
+                _isSearching = text.Length > 0; HasMoreProducts = !_isSearching && items.Count == 60;
+                foreach (var category in Categories) category.IsSelected = !_isSearching && category.Id == _catalogCategoryId;
+                ResultsTitle = !_isSearching ? Categories.FirstOrDefault(c => c.IsSelected)?.Name ?? "الأصناف"
+                    : items.Count == 0 ? "لا توجد نتائج للبحث"
+                    : items.Count == 30 ? "أول 30 نتيجة · أدخل اسمًا أدق للمزيد" : "نتائج البحث";
+            }
+            SuccessMessage = "تم تحديث المخزون والأسعار؛ الأسعار اليدوية في السلة محفوظة.";
+        }
+        catch (Exception ex) { ErrorMessage = $"تعذر تحديث المخزون والأسعار: {ex.Message}"; }
+        finally { IsBusy = false; _operations.Release(); ScanFocusRequested?.Invoke(); }
     }
 
     private async Task RestoreBatchPricingAsync()

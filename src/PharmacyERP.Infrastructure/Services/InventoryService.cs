@@ -13,11 +13,13 @@ public class InventoryService : IInventoryService
 {
     private readonly IApplicationDbContext _context;
     private readonly IDateTime _dateTime;
+    private readonly ICurrentUserService? _currentUser;
 
-    public InventoryService(IApplicationDbContext context, IDateTime dateTime)
+    public InventoryService(IApplicationDbContext context, IDateTime dateTime, ICurrentUserService? currentUser = null)
     {
         _context = context;
         _dateTime = dateTime;
+        _currentUser = currentUser;
     }
 
     // ===================== Categories =====================
@@ -165,13 +167,10 @@ public class InventoryService : IInventoryService
 
     public async Task<List<ItemDto>> GetItemsAsync(string? searchText = null, CancellationToken cancellationToken = default)
     {
-        var query = _context.Items
-            .Include(i => i.Category)
-            .Include(i => i.UnitOfMeasure)
-            .Include(i => i.Manufacturer)
-            .Include(i => i.SaleUnits)
-            .Include(i => i.Batches)
-            .AsQueryable();
+        // The catalogue needs stock totals, not every historical batch entity.
+        // Project before materializing so sale units cannot multiply batch rows,
+        // and reading a large catalogue never fills the shared EF change tracker.
+        var query = _context.Items.AsNoTracking();
 
         if (!string.IsNullOrWhiteSpace(searchText))
         {
@@ -181,19 +180,19 @@ public class InventoryService : IInventoryService
                 i.Code.Contains(term) ||
                 (i.Manufacturer != null && i.Manufacturer.Name.Contains(term)) ||
                 i.BaseUnitBarcode == term ||
+                i.SaleUnits.Any(u => u.IsActive && u.Barcode == term) ||
                 (i.Barcode != null && i.Barcode.Contains(term)) ||
                 (i.GenericName != null && i.GenericName.Contains(term)));
         }
 
-        var items = await query.OrderBy(i => i.Name).ToListAsync(cancellationToken);
-
-        return items.Select(i => new ItemDto
+        return await query.OrderBy(i => i.Name).ThenBy(i => i.Id).Select(i => new ItemDto
         {
             Id = i.Id,
             Code = i.Code,
-            Barcode = i.Barcode?.Trim(),
-            BaseUnitBarcode = i.BaseUnitBarcode?.Trim(),
-            SaleUnits = i.SaleUnits.Select(MapSaleUnit).ToList(),
+            Barcode = i.Barcode == null ? null : i.Barcode.Trim(),
+            BaseUnitBarcode = i.BaseUnitBarcode == null ? null : i.BaseUnitBarcode.Trim(),
+            SaleUnits = i.SaleUnits.Select(u => new ItemSaleUnitDto
+                { Id = u.Id, Name = u.Name, BaseUnitCount = u.BaseUnitCount, Barcode = u.Barcode, IsActive = u.IsActive }).ToList(),
             UnitsPerPackage = i.UnitsPerPackage,
             PackageUnitName = i.PackageUnitName.Trim(),
             Name = i.Name,
@@ -204,7 +203,7 @@ public class InventoryService : IInventoryService
             UnitOfMeasureId = i.UnitOfMeasureId,
             CategoryName = i.Category.Name,
             UnitOfMeasureName = i.UnitOfMeasure.Name,
-            ManufacturerName = i.Manufacturer?.Name,
+            ManufacturerName = i.Manufacturer == null ? null : i.Manufacturer.Name,
             RequiresPrescription = i.RequiresPrescription,
             IsControlledSubstance = i.IsControlledSubstance,
             DefaultSalePrice = i.DefaultSalePrice,
@@ -215,8 +214,8 @@ public class InventoryService : IInventoryService
             MinStockLevel = i.MinStockLevel,
             MaxStockLevel = i.MaxStockLevel,
             IsActive = i.IsActive,
-            TotalQuantityOnHand = i.Batches.Sum(b => b.QuantityOnHand)
-        }).ToList();
+            TotalQuantityOnHand = i.Batches.Sum(b => (int?)b.QuantityOnHand) ?? 0
+        }).ToListAsync(cancellationToken);
     }
 
     public async Task<ItemUpsertDto?> GetItemForEditAsync(int id, CancellationToken cancellationToken = default)
@@ -440,8 +439,9 @@ public class InventoryService : IInventoryService
 
     public async Task<List<BatchDto>> GetBatchesForItemAsync(int itemId, int? warehouseId = null, CancellationToken cancellationToken = default)
     {
-        var query = _context.Batches
+        var query = _context.Batches.AsNoTracking()
             .Include(b => b.Item).ThenInclude(i => i.UnitOfMeasure)
+            .Include(b => b.Item).ThenInclude(i => i.SaleUnits)
             .Include(b => b.Warehouse)
             .Where(b => b.ItemId == itemId);
 
@@ -452,6 +452,69 @@ public class InventoryService : IInventoryService
         var now = _dateTime.UtcNow;
 
         return batches.Select(b => MapBatchToDto(b, now)).ToList();
+    }
+
+    public async Task<Result<BatchDto>> UpdateBatchSalePriceAsync(UpdateBatchSalePriceDto dto, CancellationToken cancellationToken = default)
+    {
+        if (_currentUser?.UserId is null || !_currentUser.HasPermission("Inventory.ManageItems"))
+            return Result<BatchDto>.Failure("لا تملك صلاحية تحديث أسعار الأصناف.");
+        if (dto.SaleUnitPrice <= 0 || dto.SaleUnitPrice > 9999999999999999.99m)
+            return Result<BatchDto>.Failure("أدخل سعر بيع أكبر من صفر ضمن الحد المسموح.");
+        if (string.IsNullOrWhiteSpace(dto.Reason) || dto.Reason.Trim().Length > 500)
+            return Result<BatchDto>.Failure("اكتب سبب تعديل السعر (حتى 500 حرف).");
+        var batch = await _context.Batches.AsNoTracking().Include(b => b.Item).ThenInclude(i => i.UnitOfMeasure)
+            .Include(b => b.Item).ThenInclude(i => i.SaleUnits).Include(b => b.Warehouse)
+            .SingleOrDefaultAsync(b => b.Id == dto.BatchId && !b.IsDeleted, cancellationToken);
+        if (batch is null) return Result<BatchDto>.Failure("الدفعة غير موجودة.");
+        if (!_currentUser.HasPermission("Branches.Manage") && batch.Warehouse.BranchId != _currentUser.CurrentBranchId &&
+            !await _context.UserBranches.AnyAsync(a => a.UserId == _currentUser.UserId && a.BranchId == batch.Warehouse.BranchId, cancellationToken))
+            return Result<BatchDto>.Failure("لا تملك صلاحية الوصول إلى فرع هذه الدفعة.");
+        if (batch.QuantityOnHand <= 0 || batch.IsExpired(_dateTime.UtcNow) || !batch.Item.IsActive || !batch.Warehouse.IsActive)
+            return Result<BatchDto>.Failure("تحديث السعر متاح للدفعات الصالحة ذات الرصيد فقط.");
+        var before = MapBatchToDto(batch, _dateTime.UtcNow);
+        if (dto.ExpectedSaleUnitPrice != before.SaleUnitPrice || !(dto.ExpectedRowVersion ?? Array.Empty<byte>()).SequenceEqual(batch.RowVersion ?? Array.Empty<byte>()))
+            return Result<BatchDto>.Failure("تغيّرت بيانات الدفعة. حدّث القائمة وراجع السعر قبل الحفظ.");
+        var price = Math.Round(dto.SaleUnitPrice, 2, MidpointRounding.AwayFromZero);
+        if (price <= 0) return Result<BatchDto>.Failure("سعر البيع بعد التقريب يجب أن يكون أكبر من صفر.");
+        if (_context is DbContext db)
+        {
+            var oldEntry = db.ChangeTracker.Entries<Batch>().SingleOrDefault(e => e.Entity.Id == batch.Id);
+            if (oldEntry is not null)
+            {
+                if (oldEntry.State != EntityState.Unchanged) return Result<BatchDto>.Failure("توجد تغييرات غير محفوظة على الدفعة. أكملها أولاً.");
+                oldEntry.State = EntityState.Detached;
+            }
+        }
+        // Only price fields are modified: cost, stock, receipt documents and historical sales stay intact.
+        _context.Batches.Entry(batch).State = EntityState.Unchanged;
+        batch.PackageSalePrice = price;
+        batch.ReceivedUnitFactor ??= before.SaleUnitFactor;
+        batch.SalePriceOverride = Math.Round(price / before.SaleUnitFactor, 2, MidpointRounding.AwayFromZero);
+        batch.HasConfiguredSalePrice = true;
+        var audit = new AuditLog
+        {
+            TimestampUtc = _dateTime.UtcNow, UserId = _currentUser.UserId, UserName = _currentUser.UserName,
+            Action = AuditAction.Updated, EntityName = nameof(Batch), EntityId = batch.Id.ToString(),
+            OldValuesJson = System.Text.Json.JsonSerializer.Serialize(new { before.SaleUnitPrice, before.SalePriceOverride }),
+            NewValuesJson = System.Text.Json.JsonSerializer.Serialize(new { SaleUnitPrice = price, batch.SalePriceOverride,
+                Unit = before.SaleUnitName, Factor = before.SaleUnitFactor, Reason = dto.Reason.Trim() })
+        };
+        _context.AuditLogs.Add(audit);
+        try { await _context.SaveChangesAsync(cancellationToken); }
+        catch (DbUpdateConcurrencyException)
+        {
+            _context.Batches.Entry(batch).State = EntityState.Detached;
+            _context.AuditLogs.Entry(audit).State = EntityState.Detached;
+            return Result<BatchDto>.Failure("تغيّرت بيانات الدفعة. حدّث القائمة وراجع السعر قبل الحفظ.");
+        }
+        catch
+        {
+            // Failed writes must not leak into a later SaveChanges on this long-lived scope.
+            _context.Batches.Entry(batch).State = EntityState.Detached;
+            _context.AuditLogs.Entry(audit).State = EntityState.Detached;
+            throw;
+        }
+        return Result<BatchDto>.Success(MapBatchToDto(batch, _dateTime.UtcNow));
     }
 
     public async Task<Result<BatchDto>> ReceiveBatchAsync(ReceiveBatchDto dto, int? performedByUserId, CancellationToken cancellationToken = default)
@@ -496,11 +559,25 @@ public class InventoryService : IInventoryService
         };
 
         _context.Batches.Add(batch);
-        await _context.SaveChangesAsync(cancellationToken);
-
-        await RecordStockTransactionAsync(batch, StockTransactionType.PurchaseReceipt, stockQuantity,
-            referenceType: "ManualReceipt", referenceId: null, notes: "استلام دفعة جديدة (إدخال يدوي)",
-            performedByUserId, cancellationToken);
+        try
+        {
+            // One SaveChanges writes both the new lot and its stock ledger entry
+            // atomically, including when this is called without a purchase transaction.
+            await RecordStockTransactionAsync(batch, StockTransactionType.PurchaseReceipt, stockQuantity,
+                referenceType: "ManualReceipt", referenceId: null, notes: "استلام دفعة جديدة (إدخال يدوي)",
+                performedByUserId, cancellationToken);
+        }
+        catch
+        {
+            if (_context is DbContext db)
+            {
+                foreach (var entry in db.ChangeTracker.Entries<StockTransaction>()
+                    .Where(e => e.State == EntityState.Added && ReferenceEquals(e.Entity.Batch, batch)).ToList())
+                    entry.State = EntityState.Detached;
+                db.Entry(batch).State = EntityState.Detached;
+            }
+            throw;
+        }
 
         return Result<BatchDto>.Success(MapBatchToDto(await ReloadBatchAsync(batch.Id, cancellationToken), _dateTime.UtcNow));
     }
@@ -689,6 +766,7 @@ public class InventoryService : IInventoryService
         {
             ItemId = batch.ItemId,
             BatchId = batch.Id,
+            Batch = batch,
             WarehouseId = batch.WarehouseId,
             Type = type,
             QuantityChange = quantityChange,
@@ -725,11 +803,26 @@ public class InventoryService : IInventoryService
         PurchaseType = b.PurchaseType,
         PurchasePrice = b.PurchasePrice,
         SalePriceOverride = b.SalePriceOverride,
+        SaleUnitFactor = b.ReceivedUnitFactor ?? b.Item.UnitsPerPackage,
+        SaleUnitName = b.ItemSaleUnitId.HasValue ? b.Item.SaleUnits.FirstOrDefault(u => u.Id == b.ItemSaleUnitId)?.Name ?? b.Item.PackageUnitName
+            : b.Item.UnitsPerPackage > 1 ? b.Item.PackageUnitName : b.Item.UnitOfMeasure.Name,
+        SaleUnitPrice = BatchSaleUnitPrice(b),
+        RowVersion = b.RowVersion?.ToArray(),
         ReceivedAtUtc = b.ReceivedAtUtc,
         SupplierReference = b.SupplierReference,
         DaysUntilExpiry = b.DaysUntilExpiry(now),
         IsExpired = b.IsExpired(now)
     };
+
+    private static decimal BatchSaleUnitPrice(Batch b)
+    {
+        var factor = b.ReceivedUnitFactor ?? b.Item.UnitsPerPackage;
+        if (b.PackageSalePrice.HasValue) return b.PackageSalePrice.Value;
+        if (b.HasConfiguredSalePrice || b.SalePriceOverride > 0)
+            return Math.Round((b.SalePriceOverride ?? 0) * factor, 2, MidpointRounding.AwayFromZero);
+        return b.Item.DefaultSalePrice > 0 ? Math.Round(b.Item.DefaultSalePrice / b.Item.UnitsPerPackage * factor, 2, MidpointRounding.AwayFromZero)
+            : SalePricePolicy.FromPurchasePrice(b.PurchasePrice * factor, b.PurchaseType);
+    }
 
     private static string TranslateTransactionType(StockTransactionType type) => type switch
     {

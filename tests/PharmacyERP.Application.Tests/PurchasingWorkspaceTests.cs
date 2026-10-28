@@ -14,7 +14,7 @@ using Xunit;
 
 namespace PharmacyERP.Application.Tests;
 
-public class PurchasingWorkspaceTests
+public partial class PurchasingWorkspaceTests
 {
     private readonly FakeDateTime _clock = new();
     private PurchasingService Service(ApplicationDbContext db) => new(db, new InventoryService(db, _clock), new AccountingService(db, _clock), _clock);

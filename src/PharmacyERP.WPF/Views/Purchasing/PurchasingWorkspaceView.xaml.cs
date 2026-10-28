@@ -56,24 +56,25 @@ public partial class PurchasingWorkspaceView : UserControl, IDisposable
 
     private async void ImportPhotoClicked(object sender, RoutedEventArgs e)
     {
-        if (DataContext is not PurchasingWorkspaceViewModel vm || vm.IsBusy || !vm.IsGoodsStep) return;
+        if (DataContext is not PurchasingWorkspaceViewModel vm || !vm.CanInteract || !vm.IsGoodsStep) return;
         if (vm.ReceiptId.HasValue || vm.Receipt.Lines.Count > 0) { _dialogs.ShowError("ابدأ استلاماً جديداً فارغاً لاستيراد الصورة؛ احفظ السند الحالي أولاً."); return; }
         if (vm.SelectedSupplierId <= 0 || vm.Receipt.BranchId <= 0 || vm.Receipt.WarehouseId <= 0) { _dialogs.ShowError("اختر المورد والفرع والمخزن أولاً."); return; }
-        try
+        int? importedReceiptId = null;
+        await vm.RunEditorDialogAsync(async () =>
         {
             var dialog = _dialogs.CreateDialog<InvoiceImageImportDialog>();
             var editor = (InvoiceImageImportViewModel)dialog.DataContext;
             await editor.InitializeAsync(vm.SelectedSupplierId, vm.Receipt.BranchId, vm.Receipt.WarehouseId);
-            if (_dialogs.ShowDialog(dialog) == true && editor.SavedReceiptId.HasValue) await vm.ResumeReceiptAsync(editor.SavedReceiptId.Value);
-        }
-        catch (Exception) { _dialogs.ShowError("تعذر فتح استيراد الفاتورة. راجع الاتصال وإعدادات النظام."); }
+            if (_dialogs.ShowDialog(dialog) == true) importedReceiptId = editor.SavedReceiptId;
+        });
+        if (importedReceiptId.HasValue) await vm.ResumeReceiptAsync(importedReceiptId.Value);
     }
 
     private async void AddItemClicked(object sender, RoutedEventArgs e)
     {
-        if (DataContext is not PurchasingWorkspaceViewModel vm || !vm.CanManageItems || vm.IsBusy || !vm.IsGoodsStep) return;
+        if (DataContext is not PurchasingWorkspaceViewModel vm || !vm.CanManageItems || !vm.CanInteract || !vm.IsGoodsStep) return;
         if (!CommitAndValidate(this)) { vm.ReportInputError(); return; }
-        try
+        await vm.RunEditorDialogAsync(async () =>
         {
             var dialog = _dialogs.CreateDialog<ItemEditDialog>();
             var itemEditor = (ItemEditViewModel)dialog.DataContext;
@@ -82,8 +83,7 @@ public partial class PurchasingWorkspaceView : UserControl, IDisposable
             await vm.Receipt.ReloadItemsAsync();
             vm.Receipt.AddLineCommand.Execute(null);
             vm.Receipt.ApplyItemSelection(vm.Receipt.Lines.Last(), itemEditor.SavedItemId.Value);
-        }
-        catch (Exception ex) { _dialogs.ShowError("تعذر إضافة بطاقة العلاج. " + ex.Message); }
+        });
     }
 
     private void SavingMouseDown(object sender, MouseButtonEventArgs e)

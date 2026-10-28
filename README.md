@@ -1,5 +1,7 @@
 # Pharmacy ERP — Phases 0–10 (خارطة الطريق مكتملة)
 
+راجع [دليل العمل السريع للمخزون والأسعار والبيع](docs/Fast-workflows-ar.md) لمسارات الإدخال المتتابع، والاستلام بالباركود، وتحديث أسعار الدفعات، واختصارات لوحة المفاتيح ونطاق الاختبارات.
+
 ## ما تم تنفيذه حتى الآن
 
 ### Phase 0 — البنية الأساسية
@@ -130,13 +132,8 @@
 - **كلمة المرور:** يُحدد عبر PHARMACYERP_INITIAL_ADMIN_PASSWORD
 
 ## قبل أول تشغيل
-1. تأكد من نسخة SQL Server المحلية أو السيرفر، وعدّل `ConnectionStrings:DefaultConnection` في
-   `src/PharmacyERP.WPF/appsettings.json` حسب بيئتك.
-2. افتح Package Manager Console، اختر `PharmacyERP.Infrastructure` كـ Default Project، ثم نفّذ:
-   ```
-   Add-Migration InitialCreate -StartupProject PharmacyERP.WPF -Context ApplicationDbContext
-   ```
-   (التطبيق سينفّذ `Database.MigrateAsync()` تلقائياً عند أول تشغيل، فلا حاجة لـ Update-Database يدوياً.)
+1. تأكد من SQL Server وقاعدة البيانات الحالية واضبط `ConnectionStrings__DefaultConnection` محلياً. لا ترفع بيانات الاتصال إلى Git.
+2. استخدم migrations المرفقة؛ **لا تنشئ InitialCreate أخرى ولا قاعدة جديدة عند تحديث نسخة قائمة**. ينفذ التطبيق `Database.MigrateAsync()` تلقائياً، ويحتاج اتصالاً يملك صلاحية تطبيق تغييرات المخطط المرفقة.
 3. تأكد من توفر ترخيص DevExpress WPF صالح على جهاز التطوير (الحزم مرجعّة بصيغة `24.1.*` في
    `PharmacyERP.WPF.csproj` وتحتاج NuGet feed خاص بـ DevExpress). ملاحظة: الشاشات الحالية تستخدم
    عناصر WPF القياسية (DataGrid وغيرها) للحفاظ على الاستقرار؛ سيتم استبدالها بعناصر DevExpress

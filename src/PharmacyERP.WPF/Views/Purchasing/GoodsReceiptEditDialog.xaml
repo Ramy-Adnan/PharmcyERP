@@ -8,7 +8,7 @@
 
     <DockPanel Margin="24">
         <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,12,0,0">
-            <Button Content="حفظ كمسودة" Command="{Binding SaveCommand}" Padding="18,8" Background="#1F6F50"
+            <Button Content="حفظ كمسودة · Ctrl+S" Click="SaveButton_Click" Padding="18,8" Background="#1F6F50"
                     Foreground="White" BorderThickness="0" Margin="0,0,8,0"/>
             <Button Content="إلغاء" Padding="18,8" Click="CancelButton_Click"/>
         </StackPanel>

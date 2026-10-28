@@ -37,6 +37,7 @@ public interface IInventoryService
     // Batches / Stock movement
     Task<List<BatchDto>> GetBatchesForItemAsync(int itemId, int? warehouseId = null, CancellationToken cancellationToken = default);
     Task<Result<BatchDto>> ReceiveBatchAsync(ReceiveBatchDto dto, int? performedByUserId, CancellationToken cancellationToken = default);
+    Task<Result<BatchDto>> UpdateBatchSalePriceAsync(UpdateBatchSalePriceDto dto, CancellationToken cancellationToken = default);
     Task<Result> AdjustStockAsync(StockAdjustmentDto dto, int? performedByUserId, CancellationToken cancellationToken = default);
     Task<List<StockTransactionDto>> GetTransactionHistoryAsync(int batchId, CancellationToken cancellationToken = default);
 

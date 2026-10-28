@@ -20,12 +20,26 @@ public class BatchDto
     public int QuantityOnHand { get; set; }
     public decimal PurchasePrice { get; set; }
     public decimal? SalePriceOverride { get; set; }
+    public int SaleUnitFactor { get; set; } = 1;
+    public string SaleUnitName { get; set; } = string.Empty;
+    public decimal SaleUnitPrice { get; set; }
+    public byte[]? RowVersion { get; set; }
 
     public DateTime ReceivedAtUtc { get; set; }
     public string? SupplierReference { get; set; }
 
     public int DaysUntilExpiry { get; set; }
     public bool IsExpired { get; set; }
+}
+
+public class UpdateBatchSalePriceDto
+{
+    public int BatchId { get; set; }
+    /// <summary>Price per receiving unit displayed by the batch editor, not per base stock unit.</summary>
+    public decimal SaleUnitPrice { get; set; }
+    public decimal ExpectedSaleUnitPrice { get; set; }
+    public byte[]? ExpectedRowVersion { get; set; }
+    public string Reason { get; set; } = string.Empty;
 }
 
 public class ReceiveBatchDto

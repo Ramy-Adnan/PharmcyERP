@@ -35,18 +35,18 @@ public class PurchasingWorkspaceViewModel : ViewModelBase
         _purchasing = purchasing; _inventory = inventory; _branches = branches; _user = user;
         CreateEditors();
         NextCommand = new AsyncRelayCommand(ContinueAsync, () => CanContinue);
-        SaveDraftCommand = new AsyncRelayCommand(SaveDraftAsync, () => !IsBusy && IsGoodsStep && CanReceiveGoods && !_receiptPosted);
-        BackCommand = new RelayCommand(GoBack, () => !IsBusy && IsGoodsStep && !_receiptPosted);
-        NewPurchaseCommand = new AsyncRelayCommand(StartNewAsync, () => !IsBusy && (IsSupplierStep || IsPaymentStep));
-        RefreshCommand = new AsyncRelayCommand(RefreshAsync, () => !IsBusy);
-        SaveSupplierCommand = new AsyncRelayCommand(SaveSupplierAsync, () => !IsBusy && CanManageSuppliers && CanChangeSupplier);
+        SaveDraftCommand = new AsyncRelayCommand(SaveDraftAsync, () => CanInteract && IsGoodsStep && CanReceiveGoods && !_receiptPosted);
+        BackCommand = new RelayCommand(GoBack, () => CanInteract && IsGoodsStep && !_receiptPosted);
+        NewPurchaseCommand = new AsyncRelayCommand(StartNewAsync, () => CanInteract && (IsSupplierStep || IsPaymentStep));
+        RefreshCommand = new AsyncRelayCommand(RefreshAsync, () => CanInteract);
+        SaveSupplierCommand = new AsyncRelayCommand(SaveSupplierAsync, () => CanInteract && CanManageSuppliers && CanChangeSupplier);
         ResumeReceiptCommand = new AsyncRelayCommand(() => ResumeReceiptAsync(SelectedReceiptToResume!.Id),
-            () => !IsBusy && SelectedReceiptToResume is not null && CanReceiveGoods);
+            () => CanInteract && SelectedReceiptToResume is not null && CanReceiveGoods);
         ResumeInvoiceCommand = new AsyncRelayCommand(() => ResumeInvoiceAsync(SelectedInvoiceToResume!.Id),
-            () => !IsBusy && SelectedInvoiceToResume is not null && CanManageInvoices);
-        PayCommand = new AsyncRelayCommand(PayAsync, () => !IsBusy && IsPaymentStep && CanManageInvoices && Invoice?.AmountDue > 0);
+            () => CanInteract && SelectedInvoiceToResume is not null && CanManageInvoices);
+        PayCommand = new AsyncRelayCommand(PayAsync, () => CanInteract && IsPaymentStep && CanManageInvoices && Invoice?.AmountDue > 0);
         PayInFullCommand = new RelayCommand(() => PaymentAmount = Invoice?.AmountDue ?? 0,
-            () => !IsBusy && IsPaymentStep && Invoice?.AmountDue > 0);
+            () => CanInteract && IsPaymentStep && Invoice?.AmountDue > 0);
     }
 
     public bool CanManageSuppliers => _user.HasPermission("Purchasing.ManageSuppliers");
@@ -57,7 +57,21 @@ public class PurchasingWorkspaceViewModel : ViewModelBase
     public ObservableCollection<SupplierDto> Suppliers { get; } = new();
     public ObservableCollection<GoodsReceiptNoteDto> ReceiptsToResume { get; } = new();
     public ObservableCollection<PurchaseInvoiceDto> InvoicesToResume { get; } = new();
-    public GoodsReceiptEditViewModel Receipt { get => _receipt; private set => SetProperty(ref _receipt, value); }
+    public GoodsReceiptEditViewModel Receipt
+    {
+        get => _receipt;
+        private set
+        {
+            if (ReferenceEquals(_receipt, value)) return;
+            if (_receipt is not null) _receipt.PropertyChanged -= ReceiptChanged;
+            _receipt = value ?? throw new ArgumentNullException(nameof(value));
+            OnPropertyChanged();
+            _receipt.PropertyChanged += ReceiptChanged;
+            NotifyState();
+        }
+    }
+    private void ReceiptChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    { if (e.PropertyName == nameof(GoodsReceiptEditViewModel.IsBusy)) NotifyState(); }
     public PurchaseInvoiceEditViewModel InvoiceEditor { get => _invoiceEditor; private set => SetProperty(ref _invoiceEditor, value); }
     public SupplierEditViewModel SupplierEditor { get => _supplierEditor; private set => SetProperty(ref _supplierEditor, value); }
     public int? ReceiptId => Receipt.SavedReceiptId;
@@ -90,12 +104,12 @@ public class PurchasingWorkspaceViewModel : ViewModelBase
     public bool IsInvoiceStep => Step == PurchaseStep.Invoice;
     public bool IsPaymentStep => Step == PurchaseStep.Payment;
     public bool IsBusy { get => _isBusy; private set { if (SetProperty(ref _isBusy, value)) NotifyState(); } }
-    public bool CanInteract => !IsBusy;
+    public bool CanInteract => !IsBusy && Receipt?.IsBusy != true;
     public string Message { get => _message; private set => SetProperty(ref _message, value); }
     public string ErrorMessage { get => _error; private set => SetProperty(ref _error, value); }
     public decimal PaymentAmount { get => _paymentAmount; set => SetProperty(ref _paymentAmount, value); }
     public string ReceiptLabel { get; private set; } = "لم يُحفظ الاستلام بعد";
-    public bool CanContinue => !IsBusy && (Step switch
+    public bool CanContinue => CanInteract && (Step switch
     {
         PurchaseStep.Supplier => CanReceiveGoods && SelectedSupplier?.IsActive == true,
         PurchaseStep.Goods => CanReceiveGoods,
@@ -143,6 +157,7 @@ public class PurchasingWorkspaceViewModel : ViewModelBase
         await RunAsync(async () => { await Receipt.LoadForCreateAsync(_user.CurrentBranchId); await LoadListsAsync(); _initialized = true; });
     }
     public Task RefreshAsync() => RunAsync(LoadListsAsync);
+    public Task RunEditorDialogAsync(Func<Task> action) => RunAsync(action);
     public Task StartNewAsync() => RunAsync(StartNewCoreAsync);
     private async Task StartNewCoreAsync()
     {
@@ -268,7 +283,7 @@ public class PurchasingWorkspaceViewModel : ViewModelBase
     private void GoBack() { if (!IsBusy && IsGoodsStep && !_receiptPosted) Step = PurchaseStep.Supplier; }
     private async Task RunAsync(Func<Task> action)
     {
-        if (IsBusy) return;
+        if (!CanInteract) return;
         IsBusy = true; ErrorMessage = ""; Message = "";
         try { await action(); }
         catch (Exception ex) { ErrorMessage = "تعذر إكمال الخطوة. تحقق من الاتصال ثم استكمل المستند المحفوظ. " + ex.Message; }
