@@ -11,6 +11,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="ZXing.Net" Version="0.16.11" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.0" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="8.0.0" />
     <PackageReference Include="Serilog.Extensions.Hosting" Version="8.0.0" />
@@ -42,6 +43,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Update="Resources/ThirdParty/*.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <None Remove="Resources\Fonts\*.ttf" />
     <Resource Include="Resources\Fonts\*.ttf" />
   </ItemGroup>

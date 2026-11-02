@@ -81,6 +81,9 @@ public partial class App : System.Windows.Application
                     services.AddSingleton<IReportExportService, ReportExportService>();
                     services.AddSingleton<IReceiptSettingsStore, ReceiptSettingsStore>();
                     services.AddSingleton<IReceiptPrinter, ThermalReceiptPrinter>();
+                    services.AddSingleton<ProductLabelPrinter>();
+                    services.AddTransient<PrintProductLabelsViewModel>();
+                    services.AddTransient<PrintProductLabelsDialog>();
 
                     services.AddTransient<LoginViewModel>();
                     services.AddTransient<LoginView>();

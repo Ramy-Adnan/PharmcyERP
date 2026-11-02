@@ -1,0 +1,6 @@
+ZXing.Net 0.16.11
+Author: Michael Jahn and the ZXing contributors.
+Source: https://github.com/micjahn/ZXing.Net/
+License: Apache License 2.0 (see ZXing.Net.LICENSE.txt).
+
+PharmacyERP uses the unmodified ZXing.Net NuGet package to generate and verify product barcodes.

@@ -451,17 +451,28 @@ public class POSViewModel : ViewModelBase
         _cartPrices[item.ItemId] = item;
         foreach (var existing in CartLines.Where(l => l.ItemId == item.ItemId)) existing.AvailableBaseQuantity = item.AvailableQuantity;
         NotifyTotals();
-        var scanBase = !string.IsNullOrWhiteSpace(scannedBarcode) && string.Equals(item.BaseUnitBarcode, scannedBarcode, StringComparison.OrdinalIgnoreCase);
-        var scannedUnit = item.SaleUnits.FirstOrDefault(u => !string.IsNullOrWhiteSpace(scannedBarcode) && string.Equals(u.Barcode, scannedBarcode, StringComparison.OrdinalIgnoreCase));
-        var line = preferredPackage.HasValue ? CartLines.FirstOrDefault(l => l.ItemId == item.ItemId && l.SellAsPackage == preferredPackage.Value && l.ItemSaleUnitId is null)
+        var scanMainUnit = !string.IsNullOrWhiteSpace(scannedBarcode)
+            && string.Equals(item.Barcode, scannedBarcode, StringComparison.OrdinalIgnoreCase);
+        var scanPackage = scanMainUnit && item.UnitsPerPackage > 1;
+        // A printed package label identifies that unit even if the cashier last
+        // selected a strip. Only catalogue clicks may choose the available unit.
+        var requestedPackage = preferredPackage ?? (scanMainUnit ? item.UnitsPerPackage > 1 : (bool?)null);
+        var scanBase = !scanPackage && !string.IsNullOrWhiteSpace(scannedBarcode) && string.Equals(item.BaseUnitBarcode, scannedBarcode, StringComparison.OrdinalIgnoreCase);
+        var scannedUnit = scanMainUnit ? null : item.SaleUnits.FirstOrDefault(u => !string.IsNullOrWhiteSpace(scannedBarcode) && string.Equals(u.Barcode, scannedBarcode, StringComparison.OrdinalIgnoreCase));
+        var line = requestedPackage.HasValue ? CartLines.FirstOrDefault(l => l.ItemId == item.ItemId && l.SellAsPackage == requestedPackage.Value && l.ItemSaleUnitId is null)
             : scannedUnit is not null ? CartLines.FirstOrDefault(l => l.ItemId == item.ItemId && l.ItemSaleUnitId == scannedUnit.Id) : scanBase
             ? CartLines.FirstOrDefault(l => l.ItemId == item.ItemId && !l.SellAsPackage && l.ItemSaleUnitId is null)
             : SelectedCartLine is { } selected && CartLines.Contains(selected) && selected.ItemId == item.ItemId
                 ? selected : CartLines.LastOrDefault(l => l.ItemId == item.ItemId);
-        var factor = preferredPackage.HasValue ? preferredPackage.Value ? item.UnitsPerPackage : 1
+        var factor = requestedPackage.HasValue ? requestedPackage.Value ? item.UnitsPerPackage : 1
             : scannedUnit?.BaseUnitCount ?? (scanBase ? 1 : line?.UnitsPerSale ?? (item.AvailableQuantity >= item.UnitsPerPackage ? item.UnitsPerPackage : 1));
         if (ReservedStock(item.ItemId) + factor > item.AvailableQuantity)
-        { ErrorMessage = $"المتوفر من {item.DisplayName}: {item.StockDisplay}. اختر الوحدة الصغيرة عند عدم توفر عبوة كاملة."; return; }
+        {
+            ErrorMessage = scanPackage
+                ? $"باركود {item.DisplayName} خاص بعبوة كاملة ({item.UnitsPerPackage} {item.UnitOfMeasureName}). المتبقي خارج السلة لا يكفي لعبوة؛ امسح باركود الوحدة الصغيرة أو اخترها من الكارت أو السلة."
+                : $"المتوفر من {item.DisplayName}: {item.StockDisplay}. اختر الوحدة الصغيرة عند عدم توفر عبوة كاملة.";
+            return;
+        }
         foreach (var existing in CartLines.Where(l => l.ItemId == item.ItemId)) existing.AvailableBaseQuantity = item.AvailableQuantity;
         if (line is not null)
         {

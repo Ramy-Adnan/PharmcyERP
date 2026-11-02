@@ -1,0 +1,58 @@
+<Window x:Class="PharmacyERP.WPF.Views.Inventory.PrintProductLabelsDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="طباعة ملصقات الباركود" Width="880" Height="650" MinWidth="720" MinHeight="560"
+        WindowStartupLocation="CenterOwner" FlowDirection="RightToLeft" Background="#F4F6FB"
+        FontFamily="/PharmacyERP.WPF;component/Resources/Fonts/#Cairo">
+    <Grid Margin="20">
+        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+        <StackPanel Margin="0,0,0,16">
+            <TextBlock Text="ملصق المنتج" FontSize="22" FontWeight="Bold" Foreground="#172744"/>
+            <TextBlock Text="{Binding ProductName}" TextWrapping="Wrap" Foreground="#62738F"/>
+        </StackPanel>
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="20"/><ColumnDefinition Width="1.1*"/></Grid.ColumnDefinitions>
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+                    <StackPanel.Style><Style TargetType="StackPanel"><Style.Triggers><DataTrigger Binding="{Binding IsBusy}" Value="True"><Setter Property="IsEnabled" Value="False"/></DataTrigger></Style.Triggers></Style></StackPanel.Style>
+                    <TextBlock Text="المخزن" Margin="0,0,0,4"/>
+                    <ComboBox ItemsSource="{Binding Warehouses}" DisplayMemberPath="Name" SelectedItem="{Binding SelectedWarehouse}" MinHeight="38" Margin="0,0,0,12"/>
+                    <TextBlock Text="الدفعة التي سيطبع سعرها" Margin="0,0,0,4"/>
+                    <ComboBox ItemsSource="{Binding Batches}" SelectedItem="{Binding SelectedBatch}" MinHeight="38" MaxDropDownHeight="220" Margin="0,0,0,12">
+                        <ComboBox.ItemTemplate><DataTemplate><TextBlock><Run Text="{Binding BatchNumber}"/><Run Text=" — "/><Run Text="{Binding ExpiryDate, StringFormat=yyyy-MM-dd}"/></TextBlock></DataTemplate></ComboBox.ItemTemplate>
+                    </ComboBox>
+                    <TextBlock Text="وحدة البيع على الملصق" Margin="0,0,0,4"/>
+                    <ComboBox ItemsSource="{Binding Units}" DisplayMemberPath="Name" SelectedItem="{Binding SelectedUnit}" MinHeight="38" Margin="0,0,0,12"/>
+                    <TextBlock Text="{Binding Barcode, StringFormat='الباركود: {0}'}" TextWrapping="Wrap" Foreground="#62738F"/>
+                    <TextBlock Text="{Binding SalePrice, StringFormat='السعر: {0:N2} د.ع'}" FontWeight="Bold" Foreground="#2463EB" Margin="0,4,0,12"/>
+                    <TextBlock Text="{Binding PriceNotice}" TextWrapping="Wrap" Foreground="#8A5A13" FontSize="12" Margin="0,0,0,12"/>
+                    <TextBlock Text="عدد الملصقات (1–500)"/>
+                    <TextBox Text="{Binding Copies, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}" Padding="6" Margin="0,4,0,12"/>
+                    <TextBlock Text="مقاس الملصق بالملليمتر"/>
+                    <Grid Margin="0,4,0,12"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="10"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                        <StackPanel><TextBlock Text="العرض"/><TextBox Text="{Binding WidthMm, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}" Padding="6"/></StackPanel>
+                        <StackPanel Grid.Column="2"><TextBlock Text="الارتفاع"/><TextBox Text="{Binding HeightMm, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}" Padding="6"/></StackPanel>
+                    </Grid>
+                    <TextBlock Text="اختر الطابعة عند الضغط على طباعة، واضبط مقاس ورقها ليتطابق مع الملصق. تغيير المقاس لا يغير سعر الصنف أو بياناته." TextWrapping="Wrap" FontSize="12" Foreground="#62738F"/>
+                </StackPanel>
+            </ScrollViewer>
+            <Border Grid.Column="2" Background="#E7ECF4" CornerRadius="12" Padding="18">
+                <Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                    <TextBlock Text="معاينة الملصق" FontWeight="Bold" Foreground="#172744"/>
+                    <Viewbox Grid.Row="1" Stretch="Uniform" Margin="0,20"><Border x:Name="PreviewHost" Background="White"/></Viewbox>
+                    <TextBlock x:Name="PreviewError" Grid.Row="2" TextWrapping="Wrap" Foreground="#B91C1C" FontSize="12"/>
+                </Grid>
+            </Border>
+        </Grid>
+        <StackPanel Grid.Row="2" Margin="0,12,0,0">
+            <TextBlock Text="{Binding ValidationMessage}" TextWrapping="Wrap" Foreground="#B45309"/>
+            <TextBlock Text="{Binding ErrorMessage}" TextWrapping="Wrap" Foreground="#B91C1C"/>
+            <TextBlock x:Name="StatusText" TextWrapping="Wrap" Foreground="#166534"/>
+        </StackPanel>
+        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,14,0,0">
+            <Button Content="تحديث السعر" Click="RefreshClicked" Padding="14,8" Margin="0,0,8,0"/>
+            <Button x:Name="PrintButton" Content="اختيار الطابعة والطباعة" Click="PrintClicked" IsEnabled="{Binding CanPrint}" Background="#2463EB" Foreground="White" BorderThickness="0" Padding="20,8" Margin="0,0,8,0"/>
+            <Button Content="إغلاق" Click="CloseClicked" Padding="14,8"/>
+        </StackPanel>
+    </Grid>
+</Window>

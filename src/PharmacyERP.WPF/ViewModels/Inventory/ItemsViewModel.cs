@@ -25,12 +25,14 @@ public class ItemsViewModel : ViewModelBase
         EditItemCommand = new AsyncRelayCommand(() => RunAsync(EditItemCoreAsync), () => !IsBusy && CanManageItems && SelectedItem is not null);
         ToggleActiveCommand = new AsyncRelayCommand(() => RunAsync(ToggleActiveCoreAsync), () => !IsBusy && CanManageItems && SelectedItem is not null);
         ManageBatchesCommand = new AsyncRelayCommand(() => RunAsync(ManageBatchesCoreAsync), () => !IsBusy && SelectedItem is not null);
+        PrintLabelsCommand = new AsyncRelayCommand(() => RunAsync(PrintLabelsCoreAsync), () => !IsBusy && CanPrintLabels && SelectedItem is { IsActive: true });
         ReceiveStockCommand = new AsyncRelayCommand(() => RunAsync(() => ReceiveStockCoreAsync(SelectedItem)), () => !IsBusy && CanReceiveStock && SelectedItem is { IsActive: true });
     }
 
     public bool CanManageItems => _currentUserService.HasPermission("Inventory.ManageItems");
     public bool CanReceiveStock => _currentUserService.HasPermission("Inventory.ReceiveStock");
     public bool CanAdjustStock => _currentUserService.HasPermission("Inventory.AdjustStock");
+    public bool CanPrintLabels => CanManageItems || _currentUserService.HasPermission("Inventory.ViewStock");
     public ObservableCollection<ItemDto> Items { get; } = new();
     public ItemDto? SelectedItem
     {
@@ -46,6 +48,7 @@ public class ItemsViewModel : ViewModelBase
     public AsyncRelayCommand EditItemCommand { get; }
     public AsyncRelayCommand ToggleActiveCommand { get; }
     public AsyncRelayCommand ManageBatchesCommand { get; }
+    public AsyncRelayCommand PrintLabelsCommand { get; }
     public AsyncRelayCommand ReceiveStockCommand { get; }
 
     public Task InitializeAsync() => LoadItemsAsync();
@@ -125,5 +128,13 @@ public class ItemsViewModel : ViewModelBase
         var vm = (ItemBatchesViewModel)window.DataContext;
         await vm.InitializeAsync(SelectedItem.Id, SelectedItem.Name);
         _dialogService.ShowDialog(window); await ReloadItemsCoreAsync();
+    }
+
+    private async Task PrintLabelsCoreAsync()
+    {
+        if (SelectedItem is not { } item || !CanPrintLabels) return;
+        var window = _dialogService.CreateDialog<PrintProductLabelsDialog>();
+        await ((PrintProductLabelsViewModel)window.DataContext).InitializeAsync(item.Id, item.Code, item.DisplayName);
+        _dialogService.ShowDialog(window);
     }
 }

@@ -50,6 +50,7 @@
                     <Button Content="تفعيل / تعطيل" Padding="12,6" Margin="0,0,8,0" Command="{Binding ToggleActiveCommand}"/>
                     <Button Content="استلام دفعة مباشرة" Padding="12,6" Margin="0,0,8,0" Background="#1F6F50" Foreground="White" Command="{Binding ReceiveStockCommand}" Visibility="{Binding CanReceiveStock, Converter={StaticResource BoolToVisibilityConverter}}"/>
                     <Button Content="إدارة الدفعات والمخزون" Padding="12,6" Command="{Binding ManageBatchesCommand}"/>
+                    <Button Content="طباعة ملصقات الباركود" Padding="12,6" Margin="8,0,0,0" Command="{Binding PrintLabelsCommand}" Visibility="{Binding CanPrintLabels, Converter={StaticResource BoolToVisibilityConverter}}"/>
                 </StackPanel>
 
                 <DataGrid ItemsSource="{Binding Items}" SelectedItem="{Binding SelectedItem}"

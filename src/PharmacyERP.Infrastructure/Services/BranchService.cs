@@ -139,7 +139,7 @@ public class BranchService : IBranchService
 
     public async Task<List<WarehouseDto>> GetWarehousesAsync(int branchId, CancellationToken cancellationToken = default)
     {
-        var warehouses = await _context.Warehouses
+        var warehouses = await _context.Warehouses.AsNoTracking()
             .Include(w => w.Branch)
             .Where(w => w.BranchId == branchId)
             .OrderByDescending(w => w.IsDefault).ThenBy(w => w.Name)

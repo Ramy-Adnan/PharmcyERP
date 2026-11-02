@@ -29,6 +29,7 @@ public class ItemBatchesViewModel : ViewModelBase
         _dialogService = dialogService;
         _currentUserService = currentUserService;
         RefreshCommand = new AsyncRelayCommand(LoadBatchesAsync, () => !IsBusy);
+        PrintLabelsCommand = new AsyncRelayCommand(PrintLabelsAsync, () => !_closing && !IsBusy && CanPrintLabels && SelectedBatch is { QuantityOnHand: > 0, IsExpired: false });
         ReceiveStockCommand = new AsyncRelayCommand(ReceiveStockAsync, () => !IsBusy && CanReceiveStock);
         AdjustStockCommand = new AsyncRelayCommand(AdjustStockAsync, () => !IsBusy && CanAdjustStock && SelectedBatch is not null);
         SavePriceCommand = new AsyncRelayCommand(SavePriceAsync, () => !IsBusy && CanEditPrice && SelectedBatch is { QuantityOnHand: > 0, IsExpired: false }
@@ -40,6 +41,7 @@ public class ItemBatchesViewModel : ViewModelBase
     public bool CanReceiveStock => _currentUserService.HasPermission("Inventory.ReceiveStock");
     public bool CanAdjustStock => _currentUserService.HasPermission("Inventory.AdjustStock");
     public bool CanEditPrice => _currentUserService.HasPermission("Inventory.ManageItems");
+    public bool CanPrintLabels => CanEditPrice || _currentUserService.HasPermission("Inventory.ViewStock");
     public string ItemName { get => _itemName; private set => SetProperty(ref _itemName, value); }
     public ObservableCollection<BatchDto> Batches { get; } = new();
     public ObservableCollection<StockTransactionDto> TransactionHistory { get; } = new();
@@ -80,6 +82,7 @@ public class ItemBatchesViewModel : ViewModelBase
         private set { SetProperty(ref _isBusy, value); System.Windows.Input.CommandManager.InvalidateRequerySuggested(); }
     }
     public AsyncRelayCommand RefreshCommand { get; }
+    public AsyncRelayCommand PrintLabelsCommand { get; }
     public AsyncRelayCommand ReceiveStockCommand { get; }
     public AsyncRelayCommand AdjustStockCommand { get; }
     public AsyncRelayCommand SavePriceCommand { get; }
@@ -179,6 +182,23 @@ public class ItemBatchesViewModel : ViewModelBase
             if (_dialogService.ShowDialog(window) == true && vm.SavedSuccessfully) await LoadBatchesCoreAsync(batch.Id);
         }
         catch (Exception ex) { _dialogService.ShowError($"تعذر تعديل الرصيد: {ex.Message}"); }
+        finally { _operations.Release(); IsBusy = false; }
+    }
+
+    private async Task PrintLabelsAsync()
+    {
+        if (_closing || IsBusy || !CanPrintLabels || SelectedBatch is not { } batch) return;
+        IsBusy = true;
+        await _operations.WaitAsync();
+        try
+        {
+            var item = await _inventoryService.GetItemForEditAsync(_itemId);
+            if (item is null) { Status = "الصنف غير متاح."; return; }
+            var window = _dialogService.CreateDialog<PrintProductLabelsDialog>();
+            await ((PrintProductLabelsViewModel)window.DataContext).InitializeAsync(_itemId, item.Code, ItemName, batch.Id);
+            _dialogService.ShowDialog(window);
+        }
+        catch (Exception ex) { Status = "تعذر تجهيز الملصقات: " + ex.Message; }
         finally { _operations.Release(); IsBusy = false; }
     }
 

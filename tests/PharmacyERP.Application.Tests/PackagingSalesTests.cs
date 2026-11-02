@@ -153,10 +153,7 @@ public partial class PackagingSalesTests
         row.UnitsPerSale.Should().Be(1);
         await pos.SubmitSearchAsync("STRIP20", true);
         await pos.SubmitSearchAsync("1234567890", true);
-        // The box barcode follows the currently selected strip; explicitly select a box.
-        pos.CartLines.Single(l => l.ItemSaleUnitId.HasValue).SelectedSaleUnit = row.SaleUnits.Single(u => u.IsPackage);
-        pos.CartLines.Single(l => l.SellAsPackage).Quantity = 1;
-        await pos.SubmitSearchAsync("STRIP20", true);
+        // Each barcode keeps its own unit: one pill, one strip and one complete box.
         pos.TotalAmount.Should().Be(1512.50m);
         await pos.CheckoutAsync();
         pos.ErrorMessage.Should().BeEmpty();
@@ -217,13 +214,13 @@ public partial class PackagingSalesTests
     }
 
     [Fact]
-    public async Task Pos_SwitchToStripChangesPrice_RepeatedScannerEventsAddStrips_AndCheckoutPrintsSelectedUnit()
+    public async Task Pos_SwitchToStripChangesPrice_RepeatedBaseBarcodeEventsAddStrips_AndCheckoutPrintsSelectedUnit()
     {
         await using var db = TestDb.CreateContext(_clock); var f = await SeedAsync(db); await ReceiveAsync(db, f);
         var pos = await PosAsync(db, f); await pos.SubmitSearchAsync("1234567890", true);
         var row = pos.CartLines.Single(); row.UnitPrice.Should().Be(10000); row.AvailableQuantity.Should().Be(2);
         row.SelectedSaleUnit = row.SaleUnits.First(); row.UnitPrice.Should().Be(2000); row.AvailableQuantity.Should().Be(10);
-        await Task.WhenAll(pos.SubmitSearchAsync("1234567890", true), pos.SubmitSearchAsync("1234567890", true));
+        await Task.WhenAll(pos.SubmitSearchAsync("0987654321", true), pos.SubmitSearchAsync("0987654321", true));
         row.Quantity.Should().Be(3); pos.TotalAmount.Should().Be(6000);
         await pos.CheckoutAsync(); pos.ErrorMessage.Should().BeEmpty(); (await db.Batches.SingleAsync()).QuantityOnHand.Should().Be(7);
         var detail = (await Sales(db).GetSalesInvoiceDetailAsync((await db.SalesInvoices.SingleAsync()).Id))!;
@@ -248,7 +245,9 @@ public partial class PackagingSalesTests
         var pos = await PosAsync(db, f); await pos.SubmitSearchAsync("1234567890", true);
         pos.AddOtherUnitCommand.Execute(null); pos.CartLines.Should().HaveCount(2); pos.TotalAmount.Should().Be(12000);
         await pos.CheckoutAsync(); (await db.Batches.SingleAsync()).QuantityOnHand.Should().Be(4);
-        await pos.SubmitSearchAsync("1234567890", true); var line = pos.CartLines.Single();
+        await pos.SubmitSearchAsync("1234567890", true);
+        pos.CartLines.Should().BeEmpty(); pos.ErrorMessage.Should().Contain("عبوة كاملة");
+        await pos.AddProductAsync(pos.ProductCards.Single()); var line = pos.CartLines.Single();
         line.SellAsPackage.Should().BeFalse(); line.UnitPrice.Should().Be(2000);
         line.SelectedSaleUnit = line.SaleUnits.Last(); await pos.CheckoutAsync(); pos.ErrorMessage.Should().NotBeEmpty();
         (await db.Batches.SingleAsync()).QuantityOnHand.Should().Be(4);
@@ -441,14 +440,14 @@ public partial class PackagingSalesTests
     }
 
     [Fact]
-    public async Task Scanner_WithBoxAndStripRows_FollowsTheCashierSelectedRow()
+    public async Task Scanner_WithBoxAndStripRows_UsesTheScannedUnitsRegardlessOfSelectedRow()
     {
         await using var db = TestDb.CreateContext(_clock); var f = await SeedAsync(db); await ReceiveAsync(db, f, 3);
         var pos = await PosAsync(db, f); await pos.SubmitSearchAsync("1234567890", true); pos.AddOtherUnitCommand.Execute(null);
         var box = pos.CartLines.Single(l => l.SellAsPackage); var strip = pos.CartLines.Single(l => !l.SellAsPackage);
         pos.SelectedCartLine = box; await pos.SubmitSearchAsync("1234567890", true);
         box.Quantity.Should().Be(2); strip.Quantity.Should().Be(1);
-        pos.SelectedCartLine = strip; await pos.SubmitSearchAsync("1234567890", true);
+        pos.SelectedCartLine = box; await pos.SubmitSearchAsync("0987654321", true);
         box.Quantity.Should().Be(2); strip.Quantity.Should().Be(2); pos.TotalAmount.Should().Be(24000);
         await pos.CheckoutAsync(); pos.ErrorMessage.Should().BeEmpty(); (await db.Batches.SingleAsync()).QuantityOnHand.Should().Be(3);
     }
