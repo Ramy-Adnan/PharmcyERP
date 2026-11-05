@@ -39,8 +39,8 @@
             <Border Grid.Column="2" Background="#E7ECF4" CornerRadius="12" Padding="18">
                 <Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                     <TextBlock Text="معاينة الملصق" FontWeight="Bold" Foreground="#172744"/>
-                    <!-- FixedPage is already laid out for printing; an RTL Viewbox mirrors its entire visual. -->
-                    <Viewbox Grid.Row="1" FlowDirection="LeftToRight" Stretch="Uniform" Margin="0,20"><Border x:Name="PreviewHost" FlowDirection="LeftToRight" Background="White"/></Viewbox>
+                    <!-- Display pixels from the detached print page, never a FixedPage inside an RTL visual tree. -->
+                    <Border x:Name="PreviewHost" Grid.Row="1" FlowDirection="LeftToRight" Margin="0,20"/>
                     <TextBlock x:Name="PreviewError" Grid.Row="2" TextWrapping="Wrap" Foreground="#B91C1C" FontSize="12"/>
                 </Grid>
             </Border>

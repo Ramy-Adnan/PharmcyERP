@@ -42,7 +42,7 @@ public partial class PrintProductLabelsDialog : Window
     {
         PreviewHost.Child = null; PreviewError.Text = string.Empty;
         if (_viewModel.PreviewLabel is not { } request) return;
-        try { PreviewHost.Child = ProductLabelDocumentBuilder.BuildLabel(request); }
+        try { PreviewHost.Child = ProductLabelPreview.Create(request); }
         catch (ArgumentException ex) { PreviewError.Text = ex.Message; }
     }
     private static bool HasValidationError(DependencyObject node)
