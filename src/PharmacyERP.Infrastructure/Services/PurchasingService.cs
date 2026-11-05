@@ -729,11 +729,31 @@ public class PurchasingService : IPurchasingService
 
     private async Task<Result> RecordPaymentCoreAsync(RecordPaymentDto dto, CancellationToken cancellationToken)
     {
-        var invoice = await _context.PurchaseInvoices.FirstOrDefaultAsync(i => i.Id == dto.PurchaseInvoiceId, cancellationToken);
+        if (dto.RequestId == Guid.Empty) return Result.Failure("معرّف محاولة الدفع مطلوب.");
+        var journalNumber = PurchaseInvoicePaymentPostingRequest.JournalNumberFor(dto.RequestId);
+        var previous = await _context.JournalEntries.IgnoreQueryFilters().AsNoTracking().Include(e => e.Lines)
+            .SingleOrDefaultAsync(e => e.Number == journalNumber, cancellationToken);
+        if (previous is not null)
+            return !previous.IsDeleted && previous.IsPosted && previous.ReferenceType == "PurchaseInvoicePayment" &&
+                previous.ReferenceId == dto.PurchaseInvoiceId && previous.Lines.Sum(l => l.DebitAmount) == dto.Amount &&
+                previous.Lines.Sum(l => l.CreditAmount) == dto.Amount
+                ? Result.Success() : Result.Failure("معرّف محاولة الدفع مستخدم لفاتورة أو مبلغ مختلف. راجع الدفعة المسجلة.");
+        var invoice = await _context.PurchaseInvoices.AsNoTracking().FirstOrDefaultAsync(i => i.Id == dto.PurchaseInvoiceId, cancellationToken);
         if (invoice is null) return Result.Failure("فاتورة الشراء غير موجودة.");
         if (invoice.Status == PurchaseInvoiceStatus.Cancelled) return Result.Failure("لا يمكن تسجيل دفعة على فاتورة ملغاة.");
         if (dto.Amount <= 0) return Result.Failure("مبلغ الدفعة يجب أن يكون أكبر من صفر.");
         if (dto.Amount > invoice.AmountDue) return Result.Failure($"مبلغ الدفعة أكبر من المبلغ المستحق ({invoice.AmountDue:N2}).");
+
+        if (_context is DbContext db)
+        {
+            var tracked = db.ChangeTracker.Entries<PurchaseInvoice>().SingleOrDefault(e => e.Entity.Id == invoice.Id);
+            if (tracked is not null)
+            {
+                if (tracked.State != EntityState.Unchanged) return Result.Failure("توجد تغييرات غير محفوظة على الفاتورة. أكملها أولاً.");
+                tracked.State = EntityState.Detached;
+            }
+        }
+        _context.PurchaseInvoices.Entry(invoice).State = EntityState.Unchanged;
 
         invoice.AmountPaid += dto.Amount;
         invoice.Status = invoice.AmountDue <= 0 ? PurchaseInvoiceStatus.Paid : PurchaseInvoiceStatus.PartiallyPaid;
@@ -742,6 +762,7 @@ public class PurchasingService : IPurchasingService
 
         await _accountingService.PostPurchaseInvoicePaymentAsync(new PurchaseInvoicePaymentPostingRequest
         {
+            RequestId = dto.RequestId,
             BranchId = invoice.BranchId,
             PurchaseInvoiceId = invoice.Id,
             PurchaseInvoiceNumber = invoice.Number,

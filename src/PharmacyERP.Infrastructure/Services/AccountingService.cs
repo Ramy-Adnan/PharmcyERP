@@ -592,6 +592,17 @@ public class AccountingService : IAccountingService
 
     public async Task PostPurchaseInvoicePaymentAsync(PurchaseInvoicePaymentPostingRequest request, CancellationToken cancellationToken = default)
     {
+        if (request.RequestId == Guid.Empty || request.Amount <= 0) throw new InvalidOperationException("معرّف محاولة الدفع والمبلغ الموجب مطلوبان.");
+        var journalNumber = PurchaseInvoicePaymentPostingRequest.JournalNumberFor(request.RequestId);
+        var existing = await _context.JournalEntries.IgnoreQueryFilters().AsNoTracking().Include(e => e.Lines)
+            .SingleOrDefaultAsync(e => e.Number == journalNumber, cancellationToken);
+        if (existing is not null)
+        {
+            if (!existing.IsDeleted && existing.IsPosted && existing.ReferenceType == "PurchaseInvoicePayment" &&
+                existing.ReferenceId == request.PurchaseInvoiceId && existing.BranchId == request.BranchId &&
+                existing.Lines.Sum(l => l.DebitAmount) == request.Amount && existing.Lines.Sum(l => l.CreditAmount) == request.Amount) return;
+            throw new InvalidOperationException("معرّف محاولة الدفع مستخدم لعملية مختلفة. راجع الدفعة المسجلة.");
+        }
         var payableAccount = await GetSystemAccountAsync(AccountsPayableAccountCode, cancellationToken);
         var cashAccount = await GetSystemAccountAsync(CashAccountCode, cancellationToken);
 
@@ -603,7 +614,7 @@ public class AccountingService : IAccountingService
 
         await CreateAndPostEntryAsync(
             request.BranchId, request.PaymentDate, $"دفعة على فاتورة شراء {request.PurchaseInvoiceNumber}",
-            referenceType: "PurchaseInvoicePayment", referenceId: request.PurchaseInvoiceId, lines, cancellationToken);
+            referenceType: "PurchaseInvoicePayment", referenceId: request.PurchaseInvoiceId, lines, cancellationToken, journalNumber);
     }
 
     public async Task PostInsuranceClaimPaymentAsync(InsuranceClaimPaymentPostingRequest request, CancellationToken cancellationToken = default)
@@ -673,11 +684,11 @@ public class AccountingService : IAccountingService
     private async Task<JournalEntry> CreateAndPostEntryAsync(
         int branchId, DateTime entryDate, string description, string? referenceType, int? referenceId,
         IEnumerable<(int accountId, decimal debit, decimal credit, string? description)> lines,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, string? journalNumber = null)
     {
         var entry = new JournalEntry
         {
-            Number = await GenerateNumberAsync("JE"),
+            Number = journalNumber ?? await GenerateNumberAsync("JE"),
             BranchId = branchId,
             EntryDate = entryDate,
             Description = description,

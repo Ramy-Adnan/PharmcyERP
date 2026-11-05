@@ -65,6 +65,8 @@ public class PurchaseInvoiceLineUpsertDto
 
 public class RecordPaymentDto
 {
+    /// <summary>Keep this identifier unchanged when retrying the same payment after a lost response.</summary>
+    public Guid RequestId { get; set; } = Guid.NewGuid();
     public int PurchaseInvoiceId { get; set; }
     public decimal Amount { get; set; }
     public string? Notes { get; set; }

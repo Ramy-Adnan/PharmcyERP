@@ -41,6 +41,7 @@ public class ItemEditViewModel : PurchasePricingViewModel
     private bool _isActive = true;
     private string _errorMessage = string.Empty;
     private bool _isBusy;
+    private bool _isPackagingExpanded;
     private string _successMessage = string.Empty;
 
     public ItemEditViewModel(IInventoryService inventoryService)
@@ -61,6 +62,7 @@ public class ItemEditViewModel : PurchasePricingViewModel
     protected override void OnPurchaseTypeChanged() => DefaultSalePrice = SalePricePolicy.FromPurchasePrice(DefaultPurchasePrice, PurchaseType);
 
     public bool IsEditMode => _id.HasValue;
+    public bool IsPackagingExpanded { get => _isPackagingExpanded; set => SetProperty(ref _isPackagingExpanded, value); }
     public string DialogTitle => IsEditMode ? "تعديل بطاقة الصنف" : "إضافة صنف جديد";
 
     public ObservableCollection<ItemSaleUnitDto> SaleUnits { get; }
@@ -158,6 +160,7 @@ public class ItemEditViewModel : PurchasePricingViewModel
         MinStockLevel = dto.MinStockLevel;
         MaxStockLevel = dto.MaxStockLevel;
         IsActive = dto.IsActive;
+        IsPackagingExpanded = UnitsPerPackage > 1 || SaleUnits.Count > 0;
 
         OnPropertyChanged(nameof(IsEditMode));
         OnPropertyChanged(nameof(DialogTitle));
@@ -208,6 +211,7 @@ public class ItemEditViewModel : PurchasePricingViewModel
         Code = Name = string.Empty; Barcode = BaseUnitBarcode = GenericName = Strength = null;
         ManufacturerId = null; RequiresPrescription = IsControlledSubstance = false;
         UnitsPerPackage = 1; PackageUnitName = "علبة"; SaleUnits.Clear();
+        IsPackagingExpanded = false;
         DefaultPurchasePrice = DefaultSalePrice = TaxRatePercent = 0;
         ReorderPoint = MinStockLevel = MaxStockLevel = 0; IsActive = true;
         OnPropertyChanged(nameof(IsEditMode)); OnPropertyChanged(nameof(DialogTitle));
@@ -220,6 +224,9 @@ public class ItemEditViewModel : PurchasePricingViewModel
         IsBusy = true;
         try
         {
+            // The barcode remains independent. Keep an assigned code on a failed
+            // attempt so retrying the form never creates another identity.
+            if (string.IsNullOrWhiteSpace(Code)) Code = "ITM-" + Guid.NewGuid().ToString("N")[..12].ToUpperInvariant();
             var dto = new ItemUpsertDto
             {
                 Id = _id,

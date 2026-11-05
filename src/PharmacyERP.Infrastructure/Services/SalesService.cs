@@ -256,7 +256,10 @@ public class SalesService : ISalesService
         // still-fillable Prescription belonging to the same customer — enforced here rather
         // than only in the UI, since CheckoutAsync is the single choke point for every sale.
         var lineItemIds = dto.Lines.Select(l => l.ItemId).Distinct().ToList();
-        var itemsById = await _context.Items.Where(i => lineItemIds.Contains(i.Id)).Include(i => i.UnitOfMeasure).Include(i => i.Manufacturer).Include(i => i.SaleUnits).ToDictionaryAsync(i => i.Id, cancellationToken);
+        // A cashier can keep the screen open while another device disables an item,
+        // changes its prescription requirement, or retires a unit. Validation must
+        // use the database state, not a previously tracked catalogue entity.
+        var itemsById = await _context.Items.AsNoTracking().Where(i => lineItemIds.Contains(i.Id)).Include(i => i.UnitOfMeasure).Include(i => i.Manufacturer).Include(i => i.SaleUnits).ToDictionaryAsync(i => i.Id, cancellationToken);
 
         if (itemsById.Count != lineItemIds.Count || itemsById.Values.Any(i => !i.IsActive))
             return Result<SalesInvoiceDto>.Failure("أحد الأصناف غير موجود أو غير نشط.");

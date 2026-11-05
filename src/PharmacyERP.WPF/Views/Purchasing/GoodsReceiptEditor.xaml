@@ -55,7 +55,7 @@
                     <TextBlock Text="نوع الشراء / نسبة زيادة البيع" Margin="0,0,0,4"/>
                     <ComboBox ItemsSource="{Binding PurchaseTypes}" DisplayMemberPath="Name" SelectedValuePath="Value"
                               SelectedValue="{Binding PurchaseType}" Padding="6" Margin="0,0,0,8"/>
-                    <TextBlock Text="تغيير النوع أو سعر الشراء يعيد الحساب؛ يمكنك تعديل البيع بعد ذلك." TextWrapping="Wrap" Foreground="#64748B" FontSize="11" Margin="0,0,0,8"/>
+                    <TextBlock Text="تغيير النوع أو تكلفة الشراء يعيد اقتراح البيع. تغيير الوحدة يحوّل السعر اليدوي معها." TextWrapping="Wrap" Foreground="#64748B" FontSize="11" Margin="0,0,0,8"/>
                 </StackPanel>
                 <StackPanel DockPanel.Dock="Top" Margin="10,0,10,4">
                     <TextBlock Text="إضافة سريعة · باركود، رمز أو اسم الصنف (F2)" Foreground="#334155" Margin="0,0,0,5"/>
@@ -72,12 +72,18 @@
                 <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="10" HorizontalAlignment="Left">
                     <Button Content="إضافة سطر يدوي" Padding="12,6" Margin="0,0,8,0" Command="{Binding AddLineCommand}"/>
                     <Button Content="حذف السطر" Padding="12,6" Foreground="#DC2626" Command="{Binding RemoveLineCommand}"/>
+                    <Button Content="الانتقال لأول حقل ناقص F4" Padding="12,6" Margin="8,0,0,0" Command="{Binding FindIncompleteLineCommand}"/>
                 </StackPanel>
+                <Border DockPanel.Dock="Bottom" Background="#EEF4FF" Padding="10,8">
+                    <TextBlock Text="{Binding ReceiptSummary}" TextWrapping="Wrap" Foreground="#1E477A" FontWeight="SemiBold" FontSize="12"/>
+                </Border>
 
                 <DataGrid x:Name="ReceiptLinesGrid" ItemsSource="{Binding Lines}" SelectedItem="{Binding SelectedLine}"
                           AutoGenerateColumns="False" CanUserAddRows="False"
+                          EnableRowVirtualization="True" EnableColumnVirtualization="True"
                           GridLinesVisibility="Horizontal" HeadersVisibility="Column" BorderThickness="0"
                           RowHeight="32" FontSize="13">
+                    <DataGrid.RowStyle><Style TargetType="DataGridRow"><Setter Property="ToolTip" Value="{Binding EntryIssue}"/><Style.Triggers><DataTrigger Binding="{Binding NeedsAttention}" Value="True"><Setter Property="Background" Value="#FFF7ED"/></DataTrigger></Style.Triggers></Style></DataGrid.RowStyle>
                     <DataGrid.Columns>
                         <DataGridTemplateColumn Header="الصنف" Width="1.6*">
                             <DataGridTemplateColumn.CellTemplate>

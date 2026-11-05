@@ -26,6 +26,34 @@ public class InventoryAtomicReceiptTests
     }
 
     [Fact]
+    public async Task AdjustmentBalanceAndLedger_RollBackTogetherAndRetryAppliesOnlyOnce()
+    {
+        var clock = new FakeDateTime();
+        await using var connection = new SqliteConnection("Data Source=:memory:"); await connection.OpenAsync();
+        var fault = new FailStockInsert();
+        var options = new DbContextOptionsBuilder<ApplicationDbContext>().UseSqlite(connection).AddInterceptors(fault).Options;
+        await using var db = new SqliteTestDb(options, new AuditableEntitySaveChangesInterceptor(new FakeCurrentUserService(), clock));
+        await db.Database.EnsureCreatedAsync(); var f = await TestDb.SeedBaselineAsync(db);
+        var batchId = await TestDb.AddBatchAsync(db, f, "ADJUST", clock.UtcNow.AddMonths(3), 10);
+        var inventory = new InventoryService(db, clock);
+        var request = new PharmacyERP.Application.Features.Inventory.DTOs.StockAdjustmentDto
+        { BatchId = batchId, QuantityDelta = -2, Reason = "تسوية جرد" };
+        fault.Enabled = true;
+        await FluentActions.Awaiting(() => inventory.AdjustStockAsync(request, null)).Should().ThrowAsync<DbUpdateException>();
+        fault.Enabled = false;
+        await db.SaveChangesAsync();
+        (await db.Batches.SingleAsync()).QuantityOnHand.Should().Be(10); (await db.StockTransactions.CountAsync()).Should().Be(0);
+        (await inventory.AdjustStockAsync(request, null)).Succeeded.Should().BeTrue();
+        (await db.Batches.SingleAsync()).QuantityOnHand.Should().Be(8);
+        var movement = await db.StockTransactions.SingleAsync(); movement.QuantityChange.Should().Be(-2);
+        movement.ResultingQuantityOnHand.Should().Be(8);
+        // A previously tracked batch must not overwrite a later committed stock change.
+        await db.Batches.Where(b => b.Id == batchId).ExecuteUpdateAsync(s => s.SetProperty(b => b.QuantityOnHand, 5));
+        (await inventory.AdjustStockAsync(request, null)).Succeeded.Should().BeTrue();
+        (await db.Batches.AsNoTracking().SingleAsync()).QuantityOnHand.Should().Be(3);
+    }
+
+    [Fact]
     public async Task FailedReceiptLedgerInsert_RollsBackTheBatchAndDoesNotLeakIntoTheNextSave()
     {
         var clock = new FakeDateTime();

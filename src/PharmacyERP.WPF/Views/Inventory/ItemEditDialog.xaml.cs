@@ -26,7 +26,13 @@ public partial class ItemEditDialog : Window
         Closing += (_, e) => { if (viewModel.IsBusy) e.Cancel = true; };
     }
 
-    private void FocusNewItem() { CodeBox.Focus(); CodeBox.SelectAll(); }
+    private void FocusNewItem()
+    {
+        if (DataContext is ItemEditViewModel { IsEditMode: true }) { NameBox.Focus(); NameBox.SelectAll(); }
+        else { BarcodeBox.Focus(); BarcodeBox.SelectAll(); }
+    }
+    private void BarcodeKeyDown(object sender, KeyEventArgs e)
+    { if (e.Key == Key.Enter) { e.Handled = true; NameBox.Focus(); NameBox.SelectAll(); } }
     private bool CanSave()
     {
         if (DataContext is not ItemEditViewModel vm || vm.IsBusy) return false;

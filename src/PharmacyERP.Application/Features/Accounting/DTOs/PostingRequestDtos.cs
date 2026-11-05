@@ -36,11 +36,27 @@ public class PurchaseInvoicePostingRequest
 
 public class PurchaseInvoicePaymentPostingRequest
 {
+    public Guid RequestId { get; set; } = Guid.NewGuid();
     public int BranchId { get; set; }
     public int PurchaseInvoiceId { get; set; }
     public string PurchaseInvoiceNumber { get; set; } = string.Empty;
     public DateTime PaymentDate { get; set; }
     public decimal Amount { get; set; }
+
+    /// <summary>Full 128-bit identity in 29 case-insensitive-safe characters; the journal column is 30.</summary>
+    public static string JournalNumberFor(Guid requestId)
+    {
+        const string alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+        var number = new System.Text.StringBuilder("PP-");
+        uint buffer = 0; var bits = 0;
+        foreach (var value in requestId.ToByteArray())
+        {
+            buffer = (buffer << 8) | value; bits += 8;
+            while (bits >= 5) { bits -= 5; number.Append(alphabet[(int)((buffer >> bits) & 31)]); }
+        }
+        if (bits > 0) number.Append(alphabet[(int)((buffer << (5 - bits)) & 31)]);
+        return number.ToString();
+    }
 }
 
 public class InsuranceClaimPaymentPostingRequest

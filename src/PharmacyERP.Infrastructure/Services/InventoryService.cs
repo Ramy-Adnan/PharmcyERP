@@ -74,8 +74,9 @@ public class InventoryService : IInventoryService
 
     public async Task<List<UnitOfMeasureDto>> GetUnitsAsync(CancellationToken cancellationToken = default)
     {
-        var units = await _context.UnitsOfMeasure.Include(u => u.Items).OrderBy(u => u.Name).ToListAsync(cancellationToken);
-        return units.Select(u => new UnitOfMeasureDto { Id = u.Id, Code = u.Code, Name = u.Name, IsActive = u.IsActive, ItemCount = u.Items.Count }).ToList();
+        return await _context.UnitsOfMeasure.AsNoTracking().OrderBy(u => u.Name)
+            .Select(u => new UnitOfMeasureDto { Id = u.Id, Code = u.Code, Name = u.Name, IsActive = u.IsActive, ItemCount = u.Items.Count })
+            .ToListAsync(cancellationToken);
     }
 
     public async Task<Result<UnitOfMeasureDto>> UpsertUnitAsync(int? id, string code, string name, bool isActive, CancellationToken cancellationToken = default)
@@ -121,8 +122,9 @@ public class InventoryService : IInventoryService
 
     public async Task<List<ManufacturerDto>> GetManufacturersAsync(CancellationToken cancellationToken = default)
     {
-        var manufacturers = await _context.Manufacturers.Include(m => m.Items).OrderBy(m => m.Name).ToListAsync(cancellationToken);
-        return manufacturers.Select(m => new ManufacturerDto { Id = m.Id, Name = m.Name, Country = m.Country, IsActive = m.IsActive, ItemCount = m.Items.Count }).ToList();
+        return await _context.Manufacturers.AsNoTracking().OrderBy(m => m.Name)
+            .Select(m => new ManufacturerDto { Id = m.Id, Name = m.Name, Country = m.Country, IsActive = m.IsActive, ItemCount = m.Items.Count })
+            .ToListAsync(cancellationToken);
     }
 
     public async Task<Result<ManufacturerDto>> UpsertManufacturerAsync(int? id, string name, string? country, bool isActive, CancellationToken cancellationToken = default)
@@ -165,7 +167,20 @@ public class InventoryService : IInventoryService
 
     // ===================== Items =====================
 
-    public async Task<List<ItemDto>> GetItemsAsync(string? searchText = null, CancellationToken cancellationToken = default)
+    public Task<List<ItemDto>> GetItemsAsync(string? searchText = null, CancellationToken cancellationToken = default) =>
+        ProjectItems(OrderItems(FilterItems(searchText), searchText)).ToListAsync(cancellationToken);
+
+    public async Task<ItemPageDto> GetItemsPageAsync(string? searchText = null, int skip = 0, int pageSize = 60, CancellationToken cancellationToken = default)
+    {
+        skip = Math.Max(0, skip); pageSize = Math.Clamp(pageSize, 1, 200);
+        var items = await ProjectItems(OrderItems(FilterItems(searchText), searchText).Skip(skip).Take(pageSize + 1))
+            .ToListAsync(cancellationToken);
+        var hasMore = items.Count > pageSize;
+        if (hasMore) items.RemoveAt(items.Count - 1);
+        return new ItemPageDto { Items = items, HasMore = hasMore, NextSkip = skip + items.Count };
+    }
+
+    private IQueryable<Item> FilterItems(string? searchText)
     {
         // The catalogue needs stock totals, not every historical batch entity.
         // Project before materializing so sale units cannot multiply batch rows,
@@ -185,7 +200,18 @@ public class InventoryService : IInventoryService
                 (i.GenericName != null && i.GenericName.Contains(term)));
         }
 
-        return await query.OrderBy(i => i.Name).ThenBy(i => i.Id).Select(i => new ItemDto
+        return query;
+    }
+
+    private static IOrderedQueryable<Item> OrderItems(IQueryable<Item> query, string? searchText)
+    {
+        if (string.IsNullOrWhiteSpace(searchText)) return query.OrderBy(i => i.Name).ThenBy(i => i.Id);
+        var term = searchText.Trim();
+        return query.OrderByDescending(i => i.Code == term || i.Barcode == term || i.BaseUnitBarcode == term
+            || i.SaleUnits.Any(u => u.IsActive && u.Barcode == term)).ThenBy(i => i.Name).ThenBy(i => i.Id);
+    }
+
+    private static IQueryable<ItemDto> ProjectItems(IQueryable<Item> query) => query.Select(i => new ItemDto
         {
             Id = i.Id,
             Code = i.Code,
@@ -215,8 +241,7 @@ public class InventoryService : IInventoryService
             MaxStockLevel = i.MaxStockLevel,
             IsActive = i.IsActive,
             TotalQuantityOnHand = i.Batches.Sum(b => (int?)b.QuantityOnHand) ?? 0
-        }).ToListAsync(cancellationToken);
-    }
+        });
 
     public async Task<ItemUpsertDto?> GetItemForEditAsync(int id, CancellationToken cancellationToken = default)
     {
@@ -287,7 +312,7 @@ public class InventoryService : IInventoryService
         _context.Items.Add(item);
         await _context.SaveChangesAsync(cancellationToken);
 
-        return Result<ItemDto>.Success((await GetItemsAsync(cancellationToken: cancellationToken)).First(i => i.Id == item.Id));
+        return Result<ItemDto>.Success(await ProjectItems(_context.Items.AsNoTracking().Where(i => i.Id == item.Id)).SingleAsync(cancellationToken));
     }
 
     public async Task<Result<ItemDto>> UpdateItemAsync(ItemUpsertDto dto, CancellationToken cancellationToken = default)
@@ -358,7 +383,7 @@ public class InventoryService : IInventoryService
         item.IsActive = dto.IsActive;
 
         await _context.SaveChangesAsync(cancellationToken);
-        return Result<ItemDto>.Success((await GetItemsAsync(cancellationToken: cancellationToken)).First(i => i.Id == item.Id));
+        return Result<ItemDto>.Success(await ProjectItems(_context.Items.AsNoTracking().Where(i => i.Id == item.Id)).SingleAsync(cancellationToken));
     }
 
     public async Task<Result> SetItemActiveStatusAsync(int itemId, bool isActive, CancellationToken cancellationToken = default)
@@ -526,9 +551,11 @@ public class InventoryService : IInventoryService
         if (string.IsNullOrWhiteSpace(dto.BatchNumber)) return Result<BatchDto>.Failure("رقم الدفعة (Batch Number) مطلوب.");
         if (dto.ExpiryDate.Date <= _dateTime.UtcNow.Date) return Result<BatchDto>.Failure("تاريخ الانتهاء يجب أن يكون في المستقبل.");
 
-        var item = await _context.Items.FirstOrDefaultAsync(i => i.Id == dto.ItemId, cancellationToken);
+        // Receiving must see an item or unit disabled on another device even if
+        // this context already tracked it while opening the entry screen.
+        var item = await _context.Items.AsNoTracking().FirstOrDefaultAsync(i => i.Id == dto.ItemId, cancellationToken);
         if (item is null || !item.IsActive) return Result<BatchDto>.Failure("الصنف غير موجود أو غير نشط.");
-        var unit = dto.ItemSaleUnitId.HasValue ? await _context.ItemSaleUnits.FirstOrDefaultAsync(u => u.Id == dto.ItemSaleUnitId && u.ItemId == item.Id && u.IsActive, cancellationToken) : null;
+        var unit = dto.ItemSaleUnitId.HasValue ? await _context.ItemSaleUnits.AsNoTracking().FirstOrDefaultAsync(u => u.Id == dto.ItemSaleUnitId && u.ItemId == item.Id && u.IsActive, cancellationToken) : null;
         if (dto.ItemSaleUnitId.HasValue && unit is null) return Result<BatchDto>.Failure("وحدة الاستلام غير موجودة لهذا الصنف أو غير نشطة.");
         var factor = unit?.BaseUnitCount ?? item.UnitsPerPackage;
         var received = (long)dto.Quantity + dto.BonusQuantity;
@@ -536,8 +563,8 @@ public class InventoryService : IInventoryService
         var stockQuantity = (int)received * factor;
         var packageSalePrice = dto.SalePriceOverride ?? SalePricePolicy.FromPurchasePrice(dto.PurchasePrice, dto.PurchaseType);
 
-        var warehouseExists = await _context.Warehouses.AnyAsync(w => w.Id == dto.WarehouseId, cancellationToken);
-        if (!warehouseExists) return Result<BatchDto>.Failure("المخزن غير موجود.");
+        var warehouseExists = await _context.Warehouses.AnyAsync(w => w.Id == dto.WarehouseId && w.IsActive, cancellationToken);
+        if (!warehouseExists) return Result<BatchDto>.Failure("المخزن غير موجود أو غير نشط.");
 
         var batch = new Batch
         {
@@ -587,19 +614,45 @@ public class InventoryService : IInventoryService
         if (dto.QuantityDelta == 0) return Result.Failure("قيمة التعديل يجب ألا تساوي صفراً.");
         if (string.IsNullOrWhiteSpace(dto.Reason)) return Result.Failure("سبب التعديل مطلوب.");
 
-        var batch = await _context.Batches.FirstOrDefaultAsync(b => b.Id == dto.BatchId, cancellationToken);
+        var batch = await _context.Batches.AsNoTracking().FirstOrDefaultAsync(b => b.Id == dto.BatchId, cancellationToken);
         if (batch is null) return Result.Failure("الدفعة غير موجودة.");
 
-        var newQuantity = batch.QuantityOnHand + dto.QuantityDelta;
+        var newQuantity = (long)batch.QuantityOnHand + dto.QuantityDelta;
         if (newQuantity < 0) return Result.Failure($"لا يمكن إنقاص الكمية بهذا المقدار. الكمية الحالية {batch.QuantityOnHand} فقط.");
+        if (newQuantity > int.MaxValue) return Result.Failure("الكمية الناتجة كبيرة جداً.");
 
-        batch.QuantityOnHand = newQuantity;
-        await _context.SaveChangesAsync(cancellationToken);
+        if (_context is DbContext db)
+        {
+            var previous = db.ChangeTracker.Entries<Batch>().SingleOrDefault(e => e.Entity.Id == batch.Id);
+            if (previous is not null)
+            {
+                if (previous.State != EntityState.Unchanged) return Result.Failure("توجد تغييرات غير محفوظة على الدفعة. أكملها أولاً.");
+                previous.State = EntityState.Detached;
+            }
+        }
+        _context.Batches.Entry(batch).State = EntityState.Unchanged;
+        batch.QuantityOnHand = (int)newQuantity;
 
         var type = dto.QuantityDelta > 0 ? StockTransactionType.AdjustmentIncrease : StockTransactionType.AdjustmentDecrease;
-        await RecordStockTransactionAsync(batch, type, dto.QuantityDelta,
-            referenceType: "ManualAdjustment", referenceId: null, notes: dto.Reason,
-            performedByUserId, cancellationToken);
+        try
+        {
+            // The balance and ledger entry must either both persist or neither.
+            await RecordStockTransactionAsync(batch, type, dto.QuantityDelta,
+                referenceType: "ManualAdjustment", referenceId: null, notes: dto.Reason,
+                performedByUserId, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            if (_context is DbContext failedContext)
+            {
+                foreach (var entry in failedContext.ChangeTracker.Entries<StockTransaction>()
+                    .Where(e => e.State == EntityState.Added && ReferenceEquals(e.Entity.Batch, batch)).ToList())
+                    entry.State = EntityState.Detached;
+                failedContext.Entry(batch).State = EntityState.Detached;
+            }
+            if (ex is DbUpdateConcurrencyException) return Result.Failure("تغيّر رصيد الدفعة من عملية أخرى. حدّث القائمة وراجع الكمية قبل التعديل.");
+            throw;
+        }
 
         return Result.Success();
     }

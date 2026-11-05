@@ -39,6 +39,8 @@ public class GoodsReceiptEditViewModel : PurchasePricingViewModel
     private bool _saving;
     private string _quickSearchText = string.Empty, _quickEntryMessage = string.Empty;
     private ItemDto? _selectedQuickItem;
+    private readonly HashSet<GRLineRow> _observedLines = new();
+    private int _pendingOperations;
 
     public GoodsReceiptEditViewModel(IPurchasingService purchasingService, IInventoryService inventoryService, IBranchService branchService)
     {
@@ -58,6 +60,15 @@ public class GoodsReceiptEditViewModel : PurchasePricingViewModel
         RemoveLineCommand = new RelayCommand(() => { if (SelectedLine is not null) Lines.Remove(SelectedLine); }, () => !IsBusy && SelectedLine is not null);
         SaveCommand = new AsyncRelayCommand(SaveAsync, () => !IsBusy);
         AddQuickItemCommand = new RelayCommand(() => AddQuickItem(), () => !IsBusy && !string.IsNullOrWhiteSpace(QuickSearchText));
+        FindIncompleteLineCommand = new RelayCommand(() => FocusFirstIncompleteLine(), () => !IsBusy && Lines.Count > 0);
+        Lines.CollectionChanged += (_, _) =>
+        {
+            foreach (var removed in _observedLines.Where(l => !Lines.Contains(l)).ToList())
+            { removed.PropertyChanged -= LineChanged; _observedLines.Remove(removed); }
+            foreach (var added in Lines.Where(l => !_observedLines.Contains(l)))
+            { added.PropertyChanged += LineChanged; _observedLines.Add(added); added.RefreshEntryStatus(ReceiptDate); }
+            NotifySummary();
+        };
     }
 
     protected override void OnPurchaseTypeChanged()
@@ -85,6 +96,34 @@ public class GoodsReceiptEditViewModel : PurchasePricingViewModel
     public string QuickEntryMessage { get => _quickEntryMessage; private set => SetProperty(ref _quickEntryMessage, value); }
     public RelayCommand AddQuickItemCommand { get; }
     public event Action<GRLineRow>? QuickItemAdded;
+    public event Action<GRLineRow, string>? IncompleteLineRequested;
+    public RelayCommand FindIncompleteLineCommand { get; }
+    public decimal TotalPurchaseValue => Lines.Sum(l => l.LineTotal);
+    public long TotalStockUnits => Lines.Sum(l => l.StockQuantity);
+    public int IncompleteLineCount => Lines.Count(l => l.NeedsAttention);
+    public string ReceiptSummary => $"{Lines.Count} سطور · إجمالي الشراء: {TotalPurchaseValue:N2} د.ع · وارد المخزون: {TotalStockUnits:N0} وحدة شاملة البونص · سطور ناقصة: {IncompleteLineCount}";
+
+    private void NotifySummary()
+    {
+        foreach (var property in new[] { nameof(TotalPurchaseValue), nameof(TotalStockUnits), nameof(IncompleteLineCount), nameof(ReceiptSummary) }) OnPropertyChanged(property);
+        System.Windows.Input.CommandManager.InvalidateRequerySuggested();
+    }
+    private void LineChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (sender is not GRLineRow line || e.PropertyName is not (nameof(GRLineRow.ItemId) or nameof(GRLineRow.BatchNumber)
+            or nameof(GRLineRow.ExpiryDate) or nameof(GRLineRow.QuantityReceived) or nameof(GRLineRow.BonusQuantity)
+            or nameof(GRLineRow.UnitCost) or nameof(GRLineRow.SalePrice) or nameof(GRLineRow.PurchaseUnitFactor))) return;
+        line.RefreshEntryStatus(ReceiptDate); NotifySummary();
+    }
+    public bool FocusFirstIncompleteLine()
+    {
+        foreach (var line in Lines) line.RefreshEntryStatus(ReceiptDate);
+        if (Lines.FirstOrDefault(l => l.NeedsAttention) is not { } incomplete) return false;
+        SelectedLine = incomplete;
+        ErrorMessage = $"السطر {Lines.IndexOf(incomplete) + 1} · {incomplete.ItemName}: {incomplete.EntryIssue}";
+        IncompleteLineRequested?.Invoke(incomplete, incomplete.FirstIncompleteField(ReceiptDate)!);
+        return true;
+    }
 
     private static bool Exact(string? value, string term) => !string.IsNullOrWhiteSpace(value) && string.Equals(value, term, StringComparison.OrdinalIgnoreCase);
     private static bool Contains(string? value, string term) => value?.Contains(term, StringComparison.OrdinalIgnoreCase) == true;
@@ -155,7 +194,16 @@ public class GoodsReceiptEditViewModel : PurchasePricingViewModel
     }
 
     public int WarehouseId { get => _warehouseId; set => SetProperty(ref _warehouseId, value); }
-    public DateTime ReceiptDate { get => _receiptDate; set => SetProperty(ref _receiptDate, value); }
+    public DateTime ReceiptDate
+    {
+        get => _receiptDate;
+        set
+        {
+            if (!SetProperty(ref _receiptDate, value)) return;
+            foreach (var line in Lines) line.RefreshEntryStatus(value);
+            NotifySummary();
+        }
+    }
     public string? Notes { get => _notes; set => SetProperty(ref _notes, value); }
 
     public GRLineRow? SelectedLine
@@ -363,7 +411,13 @@ public class GoodsReceiptEditViewModel : PurchasePricingViewModel
         try
         {
             await RunSerializedAsync(SaveCoreAsync);
-            if (SavedSuccessfully) RequestClose?.Invoke();
+            if (SavedSuccessfully)
+            {
+                // A header query queued before saving must finish before the
+                // owner can refresh or dispose the shared data context.
+                await _operations.WaitAsync(); _operations.Release();
+                RequestClose?.Invoke();
+            }
         }
         finally { _saving = false; }
     }
@@ -375,11 +429,7 @@ public class GoodsReceiptEditViewModel : PurchasePricingViewModel
         if (SupplierId <= 0) { ErrorMessage = "الرجاء اختيار المورد."; return; }
         if (BranchId <= 0 || WarehouseId <= 0) { ErrorMessage = "الرجاء اختيار الفرع والمخزن."; return; }
         if (!Lines.Any()) { ErrorMessage = "يجب إضافة صنف واحد على الأقل."; return; }
-        if (Lines.Any(l => l.ItemId <= 0)) { ErrorMessage = "الرجاء اختيار الصنف لكل سطر."; return; }
-        if (Lines.Any(l => l.UnitCost < 0 || l.SalePrice < 0)) { ErrorMessage = "أسعار الشراء والبيع لا تقبل القيم السالبة."; return; }
-        if (Lines.Any(l => string.IsNullOrWhiteSpace(l.BatchNumber))) { ErrorMessage = "رقم الدفعة مطلوب لكل سطر."; return; }
-        if (Lines.Any(l => l.QuantityReceived < 0 || l.BonusQuantity < 0 || (long)l.QuantityReceived + l.BonusQuantity <= 0)) { ErrorMessage = "الكمية يجب أن تكون أكبر من صفر لكل سطر."; return; }
-        if (Lines.Any(l => !l.ExpiryDate.HasValue || l.ExpiryDate.Value.Date <= ReceiptDate.Date)) { ErrorMessage = "تاريخ انتهاء الصلاحية يجب أن يكون بعد تاريخ الاستلام."; return; }
+        if (FocusFirstIncompleteLine()) return;
 
         var dto = new GoodsReceiptUpsertDto
         {
@@ -424,10 +474,11 @@ public class GoodsReceiptEditViewModel : PurchasePricingViewModel
 
     private async Task RunSerializedAsync(Func<Task> action)
     {
-        await _operations.WaitAsync();
+        _pendingOperations++;
         IsBusy = true;
+        await _operations.WaitAsync();
         try { await action(); }
         catch (Exception ex) { ErrorMessage = "تعذر إكمال العملية. راجع الاتصال وحاول مجدداً. " + ex.Message; }
-        finally { IsBusy = false; _operations.Release(); }
+        finally { _pendingOperations--; IsBusy = _pendingOperations > 0; _operations.Release(); }
     }
 }

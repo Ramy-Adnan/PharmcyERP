@@ -40,6 +40,7 @@ public class POSViewModel : ViewModelBase
     private string _errorMessage = string.Empty, _successMessage = string.Empty;
     private bool _isBusy, _initialized, _checkoutUncertain;
     private int _pendingScans;
+    private int _catalogueRequests, _catalogueOffset;
     private string _resultsTitle = "نتائج البحث";
     private int? _catalogCategoryId;
     private bool _hasMoreProducts, _isSearching;
@@ -56,7 +57,7 @@ public class POSViewModel : ViewModelBase
         _inventoryService = inventoryService;
         _images = images;
         AddProductCommand = new RelayCommand(p => _ = AddProductAsync((POSProductCard)p!), p => CanScan && p is POSProductCard card);
-        LoadMoreProductsCommand = new AsyncRelayCommand(LoadMoreProductsAsync, () => CanScan && _pendingScans == 0 && HasMoreProducts && !_isSearching);
+        LoadMoreProductsCommand = new AsyncRelayCommand(LoadMoreProductsAsync, () => CanScan && !IsCatalogueBusy && _pendingScans == 0 && HasMoreProducts && !_isSearching);
         BrowseCategoryCommand = new AsyncRelayCommand(p => BrowseCategoryAsync((POSCategoryOption)p!), p => CanScan && _pendingScans == 0 && p is POSCategoryOption);
         CloseResultsCommand = new RelayCommand(CloseResults, () => !IsBusy);
         ResolveCheckoutCommand = new AsyncRelayCommand(ResolveCheckoutAsync, () => !IsBusy && CheckoutUncertain);
@@ -86,6 +87,8 @@ public class POSViewModel : ViewModelBase
     }
 
     public event Action? ScanFocusRequested;
+    public event Action? SearchInputCleared;
+    public bool IsCatalogueBusy => _catalogueRequests > 0;
     public ObservableCollection<SaleItemLookupDto> SearchResults { get; } = new();
     public ObservableCollection<POSProductCard> ProductCards { get; } = new();
     public RelayCommand AddProductCommand { get; }
@@ -111,7 +114,15 @@ public class POSViewModel : ViewModelBase
     public CustomerOption? SelectedCustomer
     {
         get => _selectedCustomer;
-        set { if (SetProperty(ref _selectedCustomer, value)) { OnPropertyChanged(nameof(HasCreditCustomer)); _ = LoadCustomerAsync(); } }
+        set
+        {
+            if (!SetProperty(ref _selectedCustomer, value)) return;
+            // Do not display or submit another customer's prescription/debt
+            // while this customer's account query waits behind a catalogue read.
+            FillablePrescriptions.Clear(); SelectedPrescription = null; CustomerDebt = 0;
+            OnPropertyChanged(nameof(HasCreditCustomer));
+            if (value?.Id is not null) _ = LoadCustomerAsync();
+        }
     }
     public ActivePrescriptionSummaryDto? SelectedPrescription
     {
@@ -176,6 +187,19 @@ public class POSViewModel : ViewModelBase
     public AsyncRelayCommand UseBatchPricingCommand { get; }
     public AsyncRelayCommand RefreshStockCommand { get; }
     private static void Requery() => System.Windows.Input.CommandManager.InvalidateRequerySuggested();
+    private void ClearSearchInput()
+    {
+        SearchText = string.Empty;
+        // The view must cancel the empty-text debounce created by this binding
+        // update. A completed scanner read does not need a second catalogue query.
+        SearchInputCleared?.Invoke();
+    }
+    private void ChangeCatalogueRequests(int delta)
+    {
+        _catalogueRequests += delta;
+        OnPropertyChanged(nameof(IsCatalogueBusy));
+        Requery();
+    }
     private void NotifyTotals(bool reprice = true, int? itemId = null)
     {
         if (_pricingCart) return;
@@ -233,6 +257,7 @@ public class POSViewModel : ViewModelBase
                 var items = await _salesService.BrowseSaleItemsAsync(WarehouseId);
                 foreach (var item in items) SearchResults.Add(item);
                 DisplayProducts(items);
+                _catalogueOffset = items.Count;
                 Categories[0].IsSelected = true; ResultsTitle = "جميع الأصناف"; HasMoreProducts = items.Count == 60;
             }
             if (WarehouseId == 0) ErrorMessage = "لا يوجد مخزن نشط في الفرع الحالي.";
@@ -244,14 +269,19 @@ public class POSViewModel : ViewModelBase
     public async Task BrowseCategoryAsync(POSCategoryOption category)
     {
         if (!CanScan || _pendingScans > 0) return;
-        SearchText = string.Empty;
+        ClearSearchInput();
+        var version = ++_searchVersion;
+        _catalogCategoryId = category.Id;
+        ChangeCatalogueRequests(1);
+        ScanFocusRequested?.Invoke();
         await _operations.WaitAsync();
-        IsBusy = true;
         try
         {
+            if (!CanScan || version != _searchVersion) return;
             ErrorMessage = string.Empty; SuccessMessage = string.Empty;
             var items = await _salesService.BrowseSaleItemsAsync(WarehouseId, category.Id);
-            _catalogCategoryId = category.Id; _isSearching = false; HasMoreProducts = items.Count == 60;
+            if (!CanScan || version != _searchVersion) return;
+            _isSearching = false; HasMoreProducts = items.Count == 60; _catalogueOffset = items.Count;
             foreach (var option in Categories) option.IsSelected = option == category;
             ResultsTitle = category.Name;
             SearchResults.Clear(); SelectedSearchResult = null;
@@ -259,23 +289,32 @@ public class POSViewModel : ViewModelBase
             DisplayProducts(items);
             if (items.Count == 0) SuccessMessage = "لا توجد أصناف في هذا التصنيف.";
         }
-        catch (Exception ex) { ErrorMessage = $"تعذر تحميل الأصناف: {ex.Message}"; }
-        finally { IsBusy = false; _operations.Release(); ScanFocusRequested?.Invoke(); }
+        catch (Exception ex) { if (!_isClosing && version == _searchVersion) ErrorMessage = $"تعذر تحميل الأصناف: {ex.Message}"; }
+        finally { ChangeCatalogueRequests(-1); _operations.Release(); }
     }
 
-    private async Task LoadMoreProductsAsync()
+    public async Task LoadMoreProductsAsync()
     {
-        if (!CanScan || _isSearching || !HasMoreProducts) return;
-        await _operations.WaitAsync(); IsBusy = true;
+        if (!CanScan || IsCatalogueBusy || _isSearching || !HasMoreProducts) return;
+        var version = _searchVersion; var categoryId = _catalogCategoryId; var offset = _catalogueOffset;
+        ChangeCatalogueRequests(1);
+        await _operations.WaitAsync();
         try
         {
-            var items = await _salesService.BrowseSaleItemsAsync(WarehouseId, _catalogCategoryId, skip: ProductCards.Count);
-            foreach (var item in items) SearchResults.Add(item);
-            foreach (var item in items) ProductCards.Add(new POSProductCard(item, _images?.GetPath(item.ItemId, item.Code)));
+            if (!CanScan || version != _searchVersion) return;
+            var items = await _salesService.BrowseSaleItemsAsync(WarehouseId, categoryId, skip: offset);
+            if (!CanScan || version != _searchVersion) return;
+            _catalogueOffset += items.Count;
+            var visible = ProductCards.Select(c => c.Item.ItemId).ToHashSet();
+            foreach (var item in items.Where(i => visible.Add(i.ItemId)))
+            {
+                SearchResults.Add(item);
+                ProductCards.Add(new POSProductCard(item, _images?.GetPath(item.ItemId, item.Code)));
+            }
             HasMoreProducts = items.Count == 60;
         }
-        catch (Exception ex) { ErrorMessage = $"تعذر تحميل الأصناف: {ex.Message}"; }
-        finally { IsBusy = false; _operations.Release(); ScanFocusRequested?.Invoke(); }
+        catch (Exception ex) { if (!_isClosing && version == _searchVersion) ErrorMessage = $"تعذر تحميل الأصناف: {ex.Message}"; }
+        finally { ChangeCatalogueRequests(-1); _operations.Release(); }
     }
 
     public void SetProductImage(POSProductCard card, byte[] data)
@@ -294,21 +333,29 @@ public class POSViewModel : ViewModelBase
 
     private async Task RefreshProductsAfterSaleAsync()
     {
-        if (_isClosing) return;
-        await _operations.WaitAsync(); IsBusy = true;
+        if (_isClosing || SearchText.Trim().Length > 0) return;
+        var version = _searchVersion;
+        ChangeCatalogueRequests(1);
+        await _operations.WaitAsync();
         try
         {
+            if (!CanScan || version != _searchVersion) return;
             var items = await _salesService.BrowseSaleItemsAsync(WarehouseId, _catalogCategoryId);
+            if (!CanScan || version != _searchVersion) return;
             DisplayProducts(items); HasMoreProducts = items.Count == 60; _isSearching = false;
+            _catalogueOffset = items.Count;
+            SearchResults.Clear(); SelectedSearchResult = null;
+            foreach (var item in items) SearchResults.Add(item);
             foreach (var category in Categories) category.IsSelected = category.Id == _catalogCategoryId;
             ResultsTitle = Categories.FirstOrDefault(c => c.IsSelected)?.Name ?? "الأصناف";
         }
-        catch { ErrorMessage += " تعذر تحديث كروت الأصناف؛ أعد اختيار التصنيف لتحديث المتوفر."; }
-        finally { IsBusy = false; _operations.Release(); }
+        catch { if (!_isClosing && version == _searchVersion) ErrorMessage += " تعذر تحديث كروت الأصناف؛ أعد اختيار التصنيف لتحديث المتوفر."; }
+        finally { ChangeCatalogueRequests(-1); _operations.Release(); }
     }
 
     private void CloseResults()
     {
+        _searchVersion++;
         SearchResults.Clear(); SelectedSearchResult = null;
         HasMoreProducts = false;
         foreach (var option in Categories) option.IsSelected = false;
@@ -318,7 +365,7 @@ public class POSViewModel : ViewModelBase
     private void CancelTransaction()
     {
         CartLines.Clear(); DiscountAmount = 0; AmountTendered = 0;
-        SearchText = string.Empty; SelectedPrescription = null;
+        ClearSearchInput(); SelectedPrescription = null;
         _checkoutRequestId = Guid.NewGuid();
         CloseResults(); ErrorMessage = string.Empty; SuccessMessage = "تم إلغاء المعاملة الحالية.";
     }
@@ -364,6 +411,7 @@ public class POSViewModel : ViewModelBase
         if (!CanScan) return;
         var text = SearchText.Trim();
         var version = _searchVersion;
+        ChangeCatalogueRequests(1);
         await _operations.WaitAsync();
         try
         {
@@ -377,6 +425,7 @@ public class POSViewModel : ViewModelBase
             foreach (var item in items) SearchResults.Add(item);
             DisplayProducts(items);
             _isSearching = text.Length > 0;
+            _catalogueOffset = _isSearching ? 0 : items.Count;
             HasMoreProducts = !_isSearching && items.Count == 60;
             foreach (var category in Categories) category.IsSelected = !_isSearching && category.Id == _catalogCategoryId;
             ResultsTitle = !_isSearching ? Categories.FirstOrDefault(c => c.IsSelected)?.Name ?? "الأصناف"
@@ -388,7 +437,7 @@ public class POSViewModel : ViewModelBase
         {
             if (!_isClosing && version == _searchVersion) ErrorMessage = $"تعذر البحث: {ex.Message}";
         }
-        finally { _operations.Release(); }
+        finally { ChangeCatalogueRequests(-1); _operations.Release(); }
     }
 
     // Called for every scanner event, rather than ICommand's single-flight guard dropping rapid scans.
@@ -396,7 +445,7 @@ public class POSViewModel : ViewModelBase
     {
         text = text.Trim();
         if (text.Length == 0 || !CanScan) return;
-        SearchText = string.Empty; // Release the input immediately, before any database round trip.
+        ClearSearchInput(); // Release the input immediately, before any database round trip.
         _pendingScans++; Requery();
         await _operations.WaitAsync();
         try
@@ -623,6 +672,7 @@ public class POSViewModel : ViewModelBase
                 foreach (var item in items) SearchResults.Add(item);
                 DisplayProducts(items);
                 _isSearching = text.Length > 0; HasMoreProducts = !_isSearching && items.Count == 60;
+                _catalogueOffset = _isSearching ? 0 : items.Count;
                 foreach (var category in Categories) category.IsSelected = !_isSearching && category.Id == _catalogCategoryId;
                 ResultsTitle = !_isSearching ? Categories.FirstOrDefault(c => c.IsSelected)?.Name ?? "الأصناف"
                     : items.Count == 0 ? "لا توجد نتائج للبحث"
@@ -653,7 +703,7 @@ public class POSViewModel : ViewModelBase
     {
         _lastInvoiceId = invoice.Id; _lastReceipt = null;
         // Clear the committed sale before printing. Printer failure must never allow a duplicate checkout.
-        CartLines.Clear(); AmountTendered = 0; DiscountAmount = 0; SearchResults.Clear(); SearchText = string.Empty;
+        CartLines.Clear(); AmountTendered = 0; DiscountAmount = 0; SearchResults.Clear(); ClearSearchInput();
         _checkoutRequestId = Guid.NewGuid(); CheckoutUncertain = false;
         SuccessMessage = $"تم حفظ الفاتورة {invoice.Number}" + (invoice.PaymentMethod == PaymentMethod.Credit
             ? $" — المستلم {invoice.InitialPaymentAmount:N2}، المتبقي على العميل {invoice.DebtAtSale:N2}."

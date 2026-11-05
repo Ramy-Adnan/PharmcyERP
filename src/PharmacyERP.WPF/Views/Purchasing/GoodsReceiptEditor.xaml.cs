@@ -13,15 +13,23 @@ public partial class GoodsReceiptEditor : UserControl
         InitializeComponent();
         DataContextChanged += (_, e) =>
         {
-            if (e.OldValue is GoodsReceiptEditViewModel previous) previous.QuickItemAdded -= FocusBatchNumber;
-            if (e.NewValue is GoodsReceiptEditViewModel current) current.QuickItemAdded += FocusBatchNumber;
+            if (e.OldValue is GoodsReceiptEditViewModel previous)
+            { previous.QuickItemAdded -= FocusBatchNumber; previous.IncompleteLineRequested -= FocusField; }
+            if (e.NewValue is GoodsReceiptEditViewModel current)
+            { current.QuickItemAdded += FocusBatchNumber; current.IncompleteLineRequested += FocusField; }
         };
     }
 
     private void EditorPreviewKeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key != Key.F2) return;
-        e.Handled = true; QuickSearchBox.Focus(); QuickSearchBox.SelectAll();
+        if (e.Key == Key.F2)
+        { e.Handled = true; QuickSearchBox.Focus(); QuickSearchBox.SelectAll(); }
+        else if (e.Key == Key.F4 && DataContext is GoodsReceiptEditViewModel vm && vm.FindIncompleteLineCommand.CanExecute(null))
+        {
+            e.Handled = true;
+            if (ReceiptLinesGrid.CommitEdit(DataGridEditingUnit.Cell, true) && ReceiptLinesGrid.CommitEdit(DataGridEditingUnit.Row, true))
+                vm.FindIncompleteLineCommand.Execute(null);
+        }
     }
     private void QuickSearchKeyDown(object sender, KeyEventArgs e)
     {
@@ -42,13 +50,24 @@ public partial class GoodsReceiptEditor : UserControl
     {
         if (DataContext is GoodsReceiptEditViewModel vm && vm.SelectedQuickItem is not null) vm.AddQuickItem();
     }
-    private void FocusBatchNumber(GRLineRow row)
+    private void FocusBatchNumber(GRLineRow row) => FocusField(row, nameof(GRLineRow.BatchNumber));
+    private void FocusField(GRLineRow row, string property)
     {
         Dispatcher.BeginInvoke(DispatcherPriority.Input, new Action(() =>
         {
             if (!IsVisible || !ReceiptLinesGrid.Items.Contains(row)) return;
-            ReceiptLinesGrid.ScrollIntoView(row); ReceiptLinesGrid.SelectedItem = row;
-            ReceiptLinesGrid.CurrentCell = new DataGridCellInfo(row, ReceiptLinesGrid.Columns[2]);
+            var index = property switch
+            {
+                nameof(GRLineRow.ItemId) => 0,
+                nameof(GRLineRow.ExpiryDate) => 3,
+                nameof(GRLineRow.QuantityReceived) => 5,
+                nameof(GRLineRow.UnitCost) => 6,
+                nameof(GRLineRow.SalePrice) => 7,
+                _ => 2
+            };
+            var column = ReceiptLinesGrid.Columns[index];
+            ReceiptLinesGrid.ScrollIntoView(row, column); ReceiptLinesGrid.SelectedItem = row;
+            ReceiptLinesGrid.CurrentCell = new DataGridCellInfo(row, column);
             ReceiptLinesGrid.Focus(); ReceiptLinesGrid.BeginEdit();
         }));
     }

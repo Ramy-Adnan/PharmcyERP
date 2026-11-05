@@ -23,17 +23,17 @@
                     </Grid.ColumnDefinitions>
 
                     <StackPanel Grid.Column="0">
-                        <TextBlock Text="رمز الصنف" Margin="0,0,0,4"/>
+                        <TextBlock Text="رمز الصنف (اختياري؛ يُولّد تلقائيًا)" Margin="0,0,0,4"/>
                         <TextBox x:Name="CodeBox" Text="{Binding Code, UpdateSourceTrigger=PropertyChanged}" Padding="6" Margin="0,0,0,12"/>
                     </StackPanel>
                     <StackPanel Grid.Column="2">
                         <TextBlock Text="باركود العبوة" Margin="0,0,0,4"/>
-                        <TextBox Text="{Binding Barcode, UpdateSourceTrigger=PropertyChanged}" Padding="6" Margin="0,0,0,12"/>
+                        <TextBox x:Name="BarcodeBox" Text="{Binding Barcode, UpdateSourceTrigger=PropertyChanged}" PreviewKeyDown="BarcodeKeyDown" Padding="6" Margin="0,0,0,12"/>
                     </StackPanel>
                 </Grid>
 
                 <TextBlock Text="اسم الصنف" Margin="0,0,0,4"/>
-                <TextBox Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" Padding="6" Margin="0,0,0,12"/>
+                <TextBox x:Name="NameBox" Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" Padding="6" Margin="0,0,0,12"/>
 
                 <TextBlock Text="الاسم العلمي (Generic Name)" Margin="0,0,0,4"/>
                 <TextBox Text="{Binding GenericName, UpdateSourceTrigger=PropertyChanged}" Padding="6" Margin="0,0,0,12"/>
@@ -74,6 +74,7 @@
                     </StackPanel>
                 </Grid>
 
+                <Expander Header="تعبئة العلبة ووحدات البيع: شريط / حبة / باكيت" IsExpanded="{Binding IsPackagingExpanded}" Margin="0,0,0,12"><StackPanel>
                 <Border Background="#E8F6F3" Padding="12" CornerRadius="8" Margin="0,0,0,12">
                     <StackPanel>
                         <TextBlock Text="تعبئة العبوة ووحدات البيع" FontWeight="Bold" Margin="0,0,0,8"/>
@@ -97,6 +98,7 @@
                     </DataGrid.Columns>
                 </DataGrid>
                 <Button Content="إضافة وحدة بيع / شراء" Command="{Binding AddSaleUnitCommand}" Padding="8,5" Margin="0,6,0,12"/>
+                </StackPanel></Expander>
                 <TextBlock Text="الشركة المصنّعة (اختياري)" Margin="0,0,0,4"/>
                 <ComboBox ItemsSource="{Binding Manufacturers}" DisplayMemberPath="Name" SelectedValuePath="Id"
                           SelectedValue="{Binding ManufacturerId}" Padding="6" Margin="0,0,0,12"/>

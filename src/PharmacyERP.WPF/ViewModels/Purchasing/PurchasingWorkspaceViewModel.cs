@@ -23,6 +23,7 @@ public class PurchasingWorkspaceViewModel : ViewModelBase
     private bool _isBusy, _initialized, _receiptPosted, _invoicePrepared;
     private string _message = string.Empty, _error = string.Empty;
     private decimal _paymentAmount;
+    private RecordPaymentDto? _pendingPayment;
     private GoodsReceiptNoteDto? _resumeReceipt;
     private PurchaseInvoiceDto? _resumeInvoice, _invoice;
     private GoodsReceiptEditViewModel _receipt = null!;
@@ -37,16 +38,16 @@ public class PurchasingWorkspaceViewModel : ViewModelBase
         NextCommand = new AsyncRelayCommand(ContinueAsync, () => CanContinue);
         SaveDraftCommand = new AsyncRelayCommand(SaveDraftAsync, () => CanInteract && IsGoodsStep && CanReceiveGoods && !_receiptPosted);
         BackCommand = new RelayCommand(GoBack, () => CanInteract && IsGoodsStep && !_receiptPosted);
-        NewPurchaseCommand = new AsyncRelayCommand(StartNewAsync, () => CanInteract && (IsSupplierStep || IsPaymentStep));
+        NewPurchaseCommand = new AsyncRelayCommand(StartNewAsync, () => CanInteract && !HasPendingPayment && (IsSupplierStep || IsPaymentStep));
         RefreshCommand = new AsyncRelayCommand(RefreshAsync, () => CanInteract);
         SaveSupplierCommand = new AsyncRelayCommand(SaveSupplierAsync, () => CanInteract && CanManageSuppliers && CanChangeSupplier);
         ResumeReceiptCommand = new AsyncRelayCommand(() => ResumeReceiptAsync(SelectedReceiptToResume!.Id),
-            () => CanInteract && SelectedReceiptToResume is not null && CanReceiveGoods);
+            () => CanInteract && !HasPendingPayment && SelectedReceiptToResume is not null && CanReceiveGoods);
         ResumeInvoiceCommand = new AsyncRelayCommand(() => ResumeInvoiceAsync(SelectedInvoiceToResume!.Id),
-            () => CanInteract && SelectedInvoiceToResume is not null && CanManageInvoices);
-        PayCommand = new AsyncRelayCommand(PayAsync, () => CanInteract && IsPaymentStep && CanManageInvoices && Invoice?.AmountDue > 0);
+            () => CanInteract && !HasPendingPayment && SelectedInvoiceToResume is not null && CanManageInvoices);
+        PayCommand = new AsyncRelayCommand(PayAsync, () => CanInteract && IsPaymentStep && CanManageInvoices && (HasPendingPayment || Invoice?.AmountDue > 0));
         PayInFullCommand = new RelayCommand(() => PaymentAmount = Invoice?.AmountDue ?? 0,
-            () => CanInteract && IsPaymentStep && Invoice?.AmountDue > 0);
+            () => CanInteract && !HasPendingPayment && IsPaymentStep && Invoice?.AmountDue > 0);
     }
 
     public bool CanManageSuppliers => _user.HasPermission("Purchasing.ManageSuppliers");
@@ -107,7 +108,10 @@ public class PurchasingWorkspaceViewModel : ViewModelBase
     public bool CanInteract => !IsBusy && Receipt?.IsBusy != true;
     public string Message { get => _message; private set => SetProperty(ref _message, value); }
     public string ErrorMessage { get => _error; private set => SetProperty(ref _error, value); }
-    public decimal PaymentAmount { get => _paymentAmount; set => SetProperty(ref _paymentAmount, value); }
+    public bool HasPendingPayment => _pendingPayment is not null;
+    public bool CanEditPaymentAmount => !HasPendingPayment;
+    public string PaymentActionLabel => HasPendingPayment ? "التحقق من الدفعة السابقة" : "تسجيل الدفعة";
+    public decimal PaymentAmount { get => _paymentAmount; set { if (!HasPendingPayment) SetProperty(ref _paymentAmount, value); } }
     public string ReceiptLabel { get; private set; } = "لم يُحفظ الاستلام بعد";
     public bool CanContinue => CanInteract && (Step switch
     {
@@ -161,6 +165,7 @@ public class PurchasingWorkspaceViewModel : ViewModelBase
     public Task StartNewAsync() => RunAsync(StartNewCoreAsync);
     private async Task StartNewCoreAsync()
     {
+        if (HasPendingPayment) { ErrorMessage = "تحقق من الدفعة السابقة قبل بدء عملية جديدة."; return; }
         CreateEditors(); _receiptPosted = false; _invoicePrepared = false; _supplierId = 0; Invoice = null;
         ReceiptLabel = "لم يُحفظ الاستلام بعد"; PaymentAmount = 0; Step = PurchaseStep.Supplier;
         await Receipt.LoadForCreateAsync(_user.CurrentBranchId); await LoadListsAsync(); NotifyState();
@@ -248,6 +253,7 @@ public class PurchasingWorkspaceViewModel : ViewModelBase
     }
     public Task ResumeReceiptAsync(int receiptId) => RunAsync(async () =>
     {
+        if (HasPendingPayment) { ErrorMessage = "تحقق من الدفعة السابقة قبل فتح مستند آخر."; return; }
         if (!CanReceiveGoods) { ErrorMessage = "تحتاج صلاحية استلام البضاعة."; return; }
         var note = (await _purchasing.GetGoodsReceiptNotesAsync()).FirstOrDefault(r => r.Id == receiptId && r.Status != GoodsReceiptStatus.Cancelled);
         if (note is null) { ErrorMessage = "سند الاستلام غير موجود أو ملغى."; return; }
@@ -264,6 +270,7 @@ public class PurchasingWorkspaceViewModel : ViewModelBase
     });
     public Task ResumeInvoiceAsync(int invoiceId) => RunAsync(async () =>
     {
+        if (HasPendingPayment) { ErrorMessage = "تحقق من الدفعة السابقة قبل فتح مستند آخر."; return; }
         if (!CanManageInvoices) { ErrorMessage = "تحتاج صلاحية إدارة فواتير الشراء."; return; }
         var invoice = (await _purchasing.GetPurchaseInvoicesAsync()).FirstOrDefault(i => i.Id == invoiceId && i.Status != PurchaseInvoiceStatus.Cancelled);
         if (invoice is null) { ErrorMessage = "الفاتورة غير موجودة أو ملغاة."; return; }
@@ -273,10 +280,29 @@ public class PurchasingWorkspaceViewModel : ViewModelBase
     public Task PayAsync() => RunAsync(async () =>
     {
         if (!CanManageInvoices || !IsPaymentStep || Invoice is null) { ErrorMessage = "تحتاج فاتورة محفوظة وصلاحية إدارة فواتير الشراء."; return; }
-        if (PaymentAmount <= 0 || PaymentAmount > Invoice.AmountDue) { ErrorMessage = "أدخل مبلغاً أكبر من صفر ولا يتجاوز المتبقي."; return; }
-        var result = await _purchasing.RecordPaymentAsync(new RecordPaymentDto { PurchaseInvoiceId = Invoice.Id, Amount = PaymentAmount });
-        if (!result.Succeeded) { ErrorMessage = result.Errors.FirstOrDefault() ?? "تعذر تسجيل الدفعة."; return; }
-        await LoadListsAsync(); PaymentAmount = 0; Message = "تم تسجيل الدفعة وتحديث المتبقي للمورد.";
+        if (_pendingPayment is null)
+        {
+            if (PaymentAmount <= 0 || PaymentAmount > Invoice.AmountDue) { ErrorMessage = "أدخل مبلغاً أكبر من صفر ولا يتجاوز المتبقي."; return; }
+            _pendingPayment = new RecordPaymentDto { PurchaseInvoiceId = Invoice.Id, Amount = PaymentAmount };
+            NotifyState();
+        }
+        PharmacyERP.Application.Common.Models.Result result;
+        try { result = await _purchasing.RecordPaymentAsync(_pendingPayment); }
+        catch (Exception ex)
+        {
+            ErrorMessage = "تعذر التأكد من تسجيل الدفعة. أعد الاتصال واضغط التحقق من الدفعة السابقة؛ لا تسجل مبلغاً آخر. " + ex.Message;
+            return;
+        }
+        if (!result.Succeeded)
+        {
+            _pendingPayment = null; NotifyState();
+            ErrorMessage = result.Errors.FirstOrDefault() ?? "تعذر تسجيل الدفعة."; return;
+        }
+        // Resolve the payment before refreshing. A failed list refresh must never
+        // cause another cash movement when the user retries the same screen.
+        _pendingPayment = null; PaymentAmount = 0; NotifyState();
+        Message = "تم تسجيل الدفعة للمورد.";
+        await LoadListsAsync(); Message = "تم تسجيل الدفعة وتحديث المتبقي للمورد.";
     });
     public void ReportInputError() => ErrorMessage = "راجع الحقول الحمراء وأدخل أرقاماً وتواريخ صحيحة قبل الحفظ.";
 
@@ -293,7 +319,8 @@ public class PurchasingWorkspaceViewModel : ViewModelBase
     {
         foreach (var name in new[] { nameof(IsSupplierStep), nameof(IsGoodsStep), nameof(IsInvoiceStep), nameof(IsPaymentStep),
             nameof(CanInteract), nameof(CanContinue), nameof(SelectedSupplierId), nameof(CanChangeSupplier), nameof(CanAddSupplier), nameof(SelectedSupplier),
-            nameof(ReceiptId), nameof(ReceiptLabel), nameof(NextLabel), nameof(StepTitle), nameof(StepHint), nameof(PaymentStatus) }) OnPropertyChanged(name);
+            nameof(ReceiptId), nameof(ReceiptLabel), nameof(NextLabel), nameof(StepTitle), nameof(StepHint), nameof(PaymentStatus),
+            nameof(HasPendingPayment), nameof(CanEditPaymentAmount), nameof(PaymentActionLabel) }) OnPropertyChanged(name);
         System.Windows.Input.CommandManager.InvalidateRequerySuggested();
     }
 }

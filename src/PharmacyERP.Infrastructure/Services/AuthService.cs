@@ -44,7 +44,7 @@ public class AuthService : IAuthService
             return Result<LoginResultDto>.Failure("اسم المستخدم أو كلمة المرور غير صحيحة.");
         }
 
-        if (user.IsLockedOut())
+        if (user.Status == UserStatus.Locked || user.LockoutEndUtc > _dateTime.UtcNow)
         {
             await LogAttemptAsync(user.Id, request, succeeded: false, "الحساب مقفل مؤقتاً", cancellationToken);
             var remaining = user.LockoutEndUtc.HasValue ? user.LockoutEndUtc.Value - _dateTime.UtcNow : TimeSpan.Zero;

@@ -41,7 +41,11 @@
         <Border Grid.Row="2" Background="White" BorderBrush="#E5E7EB" BorderThickness="1">
             <DockPanel>
                 <StackPanel DockPanel.Dock="Top" Margin="10,6">
-                    <TextBlock Text="بحث ثم Enter • صنف جديد Ctrl+N • تعديل F2 • استلام مباشر Ctrl+R • تحديث F5" Foreground="#64748B" FontSize="12" TextWrapping="Wrap"/>
+                    <TextBlock Text="بحث مباشر أثناء الكتابة • Enter للبحث فوراً • صنف جديد Ctrl+N • تعديل F2 • استلام Ctrl+R • تحديث F5" Foreground="#64748B" FontSize="12" TextWrapping="Wrap"/>
+                    <DockPanel Margin="0,6,0,0">
+                        <Button DockPanel.Dock="Left" Content="عرض المزيد من الأصناف" Command="{Binding LoadMoreCommand}" Padding="12,6" Visibility="{Binding HasMore, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                        <TextBlock Text="{Binding ResultsSummary}" Foreground="#62738F" VerticalAlignment="Center"/>
+                    </DockPanel>
                     <TextBlock Text="{Binding StatusMessage}" Foreground="#166534" Margin="0,4,0,0" TextWrapping="Wrap" Visibility="{Binding StatusMessage, Converter={StaticResource StringToVisibilityConverter}}"/>
                     <TextBlock Text="{Binding ErrorMessage}" Foreground="#B91C1C" Margin="0,4,0,0" TextWrapping="Wrap" Visibility="{Binding ErrorMessage, Converter={StaticResource StringToVisibilityConverter}}"/>
                 </StackPanel>

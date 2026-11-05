@@ -15,12 +15,18 @@ public class ItemsViewModel : ViewModelBase
     private readonly ICurrentUserService _currentUserService;
     private ItemDto? _selectedItem;
     private string _searchText = string.Empty, _statusMessage = string.Empty, _errorMessage = string.Empty;
-    private bool _isBusy;
+    private bool _isBusy, _initialized, _active, _editorOpen, _hasMore;
+    private int _nextSkip, _searchVersion;
+    private string _loadedSearch = string.Empty;
+    private CancellationTokenSource? _searchDelay;
+    private readonly SemaphoreSlim _operations = new(1, 1);
+    private const int PageSize = 60;
 
     public ItemsViewModel(IInventoryService inventoryService, IDialogService dialogService, ICurrentUserService currentUserService)
     {
         _inventoryService = inventoryService; _dialogService = dialogService; _currentUserService = currentUserService;
         SearchCommand = new AsyncRelayCommand(LoadItemsAsync, () => !IsBusy);
+        LoadMoreCommand = new AsyncRelayCommand(LoadMoreAsync, () => !IsBusy && HasMore);
         AddItemCommand = new AsyncRelayCommand(() => RunAsync(AddItemCoreAsync), () => !IsBusy && CanManageItems);
         EditItemCommand = new AsyncRelayCommand(() => RunAsync(EditItemCoreAsync), () => !IsBusy && CanManageItems && SelectedItem is not null);
         ToggleActiveCommand = new AsyncRelayCommand(() => RunAsync(ToggleActiveCoreAsync), () => !IsBusy && CanManageItems && SelectedItem is not null);
@@ -39,11 +45,24 @@ public class ItemsViewModel : ViewModelBase
         get => _selectedItem;
         set { if (SetProperty(ref _selectedItem, value)) System.Windows.Input.CommandManager.InvalidateRequerySuggested(); }
     }
-    public string SearchText { get => _searchText; set => SetProperty(ref _searchText, value); }
+    public string SearchText
+    {
+        get => _searchText;
+        set
+        {
+            if (!SetProperty(ref _searchText, value)) return;
+            CancelPendingSearch(); HasMore = false; SelectedItem = null;
+            if (_initialized && _active && !_editorOpen) QueueSearch();
+        }
+    }
+    public bool HasMore { get => _hasMore; private set { if (SetProperty(ref _hasMore, value)) System.Windows.Input.CommandManager.InvalidateRequerySuggested(); } }
+    public string ResultsSummary => Items.Count == 0 ? "لا توجد أصناف مطابقة؛ غيّر البحث أو أضف صنفاً جديداً."
+        : $"المعروض: {Items.Count:N0} صنف" + (HasMore ? " — تتوفر نتائج أخرى" : string.Empty);
     public string StatusMessage { get => _statusMessage; private set => SetProperty(ref _statusMessage, value); }
     public string ErrorMessage { get => _errorMessage; private set => SetProperty(ref _errorMessage, value); }
     public bool IsBusy { get => _isBusy; private set { if (SetProperty(ref _isBusy, value)) System.Windows.Input.CommandManager.InvalidateRequerySuggested(); } }
     public AsyncRelayCommand SearchCommand { get; }
+    public AsyncRelayCommand LoadMoreCommand { get; }
     public AsyncRelayCommand AddItemCommand { get; }
     public AsyncRelayCommand EditItemCommand { get; }
     public AsyncRelayCommand ToggleActiveCommand { get; }
@@ -51,24 +70,80 @@ public class ItemsViewModel : ViewModelBase
     public AsyncRelayCommand PrintLabelsCommand { get; }
     public AsyncRelayCommand ReceiveStockCommand { get; }
 
-    public Task InitializeAsync() => LoadItemsAsync();
-    private Task LoadItemsAsync() => RunAsync(ReloadItemsCoreAsync);
+    public Task InitializeAsync()
+    {
+        if (_active && _initialized) return Task.CompletedTask;
+        _active = _initialized = true;
+        return LoadItemsAsync();
+    }
+    public void Suspend()
+    { _active = false; CancelPendingSearch(); }
+
+    public async Task WaitForIdleAsync()
+    { await _operations.WaitAsync(); _operations.Release(); }
+
+    private void CancelPendingSearch()
+    { _searchVersion++; _searchDelay?.Cancel(); _searchDelay?.Dispose(); _searchDelay = null; }
+
+    private void QueueSearch()
+    {
+        var delay = new CancellationTokenSource(); _searchDelay = delay;
+        _ = DebouncedSearchAsync(_searchVersion, delay.Token);
+    }
+    private async Task DebouncedSearchAsync(int version, CancellationToken cancellationToken)
+    {
+        try { await Task.Delay(300, cancellationToken); await LoadPageAsync(false, version); }
+        catch (OperationCanceledException) { }
+    }
+    private Task LoadItemsAsync()
+    { CancelPendingSearch(); return LoadPageAsync(false, _searchVersion); }
+    private Task LoadMoreAsync() => LoadPageAsync(true, _searchVersion);
+
+    private async Task LoadPageAsync(bool append, int version)
+    {
+        await _operations.WaitAsync();
+        try
+        {
+            if (!_active || _editorOpen || version != _searchVersion) return;
+            var text = SearchText.Trim();
+            if (append && (!HasMore || text != _loadedSearch)) return;
+            IsBusy = true; ErrorMessage = string.Empty;
+            var selectedId = SelectedItem?.Id;
+            var page = await _inventoryService.GetItemsPageAsync(text, append ? _nextSkip : 0, PageSize);
+            if (!_active || version != _searchVersion) return;
+            if (!append) Items.Clear();
+            foreach (var item in page.Items) if (!Items.Any(i => i.Id == item.Id)) Items.Add(item);
+            _loadedSearch = text; _nextSkip = page.NextSkip; HasMore = page.HasMore;
+            SelectedItem = Items.FirstOrDefault(i => i.Id == selectedId) ?? (Items.Count == 1 ? Items[0] : null);
+            OnPropertyChanged(nameof(ResultsSummary));
+        }
+        catch (Exception ex) { if (_active && version == _searchVersion) ErrorMessage = $"تعذر تحميل الأصناف: {ex.Message}"; }
+        finally { IsBusy = false; _operations.Release(); }
+    }
 
     private async Task RunAsync(Func<Task> operation)
     {
-        if (IsBusy) return;
-        IsBusy = true; ErrorMessage = string.Empty;
+        if (!_active || IsBusy) return;
+        CancelPendingSearch(); _editorOpen = true; IsBusy = true; ErrorMessage = string.Empty;
+        await _operations.WaitAsync();
         try { await operation(); }
         catch (Exception ex) { ErrorMessage = $"تعذر تنفيذ العملية: {ex.Message}"; }
-        finally { IsBusy = false; }
+        finally
+        {
+            _operations.Release(); _editorOpen = false; IsBusy = false;
+            if (_active && SearchText.Trim() != _loadedSearch) QueueSearch();
+        }
     }
 
     private async Task ReloadItemsCoreAsync()
     {
         var selectedId = SelectedItem?.Id;
-        var items = await _inventoryService.GetItemsAsync(SearchText);
-        Items.Clear(); foreach (var item in items) Items.Add(item);
+        var text = SearchText.Trim();
+        var page = await _inventoryService.GetItemsPageAsync(text, 0, PageSize);
+        Items.Clear(); foreach (var item in page.Items) Items.Add(item);
+        _loadedSearch = text; _nextSkip = page.NextSkip; HasMore = page.HasMore;
         SelectedItem = Items.FirstOrDefault(i => i.Id == selectedId);
+        OnPropertyChanged(nameof(ResultsSummary));
     }
 
     private async Task AddItemCoreAsync()
@@ -95,7 +170,9 @@ public class ItemsViewModel : ViewModelBase
         await vm.LoadForEditAsync(SelectedItem.Id);
         _dialogService.ShowDialog(window);
         if (!vm.SavedSuccessfully) return;
-        await ReloadItemsCoreAsync(); StatusMessage = $"تم تحديث بطاقة «{vm.SavedItemName}».";
+        SearchText = vm.SavedItemCode;
+        await ReloadItemsCoreAsync(); SelectedItem = Items.FirstOrDefault(i => i.Id == vm.SavedItemId);
+        StatusMessage = $"تم تحديث بطاقة «{vm.SavedItemName}».";
     }
 
     private async Task ToggleActiveCoreAsync()

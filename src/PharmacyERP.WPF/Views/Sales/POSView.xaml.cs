@@ -25,7 +25,7 @@ public partial class POSView : UserControl, IDisposable
     private readonly DispatcherTimer _globalScanTimer = new();
     private readonly BarcodeInputBuffer _globalScan = new();
     private Window? _window;
-    private bool _disposed, _captureInputEnabled;
+    private bool _disposed, _captureInputEnabled, _suppressEmptySearch;
     public POSViewModel ViewModel => _viewModel;
     public bool HasPendingScannerInput => _globalScan.HasPendingInput || _scanTimer.IsEnabled;
     public PharmacyBrandingViewModel Branding { get; }
@@ -64,6 +64,7 @@ public partial class POSView : UserControl, IDisposable
         {
             UpdateClock(); _clockTimer.Start(); ApplyResponsiveLayout();
             _viewModel.ScanFocusRequested += FocusScanner;
+            _viewModel.SearchInputCleared += StopSearchTimers;
             _window = Window.GetWindow(this);
             if (_window is not null) _window.PreviewKeyDown += WindowKeyDown;
             _captureInputEnabled = true;
@@ -79,6 +80,7 @@ public partial class POSView : UserControl, IDisposable
             ResetGlobalScan();
             InputManager.Current.PreProcessInput -= CaptureScannerInput;
             _viewModel.ScanFocusRequested -= FocusScanner;
+            _viewModel.SearchInputCleared -= StopSearchTimers;
             if (_window is not null) _window.PreviewKeyDown -= WindowKeyDown;
             _window = null;
         };
@@ -94,6 +96,7 @@ public partial class POSView : UserControl, IDisposable
         ResetGlobalScan();
         InputManager.Current.PreProcessInput -= CaptureScannerInput;
         _viewModel.ScanFocusRequested -= FocusScanner;
+        _viewModel.SearchInputCleared -= StopSearchTimers;
         if (_window is not null) _window.PreviewKeyDown -= WindowKeyDown;
         _dataScope.Dispose();
     }
@@ -184,6 +187,13 @@ public partial class POSView : UserControl, IDisposable
             }));
     }
     private void SaleUnitClosed(object sender, EventArgs e) => FocusScanner();
+    private void StopSearchTimers()
+    {
+        _scanTimer.Stop(); _liveSearchTimer.Stop();
+        // Binding updates may arrive after the notification at DataBind priority.
+        // Keep the empty clear suppressed until the user starts typing again.
+        _suppressEmptySearch = true;
+    }
     private void SaleUnitKeyDown(object sender, KeyEventArgs e)
     {
         if (e.Key == Key.Enter) { e.Handled = true; FocusScanner(); }
@@ -193,6 +203,8 @@ public partial class POSView : UserControl, IDisposable
         _scanTimer.Stop(); _liveSearchTimer.Stop();
         if (_disposed) return;
         var text = ScanBox.Text.Trim();
+        if (text.Length > 0) _suppressEmptySearch = false;
+        if (text.Length == 0 && _suppressEmptySearch) return;
         if (text.Length >= 3 && text.All(char.IsAsciiDigit)) _scanTimer.Start();
         else _liveSearchTimer.Start();
     }

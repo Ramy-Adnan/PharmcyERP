@@ -31,6 +31,7 @@ public class ReceiveBatchViewModel : PurchasePricingViewModel
     private string? _supplierReference;
     private string _errorMessage = string.Empty;
     private bool _isBusy;
+    private bool _manualSalePrice;
     private string _successMessage = string.Empty;
     private string _itemName = string.Empty;
 
@@ -59,7 +60,12 @@ public class ReceiveBatchViewModel : PurchasePricingViewModel
         {
             var old = PurchaseUnits.FirstOrDefault(u => u.Id == _itemSaleUnitId)?.BaseUnitCount ?? 1;
             if (!SetProperty(ref _itemSaleUnitId, value)) return;
-            PurchasePrice = Math.Round(PurchasePrice / old * (PurchaseUnits.FirstOrDefault(u => u.Id == value)?.BaseUnitCount ?? 1), 2, MidpointRounding.AwayFromZero);
+            var next = PurchaseUnits.FirstOrDefault(u => u.Id == value)?.BaseUnitCount ?? 1;
+            var preserveManual = _manualSalePrice;
+            var previousSalePrice = SalePriceOverride;
+            PurchasePrice = Math.Round(PurchasePrice / old * next, 2, MidpointRounding.AwayFromZero);
+            if (preserveManual && previousSalePrice.HasValue)
+                SalePriceOverride = Math.Round(previousSalePrice.Value / old * next, 2, MidpointRounding.AwayFromZero);
             OnPropertyChanged(nameof(SelectedPurchaseUnit)); OnPropertyChanged(nameof(PackagingDescription)); OnPropertyChanged(nameof(ReceiptSummary));
         }
     }
@@ -79,7 +85,11 @@ public class ReceiveBatchViewModel : PurchasePricingViewModel
             OnPropertyChanged(nameof(ReceiptSummary));
         }
     }
-    public decimal? SalePriceOverride { get => _salePriceOverride; set => SetProperty(ref _salePriceOverride, value); }
+    public decimal? SalePriceOverride
+    {
+        get => _salePriceOverride;
+        set { _manualSalePrice = value.HasValue && value.Value != SalePricePolicy.FromPurchasePrice(PurchasePrice, PurchaseType); SetProperty(ref _salePriceOverride, value); }
+    }
     public string? SupplierReference { get => _supplierReference; set => SetProperty(ref _supplierReference, value); }
 
     public string ErrorMessage { get => _errorMessage; set => SetProperty(ref _errorMessage, value); }

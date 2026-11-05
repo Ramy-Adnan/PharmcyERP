@@ -29,6 +29,7 @@ public interface IInventoryService
 
     // Items
     Task<List<ItemDto>> GetItemsAsync(string? searchText = null, CancellationToken cancellationToken = default);
+    Task<ItemPageDto> GetItemsPageAsync(string? searchText = null, int skip = 0, int pageSize = 60, CancellationToken cancellationToken = default);
     Task<ItemUpsertDto?> GetItemForEditAsync(int id, CancellationToken cancellationToken = default);
     Task<Result<ItemDto>> CreateItemAsync(ItemUpsertDto dto, CancellationToken cancellationToken = default);
     Task<Result<ItemDto>> UpdateItemAsync(ItemUpsertDto dto, CancellationToken cancellationToken = default);
