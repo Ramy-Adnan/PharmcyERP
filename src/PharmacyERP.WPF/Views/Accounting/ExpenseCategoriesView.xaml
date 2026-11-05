@@ -1,32 +1,32 @@
-<UserControl x:Class="PharmacyERP.WPF.Views.Accounting.ExpenseCategoriesView"
-             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             FlowDirection="RightToLeft">
-
+<UserControl xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="PharmacyERP.WPF.Views.Accounting.ExpenseCategoriesView" FlowDirection="RightToLeft" Background="#F9FAFB" FontFamily="/PharmacyERP.WPF;component/Resources/Fonts/#Cairo" UseLayoutRounding="True" SnapsToDevicePixels="True" FontSize="13">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/PharmacyERP.WPF;component/Themes/WorkspaceTheme.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
     <Grid Margin="20">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="12"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
-
-        <StackPanel Grid.Row="0" Orientation="Horizontal">
-            <TextBlock Text="فئات المصاريف" FontSize="20" FontWeight="Bold" Foreground="#1F2937" VerticalAlignment="Center"/>
-            <Button Content="فئة جديدة" Margin="16,0,0,0" Padding="14,6" Background="#1F6F50" Foreground="White" BorderThickness="0"
-                    Command="{Binding AddCategoryCommand}" Visibility="{Binding CanManage, Converter={StaticResource BoolToVisibilityConverter}}"/>
-            <Button Content="تحديث" Margin="8,0,0,0" Padding="14,6" Command="{Binding RefreshCommand}"/>
-        </StackPanel>
-
-        <Border Grid.Row="2" Background="White" BorderBrush="#E5E7EB" BorderThickness="1">
+        <Border Style="{StaticResource WorkspaceToolbarStyle}" Grid.Row="0">
+            <WrapPanel Orientation="Horizontal">
+                <TextBlock Text="فئات المصاريف" VerticalAlignment="Center" Style="{StaticResource WorkspacePageTitleStyle}" Margin="0,4,8,4"/>
+                <Button Content="فئة جديدة" Margin="16,0,0,0" Command="{Binding AddCategoryCommand}" Visibility="{Binding CanManage, Converter={StaticResource BoolToVisibilityConverter}}" Style="{StaticResource PrimaryButtonStyle}"/>
+                <Button Content="تحديث" Margin="8,0,0,0" Command="{Binding RefreshCommand}" Style="{StaticResource SecondaryButtonStyle}"/>
+            </WrapPanel>
+        </Border>
+        <Border Grid.Row="2" Background="White" BorderBrush="#E5E7EB" BorderThickness="1" Style="{StaticResource WorkspaceCardStyle}">
             <DockPanel>
-                <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="10" HorizontalAlignment="Left">
-                    <Button Content="تعديل" Padding="12,6" Command="{Binding EditCategoryCommand}"/>
-                </StackPanel>
-
-                <DataGrid ItemsSource="{Binding Categories}" SelectedItem="{Binding SelectedCategory}"
-                          AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False"
-                          GridLinesVisibility="Horizontal" HeadersVisibility="Column" BorderThickness="0"
-                          RowHeight="34" FontSize="13">
+                <Border Style="{StaticResource WorkspaceCardStyle}" DockPanel.Dock="Bottom" Margin="10" Background="#F8FAFC" Padding="12">
+                    <WrapPanel Orientation="Horizontal" HorizontalAlignment="Left">
+                        <Button Content="تعديل" Command="{Binding EditCategoryCommand}" Style="{StaticResource SecondaryButtonStyle}"/>
+                    </WrapPanel>
+                </Border>
+                <DataGrid ItemsSource="{Binding Categories}" SelectedItem="{Binding SelectedCategory}" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" GridLinesVisibility="Horizontal" HeadersVisibility="Column" BorderThickness="0" FontSize="13" Style="{StaticResource WorkspaceDataGridStyle}">
                     <DataGrid.Columns>
                         <DataGridTextColumn Header="اسم الفئة" Binding="{Binding Name}" Width="*"/>
                         <DataGridTextColumn Header="حساب المصروف الافتراضي" Binding="{Binding DefaultExpenseAccountName}" Width="220"/>

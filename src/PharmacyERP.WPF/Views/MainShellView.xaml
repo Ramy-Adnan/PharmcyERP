@@ -10,7 +10,7 @@
         WindowStartupLocation="CenterScreen"
         WindowState="Maximized"
         FlowDirection="RightToLeft"
-        FontFamily="Segoe UI, Tahoma"
+        FontFamily="{DynamicResource WorkspaceFont}"
         UseLayoutRounding="True"
         SnapsToDevicePixels="True"
         Background="{DynamicResource BackgroundBrush}"
@@ -22,15 +22,19 @@
     -->
 
     <Window.Resources>
+        <ResourceDictionary>
+        <ResourceDictionary.MergedDictionaries>
+            <ResourceDictionary Source="/PharmacyERP.WPF;component/Themes/WorkspaceTheme.xaml"/>
+        </ResourceDictionary.MergedDictionaries>
         <converters:Base64LogoConverter x:Key="Base64LogoConverter"/>
 
         <!-- ===================================================== -->
         <!-- COLORS -->
         <!-- ===================================================== -->
-        <Color x:Key="PrimaryColor">#176B4D</Color>
-        <Color x:Key="PrimaryDarkColor">#10543C</Color>
-        <Color x:Key="PrimaryLightColor">#E8F5EF</Color>
-        <Color x:Key="BackgroundColor">#F5F7FA</Color>
+        <Color x:Key="PrimaryColor">#1F6F50</Color>
+        <Color x:Key="PrimaryDarkColor">#17543C</Color>
+        <Color x:Key="PrimaryLightColor">#DCFCE7</Color>
+        <Color x:Key="BackgroundColor">#F9FAFB</Color>
         <Color x:Key="DangerColor">#D92D20</Color>
 
         <!-- ===================================================== -->
@@ -41,16 +45,16 @@
         <SolidColorBrush x:Key="PrimaryLightBrush" Color="{StaticResource PrimaryLightColor}"/>
         <SolidColorBrush x:Key="BackgroundBrush" Color="{StaticResource BackgroundColor}"/>
         <SolidColorBrush x:Key="SurfaceBrush" Color="#FFFFFF"/>
-        <SolidColorBrush x:Key="TextBrush" Color="#17202A"/>
-        <SolidColorBrush x:Key="SecondaryTextBrush" Color="#667085"/>
-        <SolidColorBrush x:Key="MutedBrush" Color="#98A2B3"/>
-        <SolidColorBrush x:Key="BorderLineBrush" Color="#E6EAF0"/>
-        <SolidColorBrush x:Key="HoverBrush" Color="#F2F4F7"/>
+        <SolidColorBrush x:Key="TextBrush" Color="#1F2937"/>
+        <SolidColorBrush x:Key="SecondaryTextBrush" Color="#64748B"/>
+        <SolidColorBrush x:Key="MutedBrush" Color="#64748B"/>
+        <SolidColorBrush x:Key="BorderLineBrush" Color="#E5E7EB"/>
+        <SolidColorBrush x:Key="HoverBrush" Color="#F3F4F6"/>
         <SolidColorBrush x:Key="DangerBrush" Color="{StaticResource DangerColor}"/>
 
         <LinearGradientBrush x:Key="HeaderBrush" StartPoint="0,0" EndPoint="1,0">
-            <GradientStop Color="#10543C" Offset="0"/>
-            <GradientStop Color="#176B4D" Offset="1"/>
+            <GradientStop Color="#17543C" Offset="0"/>
+            <GradientStop Color="#1F6F50" Offset="1"/>
         </LinearGradientBrush>
 
         <!-- ===================================================== -->
@@ -292,7 +296,7 @@
         <!-- ===================================================== -->
         <!-- HEADER BUTTONS -->
         <!-- ===================================================== -->
-        <Style x:Key="HeaderButtonStyle" TargetType="Button">
+        <Style x:Key="HeaderButtonStyle" TargetType="Button" BasedOn="{StaticResource WorkspaceButtonBase}">
             <Setter Property="Foreground" Value="White"/>
             <Setter Property="Background" Value="#22FFFFFF"/>
             <Setter Property="FontSize" Value="13"/>
@@ -366,12 +370,13 @@
             </Setter>
         </Style>
 
+        </ResourceDictionary>
     </Window.Resources>
 
     <Grid>
 
         <Grid.RowDefinitions>
-            <RowDefinition Height="64"/>
+            <RowDefinition Height="72"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
