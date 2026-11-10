@@ -986,12 +986,24 @@
 
             <Grid Grid.Column="1"
                   Background="{StaticResource BackgroundBrush}">
-
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+                <Border Grid.Row="0" Background="#FFFBEB" BorderBrush="#FDE68A" BorderThickness="0,0,0,1" Padding="16,10"
+                        Visibility="{Binding Licensing.ShowBanner, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <DockPanel>
+                        <Button DockPanel.Dock="Left" Content="التفعيل / التجديد" Command="{Binding NavigateToLicenseCommand}"
+                                Margin="12,0,0,0" Style="{StaticResource SecondaryButtonStyle}"
+                                Visibility="{Binding CanManageLicense, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                        <TextBlock Text="{Binding Licensing.Message}" TextWrapping="Wrap" VerticalAlignment="Center" Foreground="#92400E"/>
+                    </DockPanel>
+                </Border>
                 <!-- الصفحة الحالية -->
-                <ContentControl Content="{Binding CurrentView}"/>
+                <ContentControl Grid.Row="1" Content="{Binding CurrentView}"/>
 
                 <!-- رسالة البداية -->
-                <Border HorizontalAlignment="Center"
+                <Border Grid.Row="1" HorizontalAlignment="Center"
                         VerticalAlignment="Center"
                         Background="{StaticResource SurfaceBrush}"
                         BorderBrush="{StaticResource BorderLineBrush}"

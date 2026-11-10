@@ -19,9 +19,9 @@ public class InvoiceImageImportTests
 {
     private readonly FakeDateTime _clock = new() { UtcNow = new(2026,10,8,10,0,0,DateTimeKind.Utc) };
     private InventoryService Inventory(ApplicationDbContext db) => new(db, _clock);
-    private PurchasingService Purchases(ApplicationDbContext db) => new(db, Inventory(db), new AccountingService(db, _clock), _clock);
+    private PurchasingService Purchases(ApplicationDbContext db) => new(db, Inventory(db), new AccountingService(db, _clock, new PermissiveLicenseService()), _clock, new PermissiveLicenseService());
     private PurchaseImageImportService Import(ApplicationDbContext db) => new(db, Inventory(db), Purchases(db), new FakeCurrentUserService(), _clock);
-    private SalesService Sales(ApplicationDbContext db) => new(db, Inventory(db), new AccountingService(db,_clock),_clock,new FakeCurrentUserService());
+    private SalesService Sales(ApplicationDbContext db) => new(db, Inventory(db), new AccountingService(db,_clock, new PermissiveLicenseService()),_clock,new FakeCurrentUserService(), new PermissiveLicenseService());
     private async Task<TestFixture> Seed(ApplicationDbContext db)
     {
         var f = await TestDb.SeedBaselineAsync(db);

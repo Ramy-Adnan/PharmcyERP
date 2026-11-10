@@ -158,7 +158,7 @@ public class LocalInvoiceOcrTests
     {
         var clock = new FakeDateTime(); await using var db = TestDb.CreateContext(clock); var baseline = await TestDb.SeedBaselineAsync(db);
         (await db.UnitsOfMeasure.FindAsync(baseline.UnitOfMeasureId))!.Name = "حبة"; await db.SaveChangesAsync();
-        var inventory = new InventoryService(db, clock); var purchasing = new PurchasingService(db, inventory, new AccountingService(db, clock), clock);
+        var inventory = new InventoryService(db, clock); var purchasing = new PurchasingService(db, inventory, new AccountingService(db, clock, new PermissiveLicenseService()), clock, new PermissiveLicenseService());
         var review = new InvoiceImageImportViewModel(new LocalOcrInvoiceImageReader(new Ocr()),
             new PurchaseImageImportService(db, inventory, purchasing, new FakeCurrentUserService(), clock), inventory);
         await review.InitializeAsync(1, baseline.BranchId, baseline.WarehouseId); await review.AnalyzeAsync(Image());
@@ -171,7 +171,7 @@ public class LocalInvoiceOcrTests
     public async Task UnknownLayout_ExposesTextAndAllowsAddingAndRemovingManualReviewLines()
     {
         var clock = new FakeDateTime(); await using var db = TestDb.CreateContext(clock); var baseline = await TestDb.SeedBaselineAsync(db);
-        var inventory = new InventoryService(db, clock); var purchasing = new PurchasingService(db, inventory, new AccountingService(db, clock), clock);
+        var inventory = new InventoryService(db, clock); var purchasing = new PurchasingService(db, inventory, new AccountingService(db, clock, new PermissiveLicenseService()), clock, new PermissiveLicenseService());
         var review = new InvoiceImageImportViewModel(new LocalOcrInvoiceImageReader(new Ocr { Page = new("Unrecognized invoice text", Array.Empty<InvoiceOcrWord>()) }),
             new PurchaseImageImportService(db, inventory, purchasing, new FakeCurrentUserService(), clock), inventory);
         await review.InitializeAsync(1, baseline.BranchId, baseline.WarehouseId); await review.AnalyzeAsync(Image());

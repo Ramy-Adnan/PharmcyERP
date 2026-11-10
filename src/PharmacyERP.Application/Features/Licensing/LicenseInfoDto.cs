@@ -18,6 +18,8 @@ public class LicenseStatusDto
     public bool IsValid { get; set; }
     public bool IsExpired { get; set; }
     public bool IsHardwareMismatch { get; set; }
+    public bool IsVerificationConfigured { get; set; }
+    public bool IsClockRollbackDetected { get; set; }
     public int? DaysUntilExpiry { get; set; }
     public string? Message { get; set; }
     public LicenseInfoDto? License { get; set; }

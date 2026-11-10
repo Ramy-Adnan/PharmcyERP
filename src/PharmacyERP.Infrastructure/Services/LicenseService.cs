@@ -1,6 +1,5 @@
+using System.Globalization;
 using System.Security.Cryptography;
-using System.Text;
-using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using PharmacyERP.Application.Common.Models;
 using PharmacyERP.Application.Features.Licensing;
@@ -8,206 +7,224 @@ using PharmacyERP.Application.Features.Licensing;
 namespace PharmacyERP.Infrastructure.Services;
 
 /// <summary>
-/// Offline license file activation. A license file is a JSON payload plus an
-/// HMAC-SHA256 signature computed with a secret embedded in this build; the
-/// vendor generates and signs the file out-of-band (a small internal tool,
-/// not shipped with the product) using the matching secret, and the
-/// pharmacy's administrator imports the resulting .lic file here. This
-/// requires no license server and works fully offline, at the disclosed
-/// cost that the embedded secret is only as protected as the compiled
-/// binary itself — acceptable, standard practice for offline desktop
-/// licensing, and explicitly not presented as tamper-proof.
+/// Offline verification using an embedded public key. No signing secret is
+/// installed at the pharmacy. The local clock checkpoint detects ordinary clock
+/// rollback; it is not a substitute for a trusted online clock or tamper-proof storage.
 /// </summary>
 public class LicenseService : ILicenseService
 {
-    // In a real deployment this constant is unique per build/customer and never committed to a
-    // public repository; it is left as a placeholder here since this is a reference implementation.
-    private static string SigningSecret => Environment.GetEnvironmentVariable("PHARMACYERP_LICENSE_SIGNING_SECRET")
-        ?? throw new InvalidOperationException("Set PHARMACYERP_LICENSE_SIGNING_SECRET to use signed licenses.");
-
+    public const string PublicKeyResourceName = "PharmacyERP.Licensing.PublicKey.pem";
     private readonly string _licenseFilePath;
     private readonly string _machineIdFilePath;
+    private readonly string _clockFilePath;
+    private readonly Func<string?> _publicKeyReader;
+    private readonly Func<DateTime> _utcNow;
+    private readonly string _machineName;
+    private readonly object _sync = new();
 
     public LicenseService(IConfiguration configuration)
+        : this(configuration, ReadEmbeddedPublicKey, () => DateTime.UtcNow, Environment.MachineName) { }
+
+    /// <summary>Explicit dependencies allow crypto, expiry and clock checks without Windows or a database.</summary>
+    public LicenseService(IConfiguration configuration, Func<string?> publicKeyReader,
+        Func<DateTime>? utcNow = null, string? machineName = null)
     {
         var configuredFolder = configuration["ApplicationSettings:LicenseFolder"];
-        var dataFolder = string.IsNullOrWhiteSpace(configuredFolder)
+        var folder = string.IsNullOrWhiteSpace(configuredFolder)
             ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "PharmacyERP")
             : configuredFolder;
-
-        Directory.CreateDirectory(dataFolder);
-        _licenseFilePath = Path.Combine(dataFolder, "license.lic");
-        _machineIdFilePath = Path.Combine(dataFolder, "machine.id");
+        _licenseFilePath = Path.Combine(folder, "license.lic");
+        _machineIdFilePath = Path.Combine(folder, "machine.id");
+        _clockFilePath = Path.Combine(folder, "license-clock.date");
+        _publicKeyReader = publicKeyReader ?? throw new ArgumentNullException(nameof(publicKeyReader));
+        _utcNow = utcNow ?? (() => DateTime.UtcNow);
+        _machineName = machineName ?? Environment.MachineName;
     }
 
     public string GetHardwareFingerprint()
     {
-        // A lightweight, non-personally-identifying fingerprint: the machine name plus a GUID
-        // generated once and persisted locally (rather than querying WMI hardware identifiers,
-        // which adds complexity and occasionally requires elevated permissions to read reliably).
-        string machineGuid;
-        if (File.Exists(_machineIdFilePath))
+        lock (_sync)
         {
-            machineGuid = File.ReadAllText(_machineIdFilePath).Trim();
+            Directory.CreateDirectory(Path.GetDirectoryName(_machineIdFilePath)!);
+            if (!File.Exists(_machineIdFilePath))
+            {
+                var temporary = _machineIdFilePath + "." + Guid.NewGuid().ToString("N") + ".tmp";
+                try
+                {
+                    File.WriteAllText(temporary, Guid.NewGuid().ToString("N"));
+                    File.Move(temporary, _machineIdFilePath, overwrite: false);
+                }
+                catch (IOException) when (File.Exists(_machineIdFilePath)) { }
+                finally { if (File.Exists(temporary)) File.Delete(temporary); }
+            }
+            var machineGuid = File.ReadAllText(_machineIdFilePath).Trim();
+            if (!Guid.TryParseExact(machineGuid, "N", out _))
+                throw new InvalidOperationException("ملف معرّف الجهاز تالف. تواصل مع الدعم لاستعادة التفعيل؛ لا تحذف بيانات الصيدلية.");
+            return $"{_machineName}-{machineGuid}";
         }
-        else
-        {
-            machineGuid = Guid.NewGuid().ToString("N");
-            File.WriteAllText(_machineIdFilePath, machineGuid);
-        }
-
-        return $"{Environment.MachineName}-{machineGuid}";
     }
 
     public Task<LicenseStatusDto> GetLicenseStatusAsync(CancellationToken cancellationToken = default)
     {
-        if (!File.Exists(_licenseFilePath))
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_sync)
         {
-            return Task.FromResult(new LicenseStatusDto
+            if (!File.Exists(_licenseFilePath))
             {
-                IsPresent = false,
-                IsValid = false,
-                Message = "لا يوجد ترخيص مُفعَّل على هذا الجهاز."
-            });
+                return Task.FromResult(new LicenseStatusDto
+                {
+                    IsVerificationConfigured = HasPublicKey(),
+                    Message = "لا يوجد ترخيص مُفعّل. تتاح قراءة البيانات والنسخ الاحتياطي؛ استورد ترخيصاً لفتح العمليات."
+                });
+            }
+            try
+            {
+                if (new FileInfo(_licenseFilePath).Length > LicenseDocumentCodec.MaxDocumentCharacters * 4)
+                    return Task.FromResult(Invalid("ملف الترخيص يتجاوز الحجم المسموح."));
+                return Task.FromResult(ValidateLicenseContent(File.ReadAllText(_licenseFilePath), updateCheckpoint: true));
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+            {
+                return Task.FromResult(Invalid("تعذّر التحقق من الترخيص. تأكد من صلاحيات مجلد بيانات البرنامج وتواصل مع الدعم."));
+            }
         }
-
-        var content = File.ReadAllText(_licenseFilePath);
-        var status = ValidateLicenseContent(content);
-        return Task.FromResult(status);
     }
 
     public Task<Result<LicenseInfoDto>> ActivateLicenseAsync(string licenseFileContent, CancellationToken cancellationToken = default)
     {
-        var status = ValidateLicenseContent(licenseFileContent);
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_sync)
+        {
+            try
+            {
+                var status = ValidateLicenseContent(licenseFileContent, updateCheckpoint: false);
+                if (!status.IsValid || status.License is null)
+                    return Task.FromResult(Result<LicenseInfoDto>.Failure(status.Message ?? "ملف الترخيص غير صالح."));
 
-        if (!status.IsValid || status.License is null)
-            return Task.FromResult(Result<LicenseInfoDto>.Failure(status.Message ?? "ملف الترخيص غير صالح."));
-
-        File.WriteAllText(_licenseFilePath, licenseFileContent);
-        return Task.FromResult(Result<LicenseInfoDto>.Success(status.License));
+                Directory.CreateDirectory(Path.GetDirectoryName(_licenseFilePath)!);
+                // Preserve the previous valid activation until writing the replacement succeeds.
+                WriteAtomic(_licenseFilePath, licenseFileContent);
+                SaveClockCheckpoint(_utcNow().ToUniversalTime().Date);
+                return Task.FromResult(Result<LicenseInfoDto>.Success(status.License));
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+            {
+                return Task.FromResult(Result<LicenseInfoDto>.Failure("تعذّر حفظ الترخيص. تأكد من صلاحيات مجلد بيانات البرنامج وحاول مجدداً."));
+            }
+        }
     }
 
     public async Task<bool> CanAddBranchAsync(int currentActiveBranchCount, CancellationToken cancellationToken = default)
     {
         var status = await GetLicenseStatusAsync(cancellationToken);
-        if (!status.IsValid || status.License is null) return false;
-
-        return currentActiveBranchCount < status.License.MaxBranches;
+        return status.IsValid && status.License is not null && currentActiveBranchCount < status.License.MaxBranches;
     }
 
     public async Task<bool> CanAddUserAsync(int currentActiveUserCount, CancellationToken cancellationToken = default)
     {
         var status = await GetLicenseStatusAsync(cancellationToken);
-        if (!status.IsValid || status.License is null) return false;
-
-        return currentActiveUserCount < status.License.MaxUsers;
+        return status.IsValid && status.License is not null && currentActiveUserCount < status.License.MaxUsers;
     }
 
-    private LicenseStatusDto ValidateLicenseContent(string content)
+    private LicenseStatusDto ValidateLicenseContent(string content, bool updateCheckpoint)
     {
-        SignedLicenseFile? signedFile;
+        if (!LicenseDocumentCodec.TryRead(content, out var document, out var error)) return Invalid(error);
+        string? key;
+        try { key = _publicKeyReader(); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException) { key = null; }
+        if (string.IsNullOrWhiteSpace(key))
+            return Invalid("هذه النسخة لا تحتوي مفتاح تحقق للترخيص. اطلب من المورّد نسخة النشر التجارية.", configured: false);
         try
         {
-            signedFile = JsonSerializer.Deserialize<SignedLicenseFile>(content,
-                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            using var rsa = LicenseDocumentCodec.ReadPublicKey(key);
+            if (!LicenseDocumentCodec.Verify(document!, rsa)) return Invalid("توقيع الترخيص غير صحيح؛ الملف معدّل أو صادر عن جهة أخرى.");
         }
-        catch
+        catch (Exception ex) when (ex is CryptographicException or ArgumentException)
         {
-            return new LicenseStatusDto { IsPresent = true, IsValid = false, Message = "تعذّرت قراءة ملف الترخيص — الملف تالف أو غير صحيح." };
+            return Invalid("مفتاح التحقق في نسخة البرنامج غير صالح. تواصل مع المورّد.", configured: false);
         }
 
-        if (signedFile is null || string.IsNullOrWhiteSpace(signedFile.Signature))
-            return new LicenseStatusDto { IsPresent = true, IsValid = false, Message = "ملف الترخيص غير مكتمل." };
-
-        var expectedSignature = ComputeSignature(signedFile.Payload);
-        if (!CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(expectedSignature), Encoding.UTF8.GetBytes(signedFile.Signature)))
-        {
+        var payload = document!.Payload!;
+        var info = LicenseDocumentCodec.ToInfo(payload);
+        var today = _utcNow().ToUniversalTime().Date;
+        if (!string.Equals(payload.HardwareId, GetHardwareFingerprint(), StringComparison.Ordinal))
             return new LicenseStatusDto
             {
-                IsPresent = true,
-                IsValid = false,
-                Message = "توقيع ملف الترخيص غير صحيح — الملف قد يكون معدَّلاً أو غير صادر عن الجهة المرخِّصة."
+                IsPresent = true, IsVerificationConfigured = true, IsHardwareMismatch = true, License = info,
+                Message = "هذا الترخيص صادر لجهاز آخر. اطلب ترخيصاً مرتبطاً بمعرّف الجهاز الحالي."
             };
-        }
-
-        var payload = signedFile.Payload;
-        var license = new LicenseInfoDto
-        {
-            LicenseKey = payload.LicenseKey,
-            CustomerName = payload.CustomerName,
-            IssuedAtUtc = payload.IssuedAtUtc,
-            ExpiryDate = payload.ExpiryDate,
-            MaxBranches = payload.MaxBranches,
-            MaxUsers = payload.MaxUsers,
-            HardwareId = payload.HardwareId
-        };
-
-        var currentHardwareId = GetHardwareFingerprint();
-        if (!string.Equals(payload.HardwareId, currentHardwareId, StringComparison.Ordinal))
-        {
+        if ((payload.IssuedAtUtc.Date - today).TotalDays > 1 || HasClockRollback(today))
             return new LicenseStatusDto
             {
-                IsPresent = true,
-                IsValid = false,
-                IsHardwareMismatch = true,
-                License = license,
-                Message = "هذا الترخيص صادر لجهاز آخر. الرجاء طلب ترخيص جديد مرتبط بهذا الجهاز من الجهة المرخِّصة."
+                IsPresent = true, IsVerificationConfigured = true, IsClockRollbackDetected = true, License = info,
+                Message = "تاريخ الجهاز يسبق تاريخ التحقق أو إصدار الترخيص. صحّح تاريخ Windows ثم أعد المحاولة؛ تتاح القراءة والنسخ الاحتياطي."
             };
-        }
-
-        if (payload.ExpiryDate.HasValue && payload.ExpiryDate.Value.Date < DateTime.UtcNow.Date)
-        {
+        if (payload.ExpiryDate.HasValue && payload.ExpiryDate.Value.Date < today)
             return new LicenseStatusDto
             {
-                IsPresent = true,
-                IsValid = false,
-                IsExpired = true,
-                License = license,
-                Message = $"انتهت صلاحية الترخيص بتاريخ {payload.ExpiryDate.Value:yyyy-MM-dd}."
+                IsPresent = true, IsVerificationConfigured = true, IsExpired = true, License = info,
+                Message = $"انتهى الترخيص بتاريخ {payload.ExpiryDate.Value:yyyy-MM-dd}. تتاح قراءة البيانات والنسخ الاحتياطي؛ استورد ملف التجديد لاستئناف العمليات."
             };
-        }
-
-        int? daysUntilExpiry = payload.ExpiryDate.HasValue
-            ? (int)(payload.ExpiryDate.Value.Date - DateTime.UtcNow.Date).TotalDays
-            : null;
-
+        if (updateCheckpoint) SaveClockCheckpoint(today);
+        var remaining = payload.ExpiryDate.HasValue ? (int?)(payload.ExpiryDate.Value.Date - today).TotalDays : null;
         return new LicenseStatusDto
         {
-            IsPresent = true,
-            IsValid = true,
-            DaysUntilExpiry = daysUntilExpiry,
-            License = license,
-            Message = daysUntilExpiry.HasValue && daysUntilExpiry.Value <= 14
-                ? $"الترخيص صالح، وينتهي خلال {daysUntilExpiry.Value} يوماً."
-                : "الترخيص صالح."
+            IsPresent = true, IsVerificationConfigured = true, IsValid = true, License = info, DaysUntilExpiry = remaining,
+            Message = remaining.HasValue && remaining <= 14 ? $"الترخيص صالح وينتهي خلال {remaining.Value} يوماً." : "الترخيص صالح."
         };
     }
 
-    private static string ComputeSignature(LicensePayload payload)
+    private bool HasPublicKey()
     {
-        var canonical = JsonSerializer.Serialize(payload);
-        var keyBytes = Encoding.UTF8.GetBytes(SigningSecret);
-        var messageBytes = Encoding.UTF8.GetBytes(canonical);
-
-        using var hmac = new HMACSHA256(keyBytes);
-        var hash = hmac.ComputeHash(messageBytes);
-        return Convert.ToBase64String(hash);
+        try
+        {
+            var pem = _publicKeyReader();
+            if (string.IsNullOrWhiteSpace(pem)) return false;
+            using var rsa = LicenseDocumentCodec.ReadPublicKey(pem);
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or CryptographicException or ArgumentException) { return false; }
     }
 
-    private class LicensePayload
+    private bool HasClockRollback(DateTime today)
     {
-        public string LicenseKey { get; set; } = string.Empty;
-        public string CustomerName { get; set; } = string.Empty;
-        public DateTime IssuedAtUtc { get; set; }
-        public DateTime? ExpiryDate { get; set; }
-        public int MaxBranches { get; set; }
-        public int MaxUsers { get; set; }
-        public string HardwareId { get; set; } = string.Empty;
+        if (!File.Exists(_clockFilePath)) return false;
+        var value = File.ReadAllText(_clockFilePath).Trim();
+        if (!DateTime.TryParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var highest) || highest.Year < 2020)
+            throw new InvalidOperationException("ملف التحقق الزمني غير صالح.");
+        // A one-day tolerance avoids locking a pharmacy after ordinary time-zone/date corrections.
+        return (highest.Date - today).TotalDays > 1;
     }
 
-    private class SignedLicenseFile
+    private void SaveClockCheckpoint(DateTime today)
     {
-        public LicensePayload Payload { get; set; } = new();
-        public string Signature { get; set; } = string.Empty;
+        if (File.Exists(_clockFilePath))
+        {
+            var value = File.ReadAllText(_clockFilePath).Trim();
+            if (DateTime.TryParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var highest)
+                && highest.Date >= today) return;
+        }
+        Directory.CreateDirectory(Path.GetDirectoryName(_clockFilePath)!);
+        WriteAtomic(_clockFilePath, today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+    }
+
+    private LicenseStatusDto Invalid(string message, bool configured = true) => new()
+    {
+        IsPresent = true, IsVerificationConfigured = configured && HasPublicKey(), Message = message
+    };
+
+    private static string? ReadEmbeddedPublicKey()
+    {
+        using var stream = typeof(LicenseService).Assembly.GetManifestResourceStream(PublicKeyResourceName);
+        if (stream is null) return null;
+        using var reader = new StreamReader(stream);
+        return reader.ReadToEnd();
+    }
+
+    private static void WriteAtomic(string path, string content)
+    {
+        var temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        try { File.WriteAllText(temporary, content); File.Move(temporary, path, overwrite: true); }
+        finally { if (File.Exists(temporary)) File.Delete(temporary); }
     }
 }

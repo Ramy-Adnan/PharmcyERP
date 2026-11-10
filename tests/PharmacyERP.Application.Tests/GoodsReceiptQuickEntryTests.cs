@@ -18,7 +18,7 @@ public class GoodsReceiptQuickEntryTests
 {
     private readonly FakeDateTime _clock = new();
     private GoodsReceiptEditViewModel Editor(ApplicationDbContext db) => new(
-        new PurchasingService(db, new InventoryService(db, _clock), new AccountingService(db, _clock), _clock),
+        new PurchasingService(db, new InventoryService(db, _clock), new AccountingService(db, _clock, new PermissiveLicenseService()), _clock, new PermissiveLicenseService()),
         new InventoryService(db, _clock), new BranchService(db, new PermissiveLicenseService()));
 
     [Fact]
@@ -75,7 +75,7 @@ public class GoodsReceiptQuickEntryTests
         var inventory = new InventoryService(db, _clock);
         var concurrency = new QueryConcurrency();
         var editor = new GoodsReceiptEditViewModel(
-            DelayedProxy.Wrap<IPurchasingService>(new PurchasingService(db, inventory, new AccountingService(db, _clock), _clock), concurrency),
+            DelayedProxy.Wrap<IPurchasingService>(new PurchasingService(db, inventory, new AccountingService(db, _clock, new PermissiveLicenseService()), _clock, new PermissiveLicenseService()), concurrency),
             DelayedProxy.Wrap<IInventoryService>(inventory, concurrency),
             DelayedProxy.Wrap<IBranchService>(new BranchService(db, new PermissiveLicenseService()), concurrency));
         var supplierId = (await db.Suppliers.SingleAsync()).Id;

@@ -3,15 +3,11 @@ using PharmacyERP.Application.Common.Models;
 namespace PharmacyERP.Application.Features.Licensing;
 
 /// <summary>
-/// Offline license activation: the vendor issues a signed .lic file (a small
-/// JSON payload plus an HMAC-SHA256 signature computed with a secret embedded
-/// in this application) bound to a hardware fingerprint of the machine it was
-/// issued for. There is no license server this application calls out to —
-/// activation is "receive the file from the vendor, import it here" — which
-/// keeps the pharmacy fully operable even with no internet connection, at
-/// the cost of the signature only being as strong as keeping the embedded
-/// secret out of a decompiled build; this is a standard, disclosed trade-off
-/// for offline desktop licensing and not a claim of tamper-proof security.
+/// Offline activation of an RSA-signed license bound to this installation.
+/// Only the public verification key is embedded in the application; the vendor
+/// keeps the private signing key and its issuing tool outside the customer build.
+/// Offline operation cannot guarantee immediate revocation or prevent a modified
+/// executable from bypassing checks.
 /// </summary>
 public interface ILicenseService
 {

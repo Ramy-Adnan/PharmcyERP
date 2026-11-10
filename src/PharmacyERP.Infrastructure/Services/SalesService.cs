@@ -8,6 +8,7 @@ using PharmacyERP.Application.Features.Inventory;
 using PharmacyERP.Application.Features.Sales;
 using PharmacyERP.Application.Features.Sales.DTOs;
 using PharmacyERP.Domain.Common;
+using PharmacyERP.Application.Features.Licensing;
 using PharmacyERP.Domain.Entities;
 using PharmacyERP.Domain.Enums;
 
@@ -25,14 +26,16 @@ namespace PharmacyERP.Infrastructure.Services;
 public class SalesService : ISalesService
 {
     private readonly IApplicationDbContext _context;
+    private readonly ILicenseService _licenseService;
     private readonly IInventoryService _inventoryService;
     private readonly IAccountingService _accountingService;
     private readonly IDateTime _dateTime;
     private readonly ICurrentUserService _currentUser;
 
-    public SalesService(IApplicationDbContext context, IInventoryService inventoryService, IAccountingService accountingService, IDateTime dateTime, ICurrentUserService currentUser)
+    public SalesService(IApplicationDbContext context, IInventoryService inventoryService, IAccountingService accountingService, IDateTime dateTime, ICurrentUserService currentUser, ILicenseService licenseService)
     {
         _context = context;
+        _licenseService = licenseService;
         _inventoryService = inventoryService;
         _accountingService = accountingService;
         _dateTime = dateTime;
@@ -75,6 +78,9 @@ public class SalesService : ISalesService
 
     public async Task<Result<CustomerDto>> CreateCustomerAsync(CustomerUpsertDto dto, CancellationToken cancellationToken = default)
     {
+        var licenseError = await LicenseWriteAccess.CheckAsync(_licenseService, cancellationToken);
+        if (licenseError is not null) return Result<CustomerDto>.Failure(licenseError);
+
         var validation = await ValidateCustomerAsync(dto, cancellationToken);
         if (validation is not null) return Result<CustomerDto>.Failure(validation);
 
@@ -95,6 +101,9 @@ public class SalesService : ISalesService
 
     public async Task<Result<CustomerDto>> UpdateCustomerAsync(CustomerUpsertDto dto, CancellationToken cancellationToken = default)
     {
+        var licenseError = await LicenseWriteAccess.CheckAsync(_licenseService, cancellationToken);
+        if (licenseError is not null) return Result<CustomerDto>.Failure(licenseError);
+
         if (dto.Id is null) return Result<CustomerDto>.Failure("معرّف العميل مطلوب.");
 
         var customer = await _context.Customers.FirstOrDefaultAsync(c => c.Id == dto.Id, cancellationToken);
@@ -115,6 +124,9 @@ public class SalesService : ISalesService
 
     public async Task<Result> SetCustomerActiveStatusAsync(int customerId, bool isActive, CancellationToken cancellationToken = default)
     {
+        var licenseError = await LicenseWriteAccess.CheckAsync(_licenseService, cancellationToken);
+        if (licenseError is not null) return Result.Failure(licenseError);
+
         var customer = await _context.Customers.FirstOrDefaultAsync(c => c.Id == customerId, cancellationToken);
         if (customer is null) return Result.Failure("العميل غير موجود.");
 
@@ -218,8 +230,12 @@ public class SalesService : ISalesService
         return id.HasValue ? await LoadInvoiceDtoAsync(id.Value, cancellationToken) : null;
     }
 
-    public Task<Result<SalesInvoiceDto>> CheckoutAsync(SalesCheckoutDto dto, int cashierUserId, CancellationToken cancellationToken = default) =>
-        InTransactionAsync(() => CheckoutCoreAsync(dto, cashierUserId, cancellationToken), r => r.Succeeded, cancellationToken);
+    public async Task<Result<SalesInvoiceDto>> CheckoutAsync(SalesCheckoutDto dto, int cashierUserId, CancellationToken cancellationToken = default)
+    {
+        var licenseError = await LicenseWriteAccess.CheckAsync(_licenseService, cancellationToken);
+        if (licenseError is not null) return Result<SalesInvoiceDto>.Failure(licenseError);
+        return await InTransactionAsync(() => CheckoutCoreAsync(dto, cashierUserId, cancellationToken), r => r.Succeeded, cancellationToken);
+    }
 
     private async Task<Result<SalesInvoiceDto>> CheckoutCoreAsync(SalesCheckoutDto dto, int cashierUserId, CancellationToken cancellationToken)
     {
@@ -513,8 +529,12 @@ public class SalesService : ISalesService
         return await LoadInvoiceDetailDtoAsync(id, cancellationToken);
     }
 
-    public Task<Result> CancelSalesInvoiceAsync(int salesInvoiceId, int? performedByUserId, CancellationToken cancellationToken = default) =>
-        InTransactionAsync(() => CancelSalesInvoiceCoreAsync(salesInvoiceId, performedByUserId, cancellationToken), r => r.Succeeded, cancellationToken);
+    public async Task<Result> CancelSalesInvoiceAsync(int salesInvoiceId, int? performedByUserId, CancellationToken cancellationToken = default)
+    {
+        var licenseError = await LicenseWriteAccess.CheckAsync(_licenseService, cancellationToken);
+        if (licenseError is not null) return Result.Failure(licenseError);
+        return await InTransactionAsync(() => CancelSalesInvoiceCoreAsync(salesInvoiceId, performedByUserId, cancellationToken), r => r.Succeeded, cancellationToken);
+    }
 
     private async Task<Result> CancelSalesInvoiceCoreAsync(int salesInvoiceId, int? performedByUserId, CancellationToken cancellationToken)
     {
@@ -604,8 +624,12 @@ public class SalesService : ISalesService
         }).ToList();
     }
 
-    public Task<Result<SalesReturnDto>> ProcessReturnAsync(SalesReturnRequestDto dto, int processedByUserId, CancellationToken cancellationToken = default) =>
-        InTransactionAsync(() => ProcessReturnCoreAsync(dto, processedByUserId, cancellationToken), r => r.Succeeded, cancellationToken);
+    public async Task<Result<SalesReturnDto>> ProcessReturnAsync(SalesReturnRequestDto dto, int processedByUserId, CancellationToken cancellationToken = default)
+    {
+        var licenseError = await LicenseWriteAccess.CheckAsync(_licenseService, cancellationToken);
+        if (licenseError is not null) return Result<SalesReturnDto>.Failure(licenseError);
+        return await InTransactionAsync(() => ProcessReturnCoreAsync(dto, processedByUserId, cancellationToken), r => r.Succeeded, cancellationToken);
+    }
 
     private async Task<Result<SalesReturnDto>> ProcessReturnCoreAsync(SalesReturnRequestDto dto, int processedByUserId, CancellationToken cancellationToken)
     {
@@ -809,8 +833,12 @@ public class SalesService : ISalesService
         };
     }
 
-    public Task<Result> RecordCustomerPaymentAsync(CustomerDebtPaymentDto dto, CancellationToken cancellationToken = default) =>
-        InTransactionAsync(() => RecordCustomerPaymentCoreAsync(dto, cancellationToken), r => r.Succeeded, cancellationToken);
+    public async Task<Result> RecordCustomerPaymentAsync(CustomerDebtPaymentDto dto, CancellationToken cancellationToken = default)
+    {
+        var licenseError = await LicenseWriteAccess.CheckAsync(_licenseService, cancellationToken);
+        if (licenseError is not null) return Result.Failure(licenseError);
+        return await InTransactionAsync(() => RecordCustomerPaymentCoreAsync(dto, cancellationToken), r => r.Succeeded, cancellationToken);
+    }
 
     private async Task<Result> RecordCustomerPaymentCoreAsync(CustomerDebtPaymentDto dto, CancellationToken cancellationToken, bool isInitialPosPayment = false)
     {
@@ -861,8 +889,11 @@ public class SalesService : ISalesService
         _context.Receipts.Where(r => r.ReferenceType == "CustomerCredit" && r.ReferenceId == invoiceId)
             .SumAsync(r => r.Amount, cancellationToken);
 
-    public Task<Result> ReconcileCustomerCreditAsync(int customerId, CancellationToken cancellationToken = default) =>
-        InTransactionAsync(async () =>
+    public async Task<Result> ReconcileCustomerCreditAsync(int customerId, CancellationToken cancellationToken = default)
+    {
+        var licenseError = await LicenseWriteAccess.CheckAsync(_licenseService, cancellationToken);
+        if (licenseError is not null) return Result.Failure(licenseError);
+        return await InTransactionAsync(async () =>
         {
             if (!_currentUser.HasPermission("Sales.ManageCustomers")) return Result.Failure("لا تملك صلاحية تسوية قيود العملاء.");
             var invoices = await _context.SalesInvoices.Where(i => i.CustomerId == customerId && i.PaymentMethod == PaymentMethod.Credit && i.Status == SalesInvoiceStatus.Completed)
@@ -870,6 +901,7 @@ public class SalesService : ISalesService
             foreach (var invoice in invoices) await ReclassifyLegacyCreditAsync(invoice, cancellationToken);
             return Result.Success();
         }, r => r.Succeeded, cancellationToken);
+    }
 
     private async Task ReclassifyLegacyCreditAsync(SalesInvoice invoice, CancellationToken cancellationToken)
     {

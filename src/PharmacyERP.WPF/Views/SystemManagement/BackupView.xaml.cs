@@ -9,6 +9,7 @@ public partial class BackupView : UserControl
     {
         InitializeComponent();
         DataContext = viewModel;
+        viewModel.RestartRequired += () => System.Windows.Application.Current.Shutdown();
         Loaded += async (_, _) => await viewModel.InitializeAsync();
     }
 }

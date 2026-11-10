@@ -7,6 +7,7 @@ using PharmacyERP.Application.Common.Interfaces;
 using PharmacyERP.Application.Features.Accounting;
 using PharmacyERP.Application.Features.Branches;
 using PharmacyERP.Application.Features.Inventory;
+using PharmacyERP.Application.Features.Licensing;
 using PharmacyERP.Application.Features.Purchasing;
 using PharmacyERP.Application.Tests.Common;
 using PharmacyERP.Domain.Entities;
@@ -59,6 +60,7 @@ public class PurchasingViewScopeTests
             var user = new FakeCurrentUserService(); user.ClearSession();
             var services = new ServiceCollection();
             services.AddSingleton<IDateTime>(clock);
+            services.AddSingleton<ILicenseService, PermissiveLicenseService>();
             services.AddSingleton<ICurrentUserService>(user);
             services.AddSingleton(new AuditableEntitySaveChangesInterceptor(user, clock));
             services.AddScoped<ApplicationDbContext>(sp => new SqliteTestDb(

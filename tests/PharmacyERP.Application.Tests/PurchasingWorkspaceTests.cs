@@ -17,7 +17,7 @@ namespace PharmacyERP.Application.Tests;
 public partial class PurchasingWorkspaceTests
 {
     private readonly FakeDateTime _clock = new();
-    private PurchasingService Service(ApplicationDbContext db) => new(db, new InventoryService(db, _clock), new AccountingService(db, _clock), _clock);
+    private PurchasingService Service(ApplicationDbContext db) => new(db, new InventoryService(db, _clock), new AccountingService(db, _clock, new PermissiveLicenseService()), _clock, new PermissiveLicenseService());
     private PurchasingWorkspaceViewModel Workspace(ApplicationDbContext db, ICurrentUserService? user = null) =>
         new(Service(db), new InventoryService(db, _clock), new BranchService(db, new PermissiveLicenseService()), user ?? new FakeCurrentUserService());
     private async Task<TestFixture> SeedAsync(ApplicationDbContext db)

@@ -18,10 +18,18 @@
             <WrapPanel Orientation="Horizontal">
                 <TextBlock Text="النسخ الاحتياطي والاستعادة" Style="{StaticResource WorkspacePageTitleStyle}" Margin="0,4,16,4"/>
                 <Button Content="نسخة احتياطية جديدة" Margin="0,4,8,4" Style="{StaticResource PrimaryButtonStyle}" Command="{Binding CreateBackupCommand}" Visibility="{Binding CanManage, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                <Button Content="تصدير حزمة نقل" Margin="0,4,8,4" Style="{StaticResource SecondaryButtonStyle}" Command="{Binding ExportBundleCommand}" Visibility="{Binding CanManage, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                <Button Content="استيراد حزمة نقل" Margin="0,4,8,4" Style="{StaticResource DangerButtonStyle}" Command="{Binding ImportBundleCommand}" Visibility="{Binding CanManage, Converter={StaticResource BoolToVisibilityConverter}}"/>
                 <Button Content="تحديث" Margin="0,4,0,4" Style="{StaticResource SecondaryButtonStyle}" Command="{Binding RefreshCommand}"/>
             </WrapPanel>
         </Border>
-        <TextBlock Grid.Row="2" Text="{Binding BackupFolder, StringFormat='مجلد النسخ الاحتياطية: {0}'}" Style="{StaticResource WorkspaceMutedTextStyle}" Margin="4,0"/>
+        <StackPanel Grid.Row="2" Margin="4,0">
+            <TextBlock Text="{Binding BackupFolder, StringFormat='مجلد النسخ الاحتياطية: {0}'}" Style="{StaticResource WorkspaceMutedTextStyle}"/>
+            <TextBlock Text="نسخة قاعدة البيانات تحفظ السجلات والأرصدة. حزمة النقل تضم معها اسم الصيدلية والشعار وإعدادات الوصل وصور المنتجات؛ الترخيص ومفاتيح الخدمات تُجهّز على الجهاز الجديد." Style="{StaticResource WorkspaceMutedTextStyle}" Margin="0,4,0,0"/>
+            <TextBlock Text="إذا كانت قاعدة البيانات على جهاز آخر، يجب أن يكون مجلد النسخ مسار مشاركة متاحاً لخدمة SQL Server ولحساب تشغيل البرنامج." Style="{StaticResource WorkspaceMutedTextStyle}" Margin="0,4,0,0"/>
+            <ProgressBar Height="4" IsIndeterminate="True" Foreground="#1F6F50" Margin="0,10,0,0" Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibilityConverter}}"/>
+            <TextBlock Text="{Binding StatusMessage}" TextWrapping="Wrap" Foreground="#1F6F50" Margin="0,6,0,0" Visibility="{Binding StatusMessage, Converter={StaticResource StringToVisibilityConverter}}"/>
+        </StackPanel>
         <Border Grid.Row="4" Style="{StaticResource WorkspaceCardStyle}">
             <DockPanel>
                 <Border DockPanel.Dock="Bottom" Style="{StaticResource WorkspaceCardStyle}" Background="#F8FAFC" Padding="12" Margin="10">

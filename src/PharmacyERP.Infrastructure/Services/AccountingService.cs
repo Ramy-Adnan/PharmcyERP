@@ -3,6 +3,7 @@ using PharmacyERP.Application.Common.Interfaces;
 using PharmacyERP.Application.Common.Models;
 using PharmacyERP.Application.Features.Accounting;
 using PharmacyERP.Application.Features.Accounting.DTOs;
+using PharmacyERP.Application.Features.Licensing;
 using PharmacyERP.Domain.Entities;
 using PharmacyERP.Domain.Enums;
 
@@ -29,11 +30,13 @@ public class AccountingService : IAccountingService
     private const string SalariesExpenseAccountCode = "5200";
 
     private readonly IApplicationDbContext _context;
+    private readonly ILicenseService _licenseService;
     private readonly IDateTime _dateTime;
 
-    public AccountingService(IApplicationDbContext context, IDateTime dateTime)
+    public AccountingService(IApplicationDbContext context, IDateTime dateTime, ILicenseService licenseService)
     {
         _context = context;
+        _licenseService = licenseService;
         _dateTime = dateTime;
     }
 
@@ -66,6 +69,9 @@ public class AccountingService : IAccountingService
 
     public async Task<Result<ChartOfAccountDto>> CreateAccountAsync(ChartOfAccountUpsertDto dto, CancellationToken cancellationToken = default)
     {
+        var licenseError = await LicenseWriteAccess.CheckAsync(_licenseService, cancellationToken);
+        if (licenseError is not null) return Result<ChartOfAccountDto>.Failure(licenseError);
+
         var validation = await ValidateAccountAsync(dto, cancellationToken);
         if (validation is not null) return Result<ChartOfAccountDto>.Failure(validation);
 
@@ -88,6 +94,9 @@ public class AccountingService : IAccountingService
 
     public async Task<Result<ChartOfAccountDto>> UpdateAccountAsync(ChartOfAccountUpsertDto dto, CancellationToken cancellationToken = default)
     {
+        var licenseError = await LicenseWriteAccess.CheckAsync(_licenseService, cancellationToken);
+        if (licenseError is not null) return Result<ChartOfAccountDto>.Failure(licenseError);
+
         if (dto.Id is null) return Result<ChartOfAccountDto>.Failure("معرّف الحساب مطلوب.");
 
         var account = await _context.ChartOfAccounts.FirstOrDefaultAsync(a => a.Id == dto.Id, cancellationToken);
@@ -113,6 +122,9 @@ public class AccountingService : IAccountingService
 
     public async Task<Result> SetAccountActiveStatusAsync(int accountId, bool isActive, CancellationToken cancellationToken = default)
     {
+        var licenseError = await LicenseWriteAccess.CheckAsync(_licenseService, cancellationToken);
+        if (licenseError is not null) return Result.Failure(licenseError);
+
         var account = await _context.ChartOfAccounts.FirstOrDefaultAsync(a => a.Id == accountId, cancellationToken);
         if (account is null) return Result.Failure("الحساب غير موجود.");
 
@@ -156,6 +168,9 @@ public class AccountingService : IAccountingService
 
     public async Task<Result<JournalEntryDto>> CreateManualEntryAsync(ManualJournalEntryUpsertDto dto, CancellationToken cancellationToken = default)
     {
+        var licenseError = await LicenseWriteAccess.CheckAsync(_licenseService, cancellationToken);
+        if (licenseError is not null) return Result<JournalEntryDto>.Failure(licenseError);
+
         if (string.IsNullOrWhiteSpace(dto.Description)) return Result<JournalEntryDto>.Failure("وصف القيد مطلوب.");
         if (dto.Lines.Count < 2) return Result<JournalEntryDto>.Failure("يجب أن يحتوي القيد على سطرين على الأقل.");
         if (dto.Lines.Any(l => l.DebitAmount > 0 && l.CreditAmount > 0))
@@ -227,6 +242,9 @@ public class AccountingService : IAccountingService
 
     public async Task<Result<CashBoxDto>> CreateCashBoxAsync(CashBoxUpsertDto dto, CancellationToken cancellationToken = default)
     {
+        var licenseError = await LicenseWriteAccess.CheckAsync(_licenseService, cancellationToken);
+        if (licenseError is not null) return Result<CashBoxDto>.Failure(licenseError);
+
         if (string.IsNullOrWhiteSpace(dto.Name)) return Result<CashBoxDto>.Failure("اسم الصندوق مطلوب.");
 
         var branchExists = await _context.Branches.AnyAsync(b => b.Id == dto.BranchId, cancellationToken);
@@ -245,6 +263,9 @@ public class AccountingService : IAccountingService
 
     public async Task<Result<CashBoxDto>> UpdateCashBoxAsync(CashBoxUpsertDto dto, CancellationToken cancellationToken = default)
     {
+        var licenseError = await LicenseWriteAccess.CheckAsync(_licenseService, cancellationToken);
+        if (licenseError is not null) return Result<CashBoxDto>.Failure(licenseError);
+
         if (dto.Id is null) return Result<CashBoxDto>.Failure("معرّف الصندوق مطلوب.");
         if (string.IsNullOrWhiteSpace(dto.Name)) return Result<CashBoxDto>.Failure("اسم الصندوق مطلوب.");
 
@@ -282,6 +303,9 @@ public class AccountingService : IAccountingService
 
     public async Task<Result<BankAccountDto>> CreateBankAccountAsync(BankAccountUpsertDto dto, CancellationToken cancellationToken = default)
     {
+        var licenseError = await LicenseWriteAccess.CheckAsync(_licenseService, cancellationToken);
+        if (licenseError is not null) return Result<BankAccountDto>.Failure(licenseError);
+
         var validation = ValidateBankAccount(dto);
         if (validation is not null) return Result<BankAccountDto>.Failure(validation);
 
@@ -302,6 +326,9 @@ public class AccountingService : IAccountingService
 
     public async Task<Result<BankAccountDto>> UpdateBankAccountAsync(BankAccountUpsertDto dto, CancellationToken cancellationToken = default)
     {
+        var licenseError = await LicenseWriteAccess.CheckAsync(_licenseService, cancellationToken);
+        if (licenseError is not null) return Result<BankAccountDto>.Failure(licenseError);
+
         if (dto.Id is null) return Result<BankAccountDto>.Failure("معرّف الحساب البنكي مطلوب.");
 
         var validation = ValidateBankAccount(dto);
@@ -349,6 +376,9 @@ public class AccountingService : IAccountingService
 
     public async Task<Result<ExpenseCategoryDto>> CreateExpenseCategoryAsync(ExpenseCategoryUpsertDto dto, CancellationToken cancellationToken = default)
     {
+        var licenseError = await LicenseWriteAccess.CheckAsync(_licenseService, cancellationToken);
+        if (licenseError is not null) return Result<ExpenseCategoryDto>.Failure(licenseError);
+
         if (string.IsNullOrWhiteSpace(dto.Name)) return Result<ExpenseCategoryDto>.Failure("اسم فئة المصروف مطلوب.");
 
         var nameTaken = await _context.ExpenseCategories.AnyAsync(c => c.Name == dto.Name.Trim() && c.Id != dto.Id, cancellationToken);
@@ -367,6 +397,9 @@ public class AccountingService : IAccountingService
 
     public async Task<Result<ExpenseCategoryDto>> UpdateExpenseCategoryAsync(ExpenseCategoryUpsertDto dto, CancellationToken cancellationToken = default)
     {
+        var licenseError = await LicenseWriteAccess.CheckAsync(_licenseService, cancellationToken);
+        if (licenseError is not null) return Result<ExpenseCategoryDto>.Failure(licenseError);
+
         if (dto.Id is null) return Result<ExpenseCategoryDto>.Failure("معرّف فئة المصروف مطلوب.");
         if (string.IsNullOrWhiteSpace(dto.Name)) return Result<ExpenseCategoryDto>.Failure("اسم فئة المصروف مطلوب.");
 
@@ -402,6 +435,9 @@ public class AccountingService : IAccountingService
 
     public async Task<Result<ExpenseDto>> CreateExpenseAsync(ExpenseCreateDto dto, CancellationToken cancellationToken = default)
     {
+        var licenseError = await LicenseWriteAccess.CheckAsync(_licenseService, cancellationToken);
+        if (licenseError is not null) return Result<ExpenseDto>.Failure(licenseError);
+
         if (dto.Amount <= 0) return Result<ExpenseDto>.Failure("مبلغ المصروف يجب أن يكون أكبر من صفر.");
 
         var sourceValidation = await ValidateCashSourceAsync(dto.SourceType, dto.CashBoxId, dto.BankAccountId, cancellationToken);
@@ -459,6 +495,9 @@ public class AccountingService : IAccountingService
 
     public async Task<Result<ReceiptDto>> CreateReceiptAsync(ReceiptCreateDto dto, CancellationToken cancellationToken = default)
     {
+        var licenseError = await LicenseWriteAccess.CheckAsync(_licenseService, cancellationToken);
+        if (licenseError is not null) return Result<ReceiptDto>.Failure(licenseError);
+
         if (dto.Amount <= 0) return Result<ReceiptDto>.Failure("مبلغ الإيصال يجب أن يكون أكبر من صفر.");
         if (string.IsNullOrWhiteSpace(dto.PayerName)) return Result<ReceiptDto>.Failure("اسم الدافع مطلوب.");
 
@@ -508,6 +547,9 @@ public class AccountingService : IAccountingService
 
     public async Task<Result<PaymentDto>> CreatePaymentAsync(PaymentCreateDto dto, CancellationToken cancellationToken = default)
     {
+        var licenseError = await LicenseWriteAccess.CheckAsync(_licenseService, cancellationToken);
+        if (licenseError is not null) return Result<PaymentDto>.Failure(licenseError);
+
         if (dto.Amount <= 0) return Result<PaymentDto>.Failure("مبلغ الدفعة يجب أن يكون أكبر من صفر.");
         if (string.IsNullOrWhiteSpace(dto.PayeeName)) return Result<PaymentDto>.Failure("اسم المستفيد مطلوب.");
 
@@ -549,6 +591,7 @@ public class AccountingService : IAccountingService
 
     public async Task PostSalesInvoiceAsync(SalesInvoicePostingRequest request, CancellationToken cancellationToken = default)
     {
+        await LicenseWriteAccess.EnsureAsync(_licenseService, cancellationToken);
         var settlementCode = request.PaymentMethod switch
         {
             PaymentMethod.Cash => CashAccountCode,
@@ -574,6 +617,7 @@ public class AccountingService : IAccountingService
 
     public async Task PostPurchaseInvoiceAsync(PurchaseInvoicePostingRequest request, CancellationToken cancellationToken = default)
     {
+        await LicenseWriteAccess.EnsureAsync(_licenseService, cancellationToken);
         var inventoryAccount = await GetSystemAccountAsync(InventoryAccountCode, cancellationToken);
         var inputTaxAccount = await GetSystemAccountAsync(InputTaxAccountCode, cancellationToken);
         var payableAccount = await GetSystemAccountAsync(AccountsPayableAccountCode, cancellationToken);
@@ -592,6 +636,7 @@ public class AccountingService : IAccountingService
 
     public async Task PostPurchaseInvoicePaymentAsync(PurchaseInvoicePaymentPostingRequest request, CancellationToken cancellationToken = default)
     {
+        await LicenseWriteAccess.EnsureAsync(_licenseService, cancellationToken);
         if (request.RequestId == Guid.Empty || request.Amount <= 0) throw new InvalidOperationException("معرّف محاولة الدفع والمبلغ الموجب مطلوبان.");
         var journalNumber = PurchaseInvoicePaymentPostingRequest.JournalNumberFor(request.RequestId);
         var existing = await _context.JournalEntries.IgnoreQueryFilters().AsNoTracking().Include(e => e.Lines)
@@ -619,6 +664,7 @@ public class AccountingService : IAccountingService
 
     public async Task PostInsuranceClaimPaymentAsync(InsuranceClaimPaymentPostingRequest request, CancellationToken cancellationToken = default)
     {
+        await LicenseWriteAccess.EnsureAsync(_licenseService, cancellationToken);
         var bankAccount = await GetSystemAccountAsync(BankAccountCode, cancellationToken);
         var insuranceReceivableAccount = await GetSystemAccountAsync(InsuranceReceivableAccountCode, cancellationToken);
 
@@ -650,6 +696,7 @@ public class AccountingService : IAccountingService
 
     public async Task PostPayrollPaymentAsync(PayrollPaymentPostingRequest request, CancellationToken cancellationToken = default)
     {
+        await LicenseWriteAccess.EnsureAsync(_licenseService, cancellationToken);
         var salariesExpenseAccount = await GetSystemAccountAsync(SalariesExpenseAccountCode, cancellationToken);
         var cashAccount = await GetSystemAccountAsync(CashAccountCode, cancellationToken);
 

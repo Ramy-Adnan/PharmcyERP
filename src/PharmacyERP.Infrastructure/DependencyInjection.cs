@@ -34,8 +34,12 @@ public static class DependencyInjection
 
         services.AddSingleton<AuditableEntitySaveChangesInterceptor>();
 
+        services.AddSingleton<PharmacyERP.Application.Features.Licensing.LicenseRuntimeState>();
+        services.AddScoped<PharmacyERP.Infrastructure.Persistence.Interceptors.LicenseSaveChangesInterceptor>();
+        services.AddSingleton<PharmacyERP.Application.Features.Backup.IDataTransferService, BackupDataTransferService>();
         services.AddDbContext<ApplicationDbContext>((sp, options) =>
         {
+            options.AddInterceptors(sp.GetRequiredService<PharmacyERP.Infrastructure.Persistence.Interceptors.LicenseSaveChangesInterceptor>());
             options.UseSqlServer(connectionString, sqlOptions =>
             {
                 sqlOptions.MigrationsAssembly(typeof(ApplicationDbContext).Assembly.FullName);

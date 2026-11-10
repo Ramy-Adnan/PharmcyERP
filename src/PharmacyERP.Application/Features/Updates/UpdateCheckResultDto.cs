@@ -7,8 +7,10 @@ public class UpdateCheckResultDto
     public string CurrentVersion { get; set; } = string.Empty;
     public string? LatestVersion { get; set; }
     public string? DownloadUrl { get; set; }
+    public string? Sha256 { get; set; }
     public string? ReleaseNotes { get; set; }
+    public string? ErrorMessage { get; set; }
 
-    /// <summary>When true, the update must be installed before the app can continue being used (e.g. a breaking database migration shipped).</summary>
+    /// <summary>Publisher release metadata; does not force installation or interrupt a sale.</summary>
     public bool IsMandatory { get; set; }
 }

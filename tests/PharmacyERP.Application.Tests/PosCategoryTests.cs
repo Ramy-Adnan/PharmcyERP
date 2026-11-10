@@ -15,7 +15,7 @@ namespace PharmacyERP.Application.Tests;
 public class PosCategoryTests
 {
     private readonly FakeDateTime _clock = new();
-    private SalesService Sales(ApplicationDbContext db) => new(db, new InventoryService(db, _clock), new AccountingService(db, _clock), _clock, new FakeCurrentUserService());
+    private SalesService Sales(ApplicationDbContext db) => new(db, new InventoryService(db, _clock), new AccountingService(db, _clock, new PermissiveLicenseService()), _clock, new FakeCurrentUserService(), new PermissiveLicenseService());
     private async Task<POSViewModel> PosAsync(ApplicationDbContext db, TestFixture fixture, PharmacyERP.Application.Features.Sales.ISalesService? service = null)
     {
         var user = new FakeCurrentUserService(); user.SetSession(1, "cashier", fixture.BranchId, Array.Empty<string>());

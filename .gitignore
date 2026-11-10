@@ -21,3 +21,12 @@ appsettings.Development.json
 *.ldf
 *.db
 *.sqlite*
+
+# Commercial release output and vendor secrets
+artifacts/
+publish/
+*.private.pem
+license-ledger*.jsonl
+connection-settings.dat
+
+TestResults/

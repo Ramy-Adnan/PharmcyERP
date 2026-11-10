@@ -15,15 +15,21 @@ public class ApplicationDbSeeder
 {
     private readonly ApplicationDbContext _context;
     private readonly IPasswordHasher _passwordHasher;
+    private readonly IInitialAdminPasswordProvider _initialAdminPassword;
 
-    public ApplicationDbSeeder(ApplicationDbContext context, IPasswordHasher passwordHasher)
+    public ApplicationDbSeeder(ApplicationDbContext context, IPasswordHasher passwordHasher, IInitialAdminPasswordProvider? initialAdminPassword = null)
     {
         _context = context;
         _passwordHasher = passwordHasher;
+        _initialAdminPassword = initialAdminPassword ?? new InitialAdminPasswordProvider();
     }
 
     public async Task SeedAsync(CancellationToken cancellationToken = default)
     {
+        // Validate before writing permissions/branches: a cancelled first-run
+        // password must not leave half of the initial catalogue behind.
+        if (!await _context.Users.AnyAsync(u => u.Username == "admin", cancellationToken))
+            InitialSetupValidation.ValidateAdministratorPassword(_initialAdminPassword.GetPassword());
         await SeedPermissionsAsync(cancellationToken);
         var adminRole = await SeedAdminRoleAsync(cancellationToken);
         var mainBranch = await SeedMainBranchAsync(cancellationToken);
@@ -156,14 +162,14 @@ public class ApplicationDbSeeder
         {
             FullName = "مدير النظام",
             Username = "admin",
-            PasswordHash = _passwordHasher.Hash(Environment.GetEnvironmentVariable("PHARMACYERP_INITIAL_ADMIN_PASSWORD")
-                ?? throw new InvalidOperationException("Set PHARMACYERP_INITIAL_ADMIN_PASSWORD before initializing the administrator.")),
+            PasswordHash = _passwordHasher.Hash(_initialAdminPassword.GetPassword()!),
             Status = UserStatus.Active,
             RoleId = adminRole.Id,
             DefaultBranchId = mainBranch.Id
         });
 
         await _context.SaveChangesAsync(cancellationToken);
+        _initialAdminPassword.Clear();
     }
 
     /// <summary>

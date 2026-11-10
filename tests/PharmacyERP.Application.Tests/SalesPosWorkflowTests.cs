@@ -13,7 +13,7 @@ namespace PharmacyERP.Application.Tests;
 public class SalesPosWorkflowTests
 {
     private readonly FakeDateTime _clock = new();
-    private SalesService Sales(ApplicationDbContext db) => new(db, new InventoryService(db, _clock), new AccountingService(db, _clock), _clock, new FakeCurrentUserService());
+    private SalesService Sales(ApplicationDbContext db) => new(db, new InventoryService(db, _clock), new AccountingService(db, _clock, new PermissiveLicenseService()), _clock, new FakeCurrentUserService(), new PermissiveLicenseService());
     private async Task<(TestFixture Fixture, int CustomerId, int UserId)> SeedAsync(ApplicationDbContext db)
     {
         var f = await TestDb.SeedBaselineAsync(db);
@@ -480,7 +480,7 @@ public class SalesPosWorkflowTests
     public async Task PosCashier_CanReceiveAFullInitialDepositWithoutCustomerManagementPermission()
     {
         await using var db = TestDb.CreateContext(_clock); var seed = await SeedAsync(db);
-        var sales = new SalesService(db, new InventoryService(db, _clock), new AccountingService(db, _clock), _clock, new PosOnlySession());
+        var sales = new SalesService(db, new InventoryService(db, _clock), new AccountingService(db, _clock, new PermissiveLicenseService()), _clock, new PosOnlySession(), new PermissiveLicenseService());
         var request = Checkout(seed.Fixture, PaymentMethod.Credit, seed.CustomerId); request.AmountTendered = 20;
         var result = await sales.CheckoutAsync(request, seed.UserId);
         result.Succeeded.Should().BeTrue(); result.Value!.DebtAtSale.Should().Be(0);

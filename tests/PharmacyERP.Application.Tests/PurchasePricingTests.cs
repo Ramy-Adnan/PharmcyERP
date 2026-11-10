@@ -334,9 +334,9 @@ public class PurchasePricingTests
     }
 
     private PurchasingService Purchasing(ApplicationDbContext db, InventoryService inventory) =>
-        new(db, inventory, new AccountingService(db, _clock), _clock);
+        new(db, inventory, new AccountingService(db, _clock, new PermissiveLicenseService()), _clock, new PermissiveLicenseService());
     private SalesService Sales(ApplicationDbContext db, InventoryService inventory) =>
-        new(db, inventory, new AccountingService(db, _clock), _clock, new FakeCurrentUserService());
+        new(db, inventory, new AccountingService(db, _clock, new PermissiveLicenseService()), _clock, new FakeCurrentUserService(), new PermissiveLicenseService());
     private static async Task<int> SupplierAsync(ApplicationDbContext db)
     {
         var supplier = new Supplier { Code = "S1", Name = "المورد", IsActive = true };

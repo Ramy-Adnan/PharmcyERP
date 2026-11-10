@@ -7,6 +7,12 @@ using Microsoft.Extensions.Hosting;
 using PharmacyERP.Application;
 using PharmacyERP.Infrastructure;
 using PharmacyERP.Infrastructure.Persistence;
+using PharmacyERP.Infrastructure.Persistence.Seed;
+using PharmacyERP.Infrastructure.Persistence.Interceptors;
+using PharmacyERP.Infrastructure.Setup;
+using PharmacyERP.Application.Common.Interfaces;
+using PharmacyERP.Application.Features.Backup;
+using PharmacyERP.Application.Features.Licensing;
 using PharmacyERP.WPF.Services;
 using PharmacyERP.WPF.ViewModels;
 using PharmacyERP.WPF.ViewModels.Accounting;
@@ -50,23 +56,41 @@ public partial class App : System.Windows.Application
     protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        ShutdownMode = ShutdownMode.OnExplicitShutdown;
+        DispatcherUnhandledException += (_, args) =>
+        {
+            if (args.Exception is not LicenseWriteDeniedException denied) return;
+            MessageBox.Show(denied.Message, "الترخيص — وضع القراءة فقط", MessageBoxButton.OK, MessageBoxImage.Information);
+            args.Handled = true;
+        };
+        var logDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PharmacyERP", "logs");
+        Directory.CreateDirectory(logDirectory);
 
         Log.Logger = new LoggerConfiguration()
             .MinimumLevel.Information()
             .WriteTo.Debug()
             .WriteTo.File(
-                path: Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "logs", "log-.txt"),
+                path: Path.Combine(logDirectory, "log-.txt"),
                 rollingInterval: RollingInterval.Day,
                 retainedFileCountLimit: 30)
             .CreateLogger();
 
+        var initialAdminPassword = new InitialAdminPasswordProvider();
         try
         {
+            var setup = await PrepareConnectionAsync();
+            if (setup is null) { Shutdown(); return; }
+            initialAdminPassword = new InitialAdminPasswordProvider(setup.InitialPassword);
+            setup = setup with { InitialPassword = null };
             _host = Host.CreateDefaultBuilder()
                 .ConfigureAppConfiguration((_, config) =>
                 {
                     config.SetBasePath(AppDomain.CurrentDomain.BaseDirectory);
                     config.AddJsonFile("appsettings.json", optional: false, reloadOnChange: false);
+                    config.AddInMemoryCollection(new Dictionary<string, string?>
+                    {
+                        ["ConnectionStrings:DefaultConnection"] = setup.ConnectionString
+                    });
                     config.AddEnvironmentVariables();
                 })
                 .UseSerilog()
@@ -74,6 +98,8 @@ public partial class App : System.Windows.Application
                 {
                     services.AddApplicationServices();
                     services.AddInfrastructureServices(context.Configuration);
+                    services.AddSingleton<IInitialAdminPasswordProvider>(initialAdminPassword);
+                    services.AddSingleton<LicenseStatusViewModel>();
 
                     services.AddSingleton<ISessionService, SessionService>();
                     services.AddSingleton<INavigationService, NavigationService>();
@@ -299,10 +325,14 @@ public partial class App : System.Windows.Application
             // typically replaced by running migrations during deployment, but it keeps
             // first-run setup painless during development.
             var dbContext = scopedProvider.GetRequiredService<ApplicationDbContext>();
-            await dbContext.Database.MigrateAsync();
-
-            var seeder = scopedProvider.GetRequiredService<PharmacyERP.Infrastructure.Persistence.Seed.ApplicationDbSeeder>();
-            await seeder.SeedAsync();
+            var licenseRuntime = scopedProvider.GetRequiredService<LicenseRuntimeState>();
+            using (licenseRuntime.BeginBootstrap())
+            {
+                await dbContext.Database.MigrateAsync();
+                var seeder = scopedProvider.GetRequiredService<ApplicationDbSeeder>();
+                await seeder.SeedAsync();
+            }
+            initialAdminPassword.Clear();
 
             // Resolving INavigationService for the first time through scopedProvider makes the
             // singleton instance permanently hold scopedProvider as its IServiceProvider, so every
@@ -310,17 +340,55 @@ public partial class App : System.Windows.Application
             // same long-lived scope instead of the invalid root provider.
             var navigationService = scopedProvider.GetRequiredService<INavigationService>();
             navigationService.ShowLogin();
+            ShutdownMode = ShutdownMode.OnLastWindowClose;
         }
         catch (Exception ex)
         {
-            Log.Fatal(ex, "Application failed to start");
+            // Connection strings and database errors may contain credentials; log the type only.
+            Log.Fatal("Application failed to start ({ErrorType})", ex.GetType().Name);
             MessageBox.Show(
                 "تعذر بدء تشغيل التطبيق. الرجاء التأكد من إعدادات الاتصال بقاعدة البيانات والمحاولة مرة أخرى." +
-                Environment.NewLine + Environment.NewLine + ex.Message,
+                Environment.NewLine + Environment.NewLine + SetupDatabaseService.SafeFailureMessage(ex),
                 "خطأ في بدء التشغيل", MessageBoxButton.OK, MessageBoxImage.Error);
             Shutdown(-1);
         }
+        finally { initialAdminPassword.Clear(); }
     }
+
+    private async Task<StartupConnection?> PrepareConnectionAsync()
+    {
+        var configuration = new ConfigurationBuilder()
+            .SetBasePath(AppDomain.CurrentDomain.BaseDirectory)
+            .AddJsonFile("appsettings.json", optional: false)
+            .Build();
+        var environmentConnection = Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection");
+        var environmentOverride = !string.IsNullOrWhiteSpace(environmentConnection);
+        var store = new SetupConnectionStore();
+        string? stored = null;
+        try { stored = store.Load(); }
+        catch (Exception) { /* The wizard can replace an unreadable, user-bound settings file. */ }
+        var connection = environmentOverride ? environmentConnection : stored ?? configuration.GetConnectionString("DefaultConnection");
+        var forceSetup = Environment.GetCommandLineArgs().Any(arg => string.Equals(arg, "--setup", StringComparison.OrdinalIgnoreCase));
+        if (!forceSetup && !string.IsNullOrWhiteSpace(connection))
+        {
+            try
+            {
+                var status = await new SetupDatabaseService().CheckAsync(connection, DatabaseSetupMode.UseExisting);
+                if (status.IsPharmacyDatabase && (status.HasAdministrator || !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("PHARMACYERP_INITIAL_ADMIN_PASSWORD"))))
+                    return new(connection, null);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(SetupDatabaseService.SafeFailureMessage(ex) + "\nيمكنك تصحيح الاتصال في نافذة الإعداد.",
+                    "إعداد الاتصال", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+        }
+        var wizard = new InitialSetupWindow(store, connection, environmentOverride);
+        if (wizard.ShowDialog() != true || string.IsNullOrWhiteSpace(wizard.ResultConnectionString)) return null;
+        return new(wizard.ResultConnectionString, wizard.TakeInitialAdminPassword());
+    }
+
+    private sealed record StartupConnection(string ConnectionString, string? InitialPassword);
 
     protected override async void OnExit(ExitEventArgs e)
     {

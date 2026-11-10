@@ -23,6 +23,8 @@
 
   <!-- Exercise the actual POS view-model on Linux; only WPF command notification plumbing is shimmed. -->
   <ItemGroup>
+    <Compile Include="../../src/PharmacyERP.WPF/ViewModels/SystemManagement/UpdateCheckViewModel.cs" Link="Setup/UpdateCheckViewModel.cs" />
+    <Compile Include="../../src/PharmacyERP.WPF/ViewModels/SystemManagement/InitialSetupViewModel.cs" Link="Setup/InitialSetupViewModel.cs" />
     <Compile Include="../../src/PharmacyERP.WPF/MVVM/ViewModelBase.cs" Link="POS/ViewModelBase.cs" />
     <Compile Include="../../src/PharmacyERP.WPF/MVVM/RelayCommand.cs" Link="POS/RelayCommand.cs" />
     <Compile Include="../../src/PharmacyERP.WPF/MVVM/AsyncRelayCommand.cs" Link="POS/AsyncRelayCommand.cs" />

@@ -46,12 +46,15 @@ public class BranchService : IBranchService
 
     public async Task<Result<BranchDto>> CreateAsync(BranchUpsertDto dto, CancellationToken cancellationToken = default)
     {
+        var licenseError = await LicenseWriteAccess.CheckAsync(_licenseService, cancellationToken);
+        if (licenseError is not null) return Result<BranchDto>.Failure(licenseError);
+
         var validation = await ValidateAsync(dto, cancellationToken);
         if (validation is not null) return Result<BranchDto>.Failure(validation);
 
         var activeBranchCount = await _context.Branches.CountAsync(b => b.IsActive, cancellationToken);
-        //if (!await _licenseService.CanAddBranchAsync(activeBranchCount, cancellationToken))
-        //    return Result<BranchDto>.Failure("تم الوصول إلى الحد الأقصى لعدد الفروع المسموح به بموجب الترخيص الحالي. الرجاء التواصل مع الجهة المرخِّصة لترقية الترخيص.");
+        if (dto.IsActive && !await _licenseService.CanAddBranchAsync(activeBranchCount, cancellationToken))
+            return Result<BranchDto>.Failure("تم الوصول إلى الحد الأقصى لعدد الفروع المسموح به بموجب الترخيص الحالي. الرجاء التواصل مع الجهة المرخِّصة لترقية الترخيص.");
 
         var branch = new Branch
         {
@@ -84,6 +87,9 @@ public class BranchService : IBranchService
 
     public async Task<Result<BranchDto>> UpdateAsync(BranchUpsertDto dto, CancellationToken cancellationToken = default)
     {
+        var licenseError = await LicenseWriteAccess.CheckAsync(_licenseService, cancellationToken);
+        if (licenseError is not null) return Result<BranchDto>.Failure(licenseError);
+
         if (dto.Id is null) return Result<BranchDto>.Failure("معرّف الفرع مطلوب.");
 
         var branch = await _context.Branches.FirstOrDefaultAsync(b => b.Id == dto.Id, cancellationToken);
@@ -91,6 +97,9 @@ public class BranchService : IBranchService
 
         var validation = await ValidateAsync(dto, cancellationToken);
         if (validation is not null) return Result<BranchDto>.Failure(validation);
+
+        if (dto.IsActive && !branch.IsActive && !await CanActivateBranchAsync(cancellationToken))
+            return Result<BranchDto>.Failure("لا يمكن تفعيل فرع آخر؛ تم الوصول إلى عدد الفروع المسموح به في الترخيص.");
 
         branch.Code = dto.Code.Trim().ToUpperInvariant();
         branch.Name = dto.Name.Trim();
@@ -107,11 +116,17 @@ public class BranchService : IBranchService
 
     public async Task<Result> SetActiveStatusAsync(int branchId, bool isActive, CancellationToken cancellationToken = default)
     {
+        var licenseError = await LicenseWriteAccess.CheckAsync(_licenseService, cancellationToken);
+        if (licenseError is not null) return Result.Failure(licenseError);
+
         var branch = await _context.Branches.FirstOrDefaultAsync(b => b.Id == branchId, cancellationToken);
         if (branch is null) return Result.Failure("الفرع غير موجود.");
 
         if (!isActive && branch.IsMainBranch)
             return Result.Failure("لا يمكن تعطيل الفرع الرئيسي.");
+
+        if (isActive && !branch.IsActive && !await CanActivateBranchAsync(cancellationToken))
+            return Result.Failure("لا يمكن تفعيل فرع آخر؛ تم الوصول إلى عدد الفروع المسموح به في الترخيص.");
 
         branch.IsActive = isActive;
         await _context.SaveChangesAsync(cancellationToken);
@@ -120,6 +135,9 @@ public class BranchService : IBranchService
 
     public async Task<Result> DeleteAsync(int branchId, CancellationToken cancellationToken = default)
     {
+        var licenseError = await LicenseWriteAccess.CheckAsync(_licenseService, cancellationToken);
+        if (licenseError is not null) return Result.Failure(licenseError);
+
         var branch = await _context.Branches
             .Include(b => b.UserBranches)
             .FirstOrDefaultAsync(b => b.Id == branchId, cancellationToken);
@@ -150,6 +168,9 @@ public class BranchService : IBranchService
 
     public async Task<Result<WarehouseDto>> CreateWarehouseAsync(WarehouseUpsertDto dto, CancellationToken cancellationToken = default)
     {
+        var licenseError = await LicenseWriteAccess.CheckAsync(_licenseService, cancellationToken);
+        if (licenseError is not null) return Result<WarehouseDto>.Failure(licenseError);
+
         var branchExists = await _context.Branches.AnyAsync(b => b.Id == dto.BranchId, cancellationToken);
         if (!branchExists) return Result<WarehouseDto>.Failure("الفرع غير موجود.");
 
@@ -177,6 +198,9 @@ public class BranchService : IBranchService
 
     public async Task<Result<WarehouseDto>> UpdateWarehouseAsync(WarehouseUpsertDto dto, CancellationToken cancellationToken = default)
     {
+        var licenseError = await LicenseWriteAccess.CheckAsync(_licenseService, cancellationToken);
+        if (licenseError is not null) return Result<WarehouseDto>.Failure(licenseError);
+
         if (dto.Id is null) return Result<WarehouseDto>.Failure("معرّف المخزن مطلوب.");
 
         var warehouse = await _context.Warehouses.Include(w => w.Branch).FirstOrDefaultAsync(w => w.Id == dto.Id, cancellationToken);
@@ -207,6 +231,9 @@ public class BranchService : IBranchService
 
     public async Task<Result> DeleteWarehouseAsync(int warehouseId, CancellationToken cancellationToken = default)
     {
+        var licenseError = await LicenseWriteAccess.CheckAsync(_licenseService, cancellationToken);
+        if (licenseError is not null) return Result.Failure(licenseError);
+
         var warehouse = await _context.Warehouses.FirstOrDefaultAsync(w => w.Id == warehouseId, cancellationToken);
         if (warehouse is null) return Result.Failure("المخزن غير موجود.");
 
@@ -265,4 +292,10 @@ public class BranchService : IBranchService
         IsDefault = w.IsDefault,
         IsActive = w.IsActive
     };
+
+    private async Task<bool> CanActivateBranchAsync(CancellationToken cancellationToken)
+    {
+        var activeBranches = await _context.Branches.CountAsync(branch => branch.IsActive, cancellationToken);
+        return await _licenseService.CanAddBranchAsync(activeBranches, cancellationToken);
+    }
 }

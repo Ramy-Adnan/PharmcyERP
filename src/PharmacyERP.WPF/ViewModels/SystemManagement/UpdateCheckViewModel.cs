@@ -18,26 +18,43 @@ public class UpdateCheckViewModel : ViewModelBase
     private int _downloadProgress;
     private bool _isChecking;
     private bool _isDownloading;
+    private bool _readyToRestart;
+    private CancellationTokenSource? _downloadCancellation;
     private string _errorMessage = string.Empty;
 
     public UpdateCheckViewModel(IUpdateService updateService)
     {
         _updateService = updateService;
-        CheckCommand = new AsyncRelayCommand(CheckAsync);
-        DownloadAndInstallCommand = new AsyncRelayCommand(DownloadAndInstallAsync, () => Result?.IsUpdateAvailable == true && !IsDownloading);
+        CheckCommand = new AsyncRelayCommand(CheckAsync, () => !IsDownloading);
+        DownloadAndInstallCommand = new AsyncRelayCommand(DownloadAndInstallAsync, () => Result?.IsUpdateAvailable == true && !IsDownloading && !IsChecking);
     }
 
-    public UpdateCheckResultDto? Result { get => _result; private set => SetProperty(ref _result, value); }
+    public UpdateCheckResultDto? Result
+    {
+        get => _result;
+        private set { if (SetProperty(ref _result, value)) OnPropertyChanged(nameof(IsUpToDate)); }
+    }
     public int DownloadProgress { get => _downloadProgress; private set => SetProperty(ref _downloadProgress, value); }
-    public bool IsChecking { get => _isChecking; set => SetProperty(ref _isChecking, value); }
+    public bool IsChecking
+    {
+        get => _isChecking;
+        set { if (SetProperty(ref _isChecking, value)) OnPropertyChanged(nameof(IsUpToDate)); }
+    }
     public bool IsDownloading { get => _isDownloading; set => SetProperty(ref _isDownloading, value); }
-    public string ErrorMessage { get => _errorMessage; set => SetProperty(ref _errorMessage, value); }
+    public string ErrorMessage
+    {
+        get => _errorMessage;
+        set { if (SetProperty(ref _errorMessage, value)) OnPropertyChanged(nameof(IsUpToDate)); }
+    }
+    public bool IsUpToDate => !IsChecking && Result is { IsUpdateAvailable: false } && string.IsNullOrEmpty(ErrorMessage);
 
     public AsyncRelayCommand CheckCommand { get; }
     public AsyncRelayCommand DownloadAndInstallCommand { get; }
 
     /// <summary>Set once DownloadAndInstallCommand completes, signalling the dialog's code-behind to shut the application down.</summary>
-    public bool ReadyToRestart { get; private set; }
+    public bool ReadyToRestart { get => _readyToRestart; private set => SetProperty(ref _readyToRestart, value); }
+
+    public void CancelDownload() => _downloadCancellation?.Cancel();
 
     public async Task CheckAsync()
     {
@@ -46,11 +63,13 @@ public class UpdateCheckViewModel : ViewModelBase
         try
         {
             Result = await _updateService.CheckForUpdateAsync();
+            ErrorMessage = Result.ErrorMessage ?? string.Empty;
             System.Windows.Input.CommandManager.InvalidateRequerySuggested();
         }
         finally
         {
             IsChecking = false;
+            System.Windows.Input.CommandManager.InvalidateRequerySuggested();
         }
     }
 
@@ -60,11 +79,19 @@ public class UpdateCheckViewModel : ViewModelBase
 
         IsDownloading = true;
         ErrorMessage = string.Empty;
+        ReadyToRestart = false;
+        DownloadProgress = 0;
+        _downloadCancellation = new CancellationTokenSource();
         try
         {
             var progress = new Progress<int>(p => DownloadProgress = p);
-            await _updateService.DownloadAndLaunchInstallerAsync(Result.DownloadUrl, progress);
+            await _updateService.DownloadAndLaunchInstallerAsync(Result.DownloadUrl, progress,
+                _downloadCancellation.Token, expectedSha256: Result.Sha256);
             ReadyToRestart = true;
+        }
+        catch (OperationCanceledException) when (_downloadCancellation.IsCancellationRequested)
+        {
+            ErrorMessage = "تم إلغاء تنزيل التحديث.";
         }
         catch (Exception ex)
         {
@@ -72,6 +99,8 @@ public class UpdateCheckViewModel : ViewModelBase
         }
         finally
         {
+            _downloadCancellation.Dispose();
+            _downloadCancellation = null;
             IsDownloading = false;
         }
     }

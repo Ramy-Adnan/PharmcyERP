@@ -60,7 +60,7 @@ public class CatalogueReadTests
             new PurchaseInvoice { Number = "PI2", SupplierId = supplier.Id, BranchId = f.BranchId, TotalAmount = 1000, AmountPaid = 1000, Status = PurchaseInvoiceStatus.Paid },
             new PurchaseInvoice { Number = "VOID", SupplierId = supplier.Id, BranchId = f.BranchId, TotalAmount = 9000, Status = PurchaseInvoiceStatus.Cancelled });
         await db.SaveChangesAsync(); db.ChangeTracker.Clear();
-        var service = new PurchasingService(db, new InventoryService(db, _clock), new AccountingService(db, _clock), _clock);
+        var service = new PurchasingService(db, new InventoryService(db, _clock), new AccountingService(db, _clock, new PermissiveLicenseService()), _clock, new PermissiveLicenseService());
         var result = (await service.GetSuppliersAsync()).Single();
         result.OpenPurchaseOrderCount.Should().Be(2); result.TotalOutstandingBalance.Should().Be(1500);
         db.ChangeTracker.Entries().Should().BeEmpty();

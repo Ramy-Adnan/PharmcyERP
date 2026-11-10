@@ -19,7 +19,7 @@ public partial class PackagingSalesTests
     private sealed class TestPrinter : PharmacyERP.WPF.Services.IReceiptPrinter
     { public void Print(SalesInvoiceDetailDto invoice) { } }
     private InventoryService Inventory(ApplicationDbContext db) => new(db, _clock);
-    private SalesService Sales(ApplicationDbContext db) => new(db, Inventory(db), new AccountingService(db, _clock), _clock, new FakeCurrentUserService());
+    private SalesService Sales(ApplicationDbContext db) => new(db, Inventory(db), new AccountingService(db, _clock, new PermissiveLicenseService()), _clock, new FakeCurrentUserService(), new PermissiveLicenseService());
     private async Task<TestFixture> SeedAsync(ApplicationDbContext db, int factor = 5)
     {
         var f = await TestDb.SeedBaselineAsync(db);
@@ -329,7 +329,7 @@ public partial class PackagingSalesTests
     public async Task GoodsReceiptAndSupplierInvoiceStayInBoxesWhileStockIsInStrips()
     {
         await using var db = TestDb.CreateContext(_clock); var f = await SeedAsync(db);
-        var purchases = new PurchasingService(db, Inventory(db), new AccountingService(db, _clock), _clock);
+        var purchases = new PurchasingService(db, Inventory(db), new AccountingService(db, _clock, new PermissiveLicenseService()), _clock, new PermissiveLicenseService());
         var receipt = await purchases.CreateGoodsReceiptAsync(new() { BranchId = f.BranchId, WarehouseId = f.WarehouseId,
             SupplierId = (await db.Suppliers.SingleAsync()).Id, ReceiptDate = _clock.UtcNow.Date,
             Lines = new() { new() { ItemId = f.ItemId, QuantityReceived = 2, UnitCost = 8000, SalePrice = 10000,

@@ -61,7 +61,7 @@ public class InvoiceImageReaderTests
     {
         var clock=new FakeDateTime {UtcNow=new(2026,10,8)};await using var db=TestDb.CreateContext(clock);var f=await TestDb.SeedBaselineAsync(db);
         (await db.UnitsOfMeasure.FindAsync(f.UnitOfMeasureId))!.Name="حبة";await db.SaveChangesAsync();
-        var inventory=new InventoryService(db,clock);var purchasing=new PurchasingService(db,inventory,new AccountingService(db,clock),clock);
+        var inventory=new InventoryService(db,clock);var purchasing=new PurchasingService(db,inventory,new AccountingService(db,clock, new PermissiveLicenseService()),clock, new PermissiveLicenseService());
         var vm=new InvoiceImageImportViewModel(Reader(new Handler()),new PurchaseImageImportService(db,inventory,purchasing,new FakeCurrentUserService(),clock),inventory);
         await vm.InitializeAsync(1,f.BranchId,f.WarehouseId);await vm.AnalyzeAsync(Image());
         var row=vm.Lines.Single();row.BaseUnitOfMeasureId.Should().Be(f.UnitOfMeasureId);row.BaseUnitsPerReceiveUnit.Should().Be(20);row.BasePurchasePrice.Should().Be(195);row.Reviewed.Should().BeFalse();row.BatchNumber.Should().BeEmpty();

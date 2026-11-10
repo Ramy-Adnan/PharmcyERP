@@ -9,7 +9,13 @@ public partial class MainShellView : Window
     {
         InitializeComponent();
         DataContext = viewModel;
-        Loaded += (_, _) => viewModel.Branding.Activate();
+        Loaded += async (_, _) =>
+        {
+            viewModel.Branding.Activate();
+            await viewModel.Licensing.RefreshAsync();
+            if (viewModel.Licensing.IsReadOnly && viewModel.CanManageLicense)
+                viewModel.NavigateToLicenseCommand.Execute(null);
+        };
         Closed += (_, _) => viewModel.Branding.Dispose();
 
         if (viewModel.NavigateToDashboardCommand.CanExecute(null))

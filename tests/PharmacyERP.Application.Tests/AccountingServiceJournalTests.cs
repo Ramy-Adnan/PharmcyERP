@@ -34,7 +34,7 @@ public class AccountingServiceJournalTests
         await using var context = TestDb.CreateContext(_clock);
         var fixture = await TestDb.SeedBaselineAsync(context);
         var (cashId, revenueId) = await SeedAccountsAsync(context);
-        var service = new AccountingService(context, _clock);
+        var service = new AccountingService(context, _clock, new PermissiveLicenseService());
 
         var result = await service.CreateManualEntryAsync(new ManualJournalEntryUpsertDto
         {
@@ -61,7 +61,7 @@ public class AccountingServiceJournalTests
         await using var context = TestDb.CreateContext(_clock);
         var fixture = await TestDb.SeedBaselineAsync(context);
         var (cashId, revenueId) = await SeedAccountsAsync(context);
-        var service = new AccountingService(context, _clock);
+        var service = new AccountingService(context, _clock, new PermissiveLicenseService());
 
         var result = await service.CreateManualEntryAsync(new ManualJournalEntryUpsertDto
         {
@@ -85,7 +85,7 @@ public class AccountingServiceJournalTests
         await using var context = TestDb.CreateContext(_clock);
         var fixture = await TestDb.SeedBaselineAsync(context);
         var (cashId, revenueId) = await SeedAccountsAsync(context);
-        var service = new AccountingService(context, _clock);
+        var service = new AccountingService(context, _clock, new PermissiveLicenseService());
 
         // Totals balance here (500/500), so only the per-line rule can catch this.
         var result = await service.CreateManualEntryAsync(new ManualJournalEntryUpsertDto
@@ -109,7 +109,7 @@ public class AccountingServiceJournalTests
         await using var context = TestDb.CreateContext(_clock);
         var fixture = await TestDb.SeedBaselineAsync(context);
         var (cashId, _) = await SeedAccountsAsync(context);
-        var service = new AccountingService(context, _clock);
+        var service = new AccountingService(context, _clock, new PermissiveLicenseService());
 
         var result = await service.CreateManualEntryAsync(new ManualJournalEntryUpsertDto
         {

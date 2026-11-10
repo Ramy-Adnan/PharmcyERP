@@ -8,6 +8,7 @@ using PharmacyERP.Application.Features.Inventory;
 using PharmacyERP.Application.Features.Inventory.DTOs;
 using PharmacyERP.Application.Features.Purchasing;
 using PharmacyERP.Application.Features.Purchasing.DTOs;
+using PharmacyERP.Application.Features.Licensing;
 using PharmacyERP.Domain.Entities;
 using PharmacyERP.Domain.Common;
 using PharmacyERP.Domain.Enums;
@@ -17,13 +18,15 @@ namespace PharmacyERP.Infrastructure.Services;
 public class PurchasingService : IPurchasingService
 {
     private readonly IApplicationDbContext _context;
+    private readonly ILicenseService _licenseService;
     private readonly IInventoryService _inventoryService;
     private readonly IAccountingService _accountingService;
     private readonly IDateTime _dateTime;
 
-    public PurchasingService(IApplicationDbContext context, IInventoryService inventoryService, IAccountingService accountingService, IDateTime dateTime)
+    public PurchasingService(IApplicationDbContext context, IInventoryService inventoryService, IAccountingService accountingService, IDateTime dateTime, ILicenseService licenseService)
     {
         _context = context;
+        _licenseService = licenseService;
         _inventoryService = inventoryService;
         _accountingService = accountingService;
         _dateTime = dateTime;
@@ -82,6 +85,9 @@ public class PurchasingService : IPurchasingService
 
     public async Task<Result<SupplierDto>> CreateSupplierAsync(SupplierUpsertDto dto, CancellationToken cancellationToken = default)
     {
+        var licenseError = await LicenseWriteAccess.CheckAsync(_licenseService, cancellationToken);
+        if (licenseError is not null) return Result<SupplierDto>.Failure(licenseError);
+
         var validation = await ValidateSupplierAsync(dto, cancellationToken);
         if (validation is not null) return Result<SupplierDto>.Failure(validation);
 
@@ -106,6 +112,9 @@ public class PurchasingService : IPurchasingService
 
     public async Task<Result<SupplierDto>> UpdateSupplierAsync(SupplierUpsertDto dto, CancellationToken cancellationToken = default)
     {
+        var licenseError = await LicenseWriteAccess.CheckAsync(_licenseService, cancellationToken);
+        if (licenseError is not null) return Result<SupplierDto>.Failure(licenseError);
+
         if (dto.Id is null) return Result<SupplierDto>.Failure("معرّف المورد مطلوب.");
 
         var supplier = await _context.Suppliers.FirstOrDefaultAsync(s => s.Id == dto.Id, cancellationToken);
@@ -130,6 +139,9 @@ public class PurchasingService : IPurchasingService
 
     public async Task<Result> SetSupplierActiveStatusAsync(int supplierId, bool isActive, CancellationToken cancellationToken = default)
     {
+        var licenseError = await LicenseWriteAccess.CheckAsync(_licenseService, cancellationToken);
+        if (licenseError is not null) return Result.Failure(licenseError);
+
         var supplier = await _context.Suppliers.FirstOrDefaultAsync(s => s.Id == supplierId, cancellationToken);
         if (supplier is null) return Result.Failure("المورد غير موجود.");
 
@@ -208,6 +220,9 @@ public class PurchasingService : IPurchasingService
 
     public async Task<Result<PurchaseOrderDto>> CreatePurchaseOrderAsync(PurchaseOrderUpsertDto dto, CancellationToken cancellationToken = default)
     {
+        var licenseError = await LicenseWriteAccess.CheckAsync(_licenseService, cancellationToken);
+        if (licenseError is not null) return Result<PurchaseOrderDto>.Failure(licenseError);
+
         var validation = await ValidatePurchaseOrderAsync(dto, cancellationToken);
         if (validation is not null) return Result<PurchaseOrderDto>.Failure(validation);
 
@@ -245,6 +260,9 @@ public class PurchasingService : IPurchasingService
 
     public async Task<Result<PurchaseOrderDto>> UpdatePurchaseOrderAsync(PurchaseOrderUpsertDto dto, CancellationToken cancellationToken = default)
     {
+        var licenseError = await LicenseWriteAccess.CheckAsync(_licenseService, cancellationToken);
+        if (licenseError is not null) return Result<PurchaseOrderDto>.Failure(licenseError);
+
         if (dto.Id is null) return Result<PurchaseOrderDto>.Failure("معرّف أمر الشراء مطلوب.");
 
         var order = await _context.PurchaseOrders
@@ -289,6 +307,9 @@ public class PurchasingService : IPurchasingService
 
     public async Task<Result> SubmitPurchaseOrderAsync(int purchaseOrderId, CancellationToken cancellationToken = default)
     {
+        var licenseError = await LicenseWriteAccess.CheckAsync(_licenseService, cancellationToken);
+        if (licenseError is not null) return Result.Failure(licenseError);
+
         var order = await _context.PurchaseOrders.Include(p => p.Items).FirstOrDefaultAsync(p => p.Id == purchaseOrderId, cancellationToken);
         if (order is null) return Result.Failure("أمر الشراء غير موجود.");
         if (order.Status != PurchaseOrderStatus.Draft) return Result.Failure("لا يمكن اعتماد أمر شراء تم اعتماده مسبقاً.");
@@ -301,6 +322,9 @@ public class PurchasingService : IPurchasingService
 
     public async Task<Result> CancelPurchaseOrderAsync(int purchaseOrderId, CancellationToken cancellationToken = default)
     {
+        var licenseError = await LicenseWriteAccess.CheckAsync(_licenseService, cancellationToken);
+        if (licenseError is not null) return Result.Failure(licenseError);
+
         var order = await _context.PurchaseOrders.FirstOrDefaultAsync(p => p.Id == purchaseOrderId, cancellationToken);
         if (order is null) return Result.Failure("أمر الشراء غير موجود.");
         if (order.Status == PurchaseOrderStatus.Received) return Result.Failure("لا يمكن إلغاء أمر شراء مكتمل الاستلام.");
@@ -312,6 +336,9 @@ public class PurchasingService : IPurchasingService
 
     public async Task<Result> DeletePurchaseOrderAsync(int purchaseOrderId, CancellationToken cancellationToken = default)
     {
+        var licenseError = await LicenseWriteAccess.CheckAsync(_licenseService, cancellationToken);
+        if (licenseError is not null) return Result.Failure(licenseError);
+
         var order = await _context.PurchaseOrders.FirstOrDefaultAsync(p => p.Id == purchaseOrderId, cancellationToken);
         if (order is null) return Result.Failure("أمر الشراء غير موجود.");
         if (order.Status != PurchaseOrderStatus.Draft) return Result.Failure("لا يمكن حذف أمر شراء بعد اعتماده — يمكن إلغاؤه بدلاً من ذلك.");
@@ -395,6 +422,9 @@ public class PurchasingService : IPurchasingService
 
     public async Task<Result<GoodsReceiptNoteDto>> CreateGoodsReceiptAsync(GoodsReceiptUpsertDto dto, CancellationToken cancellationToken = default)
     {
+        var licenseError = await LicenseWriteAccess.CheckAsync(_licenseService, cancellationToken);
+        if (licenseError is not null) return Result<GoodsReceiptNoteDto>.Failure(licenseError);
+
         var validation = await ValidateGoodsReceiptAsync(dto, cancellationToken);
         if (validation is not null) return Result<GoodsReceiptNoteDto>.Failure(validation);
 
@@ -438,6 +468,9 @@ public class PurchasingService : IPurchasingService
 
     public async Task<Result<GoodsReceiptNoteDto>> UpdateGoodsReceiptAsync(GoodsReceiptUpsertDto dto, CancellationToken cancellationToken = default)
     {
+        var licenseError = await LicenseWriteAccess.CheckAsync(_licenseService, cancellationToken);
+        if (licenseError is not null) return Result<GoodsReceiptNoteDto>.Failure(licenseError);
+
         if (dto.Id is null) return Result<GoodsReceiptNoteDto>.Failure("معرّف سند الاستلام مطلوب.");
 
         var note = await _context.GoodsReceiptNotes.Include(n => n.Items).FirstOrDefaultAsync(n => n.Id == dto.Id, cancellationToken);
@@ -486,8 +519,12 @@ public class PurchasingService : IPurchasingService
     /// authoritative, then reconciles the linked PurchaseOrder's received
     /// quantities and rolls its status forward (PartiallyReceived/Received).
     /// </summary>
-    public Task<Result> PostGoodsReceiptAsync(int goodsReceiptNoteId, int? performedByUserId, CancellationToken cancellationToken = default) =>
-        InTransactionAsync(() => PostGoodsReceiptCoreAsync(goodsReceiptNoteId, performedByUserId, cancellationToken), r => r.Succeeded, cancellationToken);
+    public async Task<Result> PostGoodsReceiptAsync(int goodsReceiptNoteId, int? performedByUserId, CancellationToken cancellationToken = default)
+    {
+        var licenseError = await LicenseWriteAccess.CheckAsync(_licenseService, cancellationToken);
+        if (licenseError is not null) return Result.Failure(licenseError);
+        return await InTransactionAsync(() => PostGoodsReceiptCoreAsync(goodsReceiptNoteId, performedByUserId, cancellationToken), r => r.Succeeded, cancellationToken);
+    }
 
     private async Task<Result> PostGoodsReceiptCoreAsync(int goodsReceiptNoteId, int? performedByUserId, CancellationToken cancellationToken)
     {
@@ -553,6 +590,9 @@ public class PurchasingService : IPurchasingService
 
     public async Task<Result> DeleteGoodsReceiptAsync(int goodsReceiptNoteId, CancellationToken cancellationToken = default)
     {
+        var licenseError = await LicenseWriteAccess.CheckAsync(_licenseService, cancellationToken);
+        if (licenseError is not null) return Result.Failure(licenseError);
+
         var note = await _context.GoodsReceiptNotes.FirstOrDefaultAsync(n => n.Id == goodsReceiptNoteId, cancellationToken);
         if (note is null) return Result.Failure("سند الاستلام غير موجود.");
         if (note.Status != GoodsReceiptStatus.Draft) return Result.Failure("لا يمكن حذف سند استلام تم ترحيله — أرصدة المخزون أصبحت معتمدة عليه.");
@@ -648,8 +688,12 @@ public class PurchasingService : IPurchasingService
         return lines.Select(MapPurchaseInvoiceLineToDto).ToList();
     }
 
-    public Task<Result<PurchaseInvoiceDto>> CreatePurchaseInvoiceAsync(PurchaseInvoiceUpsertDto dto, CancellationToken cancellationToken = default) =>
-        InTransactionAsync(() => CreatePurchaseInvoiceCoreAsync(dto, cancellationToken), r => r.Succeeded, cancellationToken);
+    public async Task<Result<PurchaseInvoiceDto>> CreatePurchaseInvoiceAsync(PurchaseInvoiceUpsertDto dto, CancellationToken cancellationToken = default)
+    {
+        var licenseError = await LicenseWriteAccess.CheckAsync(_licenseService, cancellationToken);
+        if (licenseError is not null) return Result<PurchaseInvoiceDto>.Failure(licenseError);
+        return await InTransactionAsync(() => CreatePurchaseInvoiceCoreAsync(dto, cancellationToken), r => r.Succeeded, cancellationToken);
+    }
 
     private async Task<Result<PurchaseInvoiceDto>> CreatePurchaseInvoiceCoreAsync(PurchaseInvoiceUpsertDto dto, CancellationToken cancellationToken)
     {
@@ -724,8 +768,12 @@ public class PurchasingService : IPurchasingService
         return Result<PurchaseInvoiceDto>.Success((await GetPurchaseInvoicesAsync(cancellationToken)).First(i => i.Id == invoice.Id));
     }
 
-    public Task<Result> RecordPaymentAsync(RecordPaymentDto dto, CancellationToken cancellationToken = default) =>
-        InTransactionAsync(() => RecordPaymentCoreAsync(dto, cancellationToken), r => r.Succeeded, cancellationToken);
+    public async Task<Result> RecordPaymentAsync(RecordPaymentDto dto, CancellationToken cancellationToken = default)
+    {
+        var licenseError = await LicenseWriteAccess.CheckAsync(_licenseService, cancellationToken);
+        if (licenseError is not null) return Result.Failure(licenseError);
+        return await InTransactionAsync(() => RecordPaymentCoreAsync(dto, cancellationToken), r => r.Succeeded, cancellationToken);
+    }
 
     private async Task<Result> RecordPaymentCoreAsync(RecordPaymentDto dto, CancellationToken cancellationToken)
     {
@@ -775,6 +823,9 @@ public class PurchasingService : IPurchasingService
 
     public async Task<Result> CancelPurchaseInvoiceAsync(int purchaseInvoiceId, CancellationToken cancellationToken = default)
     {
+        var licenseError = await LicenseWriteAccess.CheckAsync(_licenseService, cancellationToken);
+        if (licenseError is not null) return Result.Failure(licenseError);
+
         var invoice = await _context.PurchaseInvoices.FirstOrDefaultAsync(i => i.Id == purchaseInvoiceId, cancellationToken);
         if (invoice is null) return Result.Failure("فاتورة الشراء غير موجودة.");
         if (invoice.AmountPaid > 0) return Result.Failure("لا يمكن إلغاء فاتورة تم تسجيل دفعات عليها.");

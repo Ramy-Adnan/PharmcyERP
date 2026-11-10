@@ -17,15 +17,17 @@ public class LicenseViewModel : ViewModelBase
 {
     private readonly ILicenseService _licenseService;
     private readonly IDialogService _dialogService;
+    private readonly LicenseStatusViewModel _licenseStatus;
 
     private LicenseStatusDto? _status;
     private string _hardwareFingerprint = string.Empty;
     private bool _isBusy;
 
-    public LicenseViewModel(ILicenseService licenseService, IDialogService dialogService)
+    public LicenseViewModel(ILicenseService licenseService, IDialogService dialogService, LicenseStatusViewModel licenseStatus)
     {
         _licenseService = licenseService;
         _dialogService = dialogService;
+        _licenseStatus = licenseStatus;
 
         RefreshCommand = new AsyncRelayCommand(LoadAsync);
         ImportLicenseCommand = new AsyncRelayCommand(ImportLicenseAsync, () => !IsBusy);
@@ -43,7 +45,12 @@ public class LicenseViewModel : ViewModelBase
 
     public async Task InitializeAsync()
     {
-        HardwareFingerprint = _licenseService.GetHardwareFingerprint();
+        try { HardwareFingerprint = _licenseService.GetHardwareFingerprint(); }
+        catch (Exception)
+        {
+            HardwareFingerprint = string.Empty;
+            _dialogService.ShowError("تعذر قراءة معرّف الجهاز. تحقق من صلاحيات مجلد بيانات البرنامج؛ لا تحذف بيانات الصيدلية، وتواصل مع الدعم.");
+        }
         await LoadAsync();
     }
 
@@ -53,6 +60,7 @@ public class LicenseViewModel : ViewModelBase
         try
         {
             Status = await _licenseService.GetLicenseStatusAsync();
+            await _licenseStatus.RefreshAsync();
         }
         finally
         {
@@ -84,6 +92,10 @@ public class LicenseViewModel : ViewModelBase
             _dialogService.ShowInfo("تم تفعيل الترخيص بنجاح.");
             await LoadAsync();
         }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            _dialogService.ShowError("تعذّر قراءة أو تثبيت ملف الترخيص. اختر ملفاً صالحاً وتحقق من صلاحيات بيانات البرنامج.");
+        }
         finally
         {
             IsBusy = false;
@@ -92,6 +104,7 @@ public class LicenseViewModel : ViewModelBase
 
     private void CopyFingerprint()
     {
+        if (string.IsNullOrWhiteSpace(HardwareFingerprint)) return;
         System.Windows.Clipboard.SetText(HardwareFingerprint);
         _dialogService.ShowInfo("تم نسخ بصمة الجهاز. أرسلها للجهة المرخِّصة لإصدار ترخيص جديد.");
     }

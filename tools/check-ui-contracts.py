@@ -257,7 +257,16 @@ def audit(repo: Path, baseline: str) -> tuple[list[Finding], int, int]:
             fail(path, "x:Class", f"expected {old_class!r}")
         lost(path, "named element", names(before), names(after))
         lost(path, "event handler", events(before), events(after))
-        lost(path, "functional binding", binding_contracts(before), binding_contracts(after))
+        required_bindings = binding_contracts(before)
+        current_bindings = binding_contracts(after)
+        # v1.1.0 fixes an intentional functional defect: offline update checks
+        # must not show "up to date". Retain every other styling-era contract.
+        if path == VIEWS + "SystemManagement/UpdateCheckDialog.xaml":
+            old_status = ("Visibility", normalize("{Binding Result.IsUpdateAvailable, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}"))
+            new_status = ("Visibility", normalize("{Binding IsUpToDate, Converter={StaticResource BoolToVisibilityConverter}}"))
+            if required_bindings[old_status] and current_bindings[new_status]:
+                required_bindings[new_status] += required_bindings.pop(old_status)
+        lost(path, "functional binding", required_bindings, current_bindings)
         lost(path, "input/selection setting", functional_literals(before), functional_literals(after))
         lost(path, "keyboard/command binding", input_bindings(before), input_bindings(after))
         lost(path, "validation metadata", validation_metadata(before), validation_metadata(after))

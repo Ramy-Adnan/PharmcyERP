@@ -1,3 +1,4 @@
+using PharmacyERP.WPF.ViewModels.SystemManagement;
 using PharmacyERP.WPF.MVVM;
 using PharmacyERP.WPF.Services;
 using PharmacyERP.WPF.Views.Accounting;
@@ -31,13 +32,14 @@ public class MainShellViewModel : ViewModelBase
     private object? _currentView;
 
     public MainShellViewModel(ISessionService sessionService, INavigationService navigationService, IServiceProvider serviceProvider, IDialogService dialogService,
-        PharmacyBrandingViewModel branding)
+        PharmacyBrandingViewModel branding, LicenseStatusViewModel licensing)
     {
         _sessionService = sessionService;
         _navigationService = navigationService;
         _serviceProvider = serviceProvider;
         _dialogService = dialogService;
         Branding = branding;
+        Licensing = licensing;
 
         LogoutCommand = new RelayCommand(Logout);
         NavigateToDashboardCommand = new RelayCommand(() => CurrentView = _serviceProvider.GetService(typeof(DashboardView)));
@@ -93,6 +95,7 @@ public class MainShellViewModel : ViewModelBase
             : $"مرحباً، {_sessionService.CurrentSession.FullName}";
 
     public PharmacyBrandingViewModel Branding { get; }
+    public LicenseStatusViewModel Licensing { get; }
 
     public string RoleAndBranch =>
         _sessionService.CurrentSession is null

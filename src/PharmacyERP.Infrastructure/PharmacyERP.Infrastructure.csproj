@@ -22,6 +22,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="$(LicensePublicKeyFile)" LogicalName="PharmacyERP.Licensing.PublicKey.pem" Condition="'$(LicensePublicKeyFile)' != '' and Exists('$(LicensePublicKeyFile)')" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\PharmacyERP.Application\PharmacyERP.Application.csproj" />
   </ItemGroup>
 

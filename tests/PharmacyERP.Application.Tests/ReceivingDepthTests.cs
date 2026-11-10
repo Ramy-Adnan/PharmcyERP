@@ -17,7 +17,7 @@ public class ReceivingDepthTests
     private readonly FakeDateTime _clock = new();
     private static readonly PurchaseUnitOption[] Units = { new(null, "علبة", 5), new(10, "شريط", 1) };
     private GoodsReceiptEditViewModel Editor(ApplicationDbContext db, IInventoryService? inventory = null) => new(
-        new PurchasingService(db, new InventoryService(db, _clock), new AccountingService(db, _clock), _clock),
+        new PurchasingService(db, new InventoryService(db, _clock), new AccountingService(db, _clock, new PermissiveLicenseService()), _clock, new PermissiveLicenseService()),
         inventory ?? new InventoryService(db, _clock), new BranchService(db, new PermissiveLicenseService()));
 
     [Theory]

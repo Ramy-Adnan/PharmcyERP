@@ -31,7 +31,7 @@
                             <TextBlock Text="{Binding Result.ReleaseNotes}" TextWrapping="Wrap" Foreground="#6B7280" Margin="0,0,0,12"/>
                             <ProgressBar Height="8" Minimum="0" Maximum="100" Value="{Binding DownloadProgress, Mode=OneWay}" Visibility="{Binding IsDownloading, Converter={StaticResource BoolToVisibilityConverter}}" Margin="0,0,0,12" Foreground="#1F6F50"/>
                         </StackPanel>
-                        <TextBlock Text="التطبيق محدَّث لأحدث إصدار." FontWeight="SemiBold" Foreground="#1F6F50" Visibility="{Binding Result.IsUpdateAvailable, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}"/>
+                        <TextBlock Text="التطبيق محدَّث لأحدث إصدار." FontWeight="SemiBold" Foreground="#1F6F50" Visibility="{Binding IsUpToDate, Converter={StaticResource BoolToVisibilityConverter}}"/>
                     </StackPanel>
                     <TextBlock Text="{Binding ErrorMessage}" Foreground="#DC2626" TextWrapping="Wrap" Margin="0,12,0,0" Visibility="{Binding ErrorMessage, Converter={StaticResource StringToVisibilityConverter}}"/>
                 </StackPanel>

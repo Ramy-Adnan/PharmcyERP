@@ -67,12 +67,16 @@ public class UserService : IUserService
 
     public async Task<Result<UserDto>> CreateAsync(UserUpsertDto dto, CancellationToken cancellationToken = default)
     {
+        var licenseError = await LicenseWriteAccess.CheckAsync(_licenseService, cancellationToken);
+        if (licenseError is not null) return Result<UserDto>.Failure(licenseError);
+
         var validation = await ValidateAsync(dto, isNew: true, cancellationToken);
         if (validation is not null) return Result<UserDto>.Failure(validation);
 
-        var activeUserCount = await _context.Users.CountAsync(u => u.Status == UserStatus.Active, cancellationToken);
-        //if (!await _licenseService.CanAddUserAsync(activeUserCount, cancellationToken))
-        //    return Result<UserDto>.Failure("تم الوصول إلى الحد الأقصى لعدد المستخدمين المسموح به بموجب الترخيص الحالي. الرجاء التواصل مع الجهة المرخِّصة لترقية الترخيص.");
+        // A temporarily locked account still occupies its licensed seat.
+        var activeUserCount = await _context.Users.CountAsync(u => u.Status != UserStatus.Inactive, cancellationToken);
+        if (!await _licenseService.CanAddUserAsync(activeUserCount, cancellationToken))
+            return Result<UserDto>.Failure("تم الوصول إلى الحد الأقصى لعدد المستخدمين المسموح به بموجب الترخيص الحالي. الرجاء التواصل مع الجهة المرخِّصة لترقية الترخيص.");
 
         var user = new User
         {
@@ -96,6 +100,9 @@ public class UserService : IUserService
 
     public async Task<Result<UserDto>> UpdateAsync(UserUpsertDto dto, CancellationToken cancellationToken = default)
     {
+        var licenseError = await LicenseWriteAccess.CheckAsync(_licenseService, cancellationToken);
+        if (licenseError is not null) return Result<UserDto>.Failure(licenseError);
+
         if (dto.Id is null) return Result<UserDto>.Failure("معرّف المستخدم مطلوب.");
 
         var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == dto.Id, cancellationToken);
@@ -122,6 +129,9 @@ public class UserService : IUserService
 
     public async Task<Result> SetStatusAsync(int userId, bool activate, CancellationToken cancellationToken = default)
     {
+        var licenseError = await LicenseWriteAccess.CheckAsync(_licenseService, cancellationToken);
+        if (licenseError is not null) return Result.Failure(licenseError);
+
         var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == userId, cancellationToken);
         if (user is null) return Result.Failure("المستخدم غير موجود.");
 
@@ -129,6 +139,13 @@ public class UserService : IUserService
         {
             var isLastActiveAdmin = await IsLastActiveAdministratorAsync(user, cancellationToken);
             if (isLastActiveAdmin) return Result.Failure("لا يمكن تعطيل آخر مستخدم مدير نظام نشط.");
+        }
+
+        if (activate && user.Status == UserStatus.Inactive)
+        {
+            var occupiedSeats = await _context.Users.CountAsync(u => u.Status != UserStatus.Inactive, cancellationToken);
+            if (!await _licenseService.CanAddUserAsync(occupiedSeats, cancellationToken))
+                return Result.Failure("لا يمكن تفعيل مستخدم آخر؛ تم الوصول إلى عدد المستخدمين المسموح به في الترخيص.");
         }
 
         user.Status = activate ? UserStatus.Active : UserStatus.Inactive;
